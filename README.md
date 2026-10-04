@@ -78,6 +78,8 @@ MCP 配置存在插件数据目录下，所有 profile 共用一份；插件**�
 - 写客户端界面（标签页、kit、宿主组件约定）：[docs/CLIENT-GUIDE.md](docs/CLIENT-GUIDE.md)
 - 宿主 UI 组件与主题变量参考：[docs/PRIMITIVES.md](docs/PRIMITIVES.md)
 - 设计决策记录（代码注释里的 `D-xx` 指向这里）：[docs/DECISIONS.md](docs/DECISIONS.md)
+- 界面设计规范：[docs/UI-DESIGN.md](docs/UI-DESIGN.md)；术语表：[GLOSSARY.md](GLOSSARY.md)
+- 给编程代理的约定：[AGENTS.md](AGENTS.md)
 
 ## 目录结构
 
@@ -87,7 +89,7 @@ MCP 配置存在插件数据目录下，所有 profile 共用一份；插件**�
     src/host/              宿主半：平台外壳 + skills-local / skills-remote / mcp-config / mcp-runtime
     src/client/            客户端半：外壳、技能 / MCP / 运行态三个标签页、共用 UI kit
     test/                  node:test 单测 + MCP 运行时集成测试 + 夹具
-    docs/                  开发指南、客户端指南、宿主 primitives 参考、设计决策
+    docs/                  开发指南、客户端指南、宿主 primitives 参考、设计决策、界面规范
 
 ## 许可证
 
