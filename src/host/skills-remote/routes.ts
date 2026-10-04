@@ -10,6 +10,7 @@ import { badRequest, validation } from './errors.ts';
 import { assertRepoShape } from './repos.ts';
 import { browseRepo } from './browse.ts';
 import { discoverSources } from './discover.ts';
+import { forgetDiscovery, readDiscovery, refreshDiscovery, type DiscoveryStore } from './repo-discovery.ts';
 import { installSkills, registerSource, unregisterSource, assertInstallTarget } from './install.ts';
 import { applyUpdates, checkUpdates } from './updates.ts';
 import { normalizeSkillsShResponse } from './github.ts';
@@ -31,6 +32,7 @@ export interface RoutesDeps {
   github: GitHubClient;
   sources: SourceStore;
   repos: RepoStore;
+  discovery: DiscoveryStore;
   redactor: Redactor;
   now?: RemoteOptions['now'];
 }
@@ -76,6 +78,16 @@ function optionalStringArray(body: Record<string, unknown>, key: string): string
 }
 
 /** 解析 repo 字段：owner/name 或 GitHub URL（含 /tree/<ref>/<path>） */
+function optionalPatchString(body: Record<string, unknown>, key: string): string | undefined {
+  const raw = body[key];
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'string') {
+    throw validation(`参数 ${key} 必须是字符串。`, [{ path: key, message: '必须是字符串' }]);
+  }
+  // 与 optionalString 不同：空串有意义（= 清除该字段）
+  return raw.trim();
+}
+
 function resolveRepoInput(raw: string, explicitRef?: string): { repo: string; ref?: string; subPath?: string } {
   const parsed = parseRepoRef(raw);
   const repo = assertRepoShape(parsed.repo);
@@ -87,8 +99,18 @@ function resolveRepoInput(raw: string, explicitRef?: string): { repo: string; re
 }
 
 export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, RouteHandler> {
-  const { ctx, skills, github, sources, repos } = deps;
+  const { ctx, skills, github, sources, repos, discovery, redactor } = deps;
   const now = deps.now;
+  const discoveryDeps = { github, skills, repos, store: discovery, redactor, now };
+
+  /** 只补扫一个仓库；失败已记在该仓库条目上，这里只吞掉取消等意外，不让增改仓库失败 */
+  async function rescanOne(repo: string, workspace: string | undefined, signal: AbortSignal | undefined) {
+    try {
+      return await refreshDiscovery(discoveryDeps, { repos: [repo], workspace, signal });
+    } catch {
+      return await readDiscovery(discoveryDeps, { workspace });
+    }
+  }
 
   const routes: Record<string, RouteHandler> = {};
 
@@ -168,17 +190,51 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
     const body = asRecord(req.body);
     const repoRaw = requireString(body, 'repo', '仓库');
     const ref = optionalString(body, 'ref');
+    const subPath = optionalString(body, 'subPath');
+    const workspace = optionalString(body, 'workspace');
     const resolved = resolveRepoInput(repoRaw, ref);
-    const record = await repos.add(resolved.repo, resolved.ref);
-    return { repo: record, repos: await repos.list() };
+    const record = await repos.add(resolved.repo, resolved.ref, subPath ?? resolved.subPath);
+    // D-B16：增加仓库只补扫这一个（在同一个请求里扫完再返回）
+    const view = await rescanOne(record.repo, workspace, req.signal);
+    return { repo: record, repos: await repos.list(), discovery: view };
+  };
+
+  routes['POST skills/repos/update'] = async (req) => {
+    const body = asRecord(req.body);
+    const repoRaw = requireString(body, 'repo', '仓库');
+    const ref = optionalPatchString(body, 'ref');
+    const subPath = optionalPatchString(body, 'subPath');
+    const workspace = optionalString(body, 'workspace');
+    if (ref === undefined && subPath === undefined) throw badRequest('请至少修改分支或子目录中的一项。');
+    const resolved = resolveRepoInput(repoRaw);
+    const patch: { ref?: string; subPath?: string } = {};
+    if (ref !== undefined) patch.ref = ref;
+    if (subPath !== undefined) patch.subPath = subPath;
+    const { record, changed } = await repos.update(resolved.repo, patch);
+    const view = changed ? await rescanOne(record.repo, workspace, req.signal) : await readDiscovery(discoveryDeps, { workspace });
+    return { repo: record, changed, repos: await repos.list(), discovery: view };
   };
 
   routes['POST skills/repos/remove'] = async (req) => {
     const body = asRecord(req.body);
     const repoRaw = requireString(body, 'repo', '仓库');
+    const workspace = optionalString(body, 'workspace');
     const resolved = resolveRepoInput(repoRaw);
     await repos.remove(resolved.repo);
-    return { repos: await repos.list() };
+    await forgetDiscovery(discovery, resolved.repo);
+    return { repos: await repos.list(), discovery: await readDiscovery(discoveryDeps, { workspace }) };
+  };
+
+  routes['GET skills/discovery'] = async (req) => {
+    const workspace = req.query['workspace'];
+    return await readDiscovery(discoveryDeps, workspace !== undefined && workspace !== '' ? { workspace } : {});
+  };
+
+  routes['POST skills/discovery/refresh'] = async (req) => {
+    const body = asRecord(req.body);
+    const only = optionalStringArray(body, 'repos');
+    const workspace = optionalString(body, 'workspace');
+    return await refreshDiscovery(discoveryDeps, { repos: only, workspace, signal: req.signal });
   };
 
   routes['POST skills/repo/browse'] = async (req) => {

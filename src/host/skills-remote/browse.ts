@@ -13,7 +13,7 @@ import { parseMiniFrontmatter } from './frontmatter.ts';
 import { skillDirOf, skillMdPathOf } from './sourceurl.ts';
 import { upstream } from './errors.ts';
 import type { GitHubClient } from './github.ts';
-import type { BrowseResult, BrowseSkill, SkillsLocalApi } from './types.ts';
+import type { BrowseResult, BrowseSkill, DiscoverySkill, SkillSummary, SkillsLocalApi } from './types.ts';
 
 /** 与 npx skills 的 copyDirectory 排除清单对齐（快照与安装都不带这些） */
 const BROWSE_SKIP_DIRS = new Set(['.git', 'node_modules', '__pycache__', '__pypackages__']);
@@ -35,8 +35,22 @@ export interface BrowseDeps {
   skills: SkillsLocalApi;
 }
 
-export async function browseRepo(deps: BrowseDeps, options: BrowseOptions): Promise<BrowseResult> {
-  const tarball = await deps.github.downloadTarball(options.repo, options.ref, options.signal);
+export interface ScanResult {
+  repo: string;
+  /** 实际下载的分支（未指定时是默认分支） */
+  ref: string;
+  skills: DiscoverySkill[];
+}
+
+/**
+ * 下载并扫描一个仓库（可限定子路径），列出其中的技能；不碰本机技能列表。
+ * 没有任何技能时抛 UPSTREAM（中文说明）。浏览与汇总发现共用这一份。
+ */
+export async function scanRepoSkills(
+  github: GitHubClient,
+  options: { repo: string; ref?: string; subPath?: string; signal?: AbortSignal }
+): Promise<ScanResult> {
+  const tarball = await github.downloadTarball(options.repo, options.ref, options.signal);
   const entries = tarball.entries;
   const prefix = options.subPath ? `${options.subPath.replace(/\/+$/, '')}/` : '';
 
@@ -57,20 +71,7 @@ export async function browseRepo(deps: BrowseDeps, options: BrowseOptions): Prom
       });
     });
 
-  // 本机已安装映射：目录名 → skillId；name → skillId
-  let installedByDir = new Map<string, string>();
-  let installedByName = new Map<string, string>();
-  try {
-    const listed = await deps.skills.list({ workspace: options.workspace });
-    installedByDir = new Map(listed.skills.map((s) => [s.dirName.toLowerCase(), s.id]));
-    installedByName = new Map(
-      listed.skills.filter((s) => typeof s.name === 'string').map((s) => [String(s.name).toLowerCase(), s.id])
-    );
-  } catch {
-    // 本机扫描失败不影响浏览（只少一个「已安装」标记）
-  }
-
-  const skills: BrowseSkill[] = [];
+  const skills: DiscoverySkill[] = [];
   const seenDirs = new Set<string>();
   const repoBase = options.repo.split('/').pop() ?? options.repo;
   for (const skillPath of candidates.sort()) {
@@ -89,16 +90,9 @@ export async function browseRepo(deps: BrowseDeps, options: BrowseOptions): Prom
     const files = dirPath === '' ? rootSkillFiles(entries) : filesUnderDirectory(entries, dirPath);
     const skillMd = files.find((f) => f.rel.toLowerCase() === 'skill.md') ?? files.find((f) => /^SKILL\.md$/i.test(f.rel));
     const fm = skillMd ? parseMiniFrontmatter(skillMd.data.toString('utf8')) : { keys: [] as string[] };
-    const item: BrowseSkill = { skillPath: skillMdPathOf(dirPath), dirName };
+    const item: DiscoverySkill = { skillPath: skillMdPathOf(dirPath), dirName };
     if (fm.name !== undefined) item.name = fm.name;
     if (fm.description !== undefined) item.description = fm.description;
-    // FIX-7：根级技能没有目录段 —— 装出来的目录名是 sanitizeName(frontmatter name)（取不到名字时
-    // 用仓库名），所以这里还要按「安装时会用的那个目录名」查一次；否则根级技能装完仍显示「未安装」。
-    const installed =
-      installedByName.get((fm.name ?? dirName).toLowerCase()) ??
-      (dirPath === '' ? installedByDir.get(sanitizeName(fm.name ?? dirName).toLowerCase()) : undefined) ??
-      installedByDir.get(dirName.toLowerCase());
-    if (installed !== undefined) item.installedId = installed;
     skills.push(item);
   }
 
@@ -110,4 +104,55 @@ export async function browseRepo(deps: BrowseDeps, options: BrowseOptions): Prom
 
   skills.sort((a, b) => a.dirName.localeCompare(b.dirName));
   return { repo: options.repo, ref: tarball.ref, skills };
+}
+
+/** 本机已安装索引：目录名 → skillId；name → skillId（都小写）。 */
+export interface InstalledIndex {
+  byDir: Map<string, string>;
+  byName: Map<string, string>;
+}
+
+export function buildInstalledIndex(listed: readonly Pick<SkillSummary, 'id' | 'dirName' | 'name'>[]): InstalledIndex {
+  return {
+    byDir: new Map(listed.map((s) => [s.dirName.toLowerCase(), s.id])),
+    byName: new Map(listed.filter((s) => typeof s.name === 'string').map((s) => [String(s.name).toLowerCase(), s.id])),
+  };
+}
+
+export const EMPTY_INSTALLED_INDEX: InstalledIndex = { byDir: new Map(), byName: new Map() };
+
+/**
+ * 一个上游技能在本机是否已安装（按 name / 目录名匹配）。
+ * FIX-7：根级技能没有目录段 —— 装出来的目录名是 sanitizeName(frontmatter name)（取不到名字时
+ * 用仓库名），所以这里还要按「安装时会用的那个目录名」查一次；否则根级技能装完仍显示「未安装」。
+ */
+export function installedIdOf(skill: DiscoverySkill, index: InstalledIndex): string | undefined {
+  const isRoot = /^SKILL\.md$/i.test(skill.skillPath);
+  return (
+    index.byName.get((skill.name ?? skill.dirName).toLowerCase()) ??
+    (isRoot ? index.byDir.get(sanitizeName(skill.name ?? skill.dirName).toLowerCase()) : undefined) ??
+    index.byDir.get(skill.dirName.toLowerCase())
+  );
+}
+
+/** 读本机技能列表建索引；扫描失败不影响浏览/发现（只少「已安装」标记）。 */
+export async function loadInstalledIndex(skills: SkillsLocalApi, workspace?: string): Promise<InstalledIndex> {
+  try {
+    const listed = await skills.list({ workspace });
+    return buildInstalledIndex(listed.skills);
+  } catch {
+    return EMPTY_INSTALLED_INDEX;
+  }
+}
+
+export async function browseRepo(deps: BrowseDeps, options: BrowseOptions): Promise<BrowseResult> {
+  const scanned = await scanRepoSkills(deps.github, options);
+  const index = await loadInstalledIndex(deps.skills, options.workspace);
+  const skills: BrowseSkill[] = scanned.skills.map((skill) => {
+    const item: BrowseSkill = { ...skill };
+    const installed = installedIdOf(skill, index);
+    if (installed !== undefined) item.installedId = installed;
+    return item;
+  });
+  return { repo: scanned.repo, ref: scanned.ref, skills };
 }

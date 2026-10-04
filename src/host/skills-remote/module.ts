@@ -12,6 +12,7 @@ import { GitHubClient, type GitHubClientOptions } from './github.ts';
 import { Redactor, createRedactingLogger } from './redact.ts';
 import { createSourceStore, type SourceStore } from './lockstore.ts';
 import { createRepoStore, type RepoStore } from './repos.ts';
+import { createDiscoveryStore } from './repo-discovery.ts';
 import { createSkillsRemoteRoutes } from './routes.ts';
 import type { HubContext, HubModule, LockStash, RemoteOptions, SkillsLocalApi } from './types.ts';
 
@@ -51,6 +52,7 @@ export function createSkillsRemoteModule(
     github,
     sources,
     repos,
+    discovery: createDiscoveryStore(scopedCtx),
     redactor,
     now: options.now,
   });

@@ -14,6 +14,7 @@
 import path from 'node:path';
 import { pathExists, readJsonFile, writeJsonFile } from './fsx.ts';
 import { badRequest, conflict, notFound, validation } from './errors.ts';
+import { describeUnsafePath } from './safepath.ts';
 import type { HubContext, RepoRecord, RepoReposFile } from './types.ts';
 
 const REPOS_VERSION = 1;
@@ -54,12 +55,46 @@ export function assertRepoShape(repo: string): string {
   return trimmed;
 }
 
+/**
+ * 校验并归一化仓库子目录：去掉首尾斜杠；空串表示「整个仓库」（返回 undefined）。
+ * 必须是安全的相对路径（不许 ..、绝对路径、盘符、反斜杠），否则 VALIDATION。
+ */
+export function normalizeSubPath(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  if (trimmed === '') return undefined;
+  const reason = describeUnsafePath(trimmed);
+  if (reason !== undefined) {
+    throw validation(`子目录 "${trimmed}" 不合法（${reason}），应为仓库内的相对路径，例如 skills。`, [
+      { path: 'subPath', message: reason },
+    ]);
+  }
+  return trimmed;
+}
+
+export interface RepoPatch {
+  /** 空串 = 改回默认分支 */
+  ref?: string;
+  /** 空串 = 整个仓库 */
+  subPath?: string;
+}
+
 export interface RepoStore {
   list(): Promise<RepoRecord[]>;
-  add(repo: string, ref?: string): Promise<RepoRecord>;
+  add(repo: string, ref?: string, subPath?: string): Promise<RepoRecord>;
+  /** 改分支 / 子目录；返回新记录与「是否真的变了」 */
+  update(repo: string, patch: RepoPatch): Promise<{ record: RepoRecord; changed: boolean }>;
   remove(repo: string): Promise<void>;
   /** 预置仓库清单（用于 discover 的候选池；不写盘） */
   presets(): PresetRepo[];
+}
+
+/** 只保留认识的字段（旧文件没有 subPath 照常读） */
+function cleanRecord(r: RepoRecord): RepoRecord {
+  const record: RepoRecord = { repo: r.repo, preset: r.preset === true };
+  if (typeof r.ref === 'string' && r.ref !== '') record.ref = r.ref;
+  if (typeof r.subPath === 'string' && r.subPath !== '') record.subPath = r.subPath;
+  return record;
 }
 
 export function createRepoStore(ctx: HubContext): RepoStore {
@@ -93,22 +128,44 @@ export function createRepoStore(ctx: HubContext): RepoStore {
     presets: () => PRESET_REPOS.map((p) => ({ ...p })),
     async list() {
       const file = await read();
-      return file.repos.map((r) => {
-        const record: RepoRecord = { repo: r.repo, preset: r.preset === true };
-        if (r.ref !== undefined) record.ref = r.ref;
-        return record;
-      });
+      return file.repos.map(cleanRecord);
     },
-    async add(repo, ref) {
+    async add(repo, ref, subPath) {
       const normalized = assertRepoShape(repo);
+      const sub = normalizeSubPath(subPath);
       const file = await read();
       const exists = file.repos.find((r) => r.repo.toLowerCase() === normalized.toLowerCase());
       if (exists) throw conflict(`仓库 ${normalized} 已在列表中。`);
       const record: RepoRecord = { repo: normalized, preset: false };
       if (ref !== undefined && ref.trim() !== '') record.ref = ref.trim();
+      if (sub !== undefined) record.subPath = sub;
       file.repos.push(record);
       await write(file);
       return record;
+    },
+    async update(repo, patch) {
+      const normalized = repo.trim();
+      const file = await read();
+      const index = file.repos.findIndex((r) => r.repo.toLowerCase() === normalized.toLowerCase());
+      if (index === -1) throw notFound(`仓库 ${normalized} 不在列表中。`);
+      const before = cleanRecord(file.repos[index]!);
+      const next: RepoRecord = { ...before };
+      if (patch.ref !== undefined) {
+        const ref = patch.ref.trim();
+        if (ref === '') delete next.ref;
+        else next.ref = ref;
+      }
+      if (patch.subPath !== undefined) {
+        const sub = normalizeSubPath(patch.subPath);
+        if (sub === undefined) delete next.subPath;
+        else next.subPath = sub;
+      }
+      const changed = next.ref !== before.ref || next.subPath !== before.subPath;
+      if (changed) {
+        file.repos[index] = next;
+        await write(file);
+      }
+      return { record: next, changed };
     },
     async remove(repo) {
       const normalized = repo.trim();

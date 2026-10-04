@@ -181,6 +181,8 @@ export interface HubStoreFile {
 export interface RepoRecord {
   repo: string;
   ref?: string;
+  /** 只在仓库的这个子目录下发现技能（相对路径，正斜杠，不带首尾斜杠） */
+  subPath?: string;
   preset: boolean;
 }
 
@@ -202,6 +204,66 @@ export interface BrowseResult {
   repo: string;
   ref: string;
   skills: BrowseSkill[];
+}
+
+/** 发现缓存里的一个技能（不含「是否已安装」——那个每次读取时现算） */
+export interface DiscoverySkill {
+  skillPath: string;
+  dirName: string;
+  name?: string;
+  description?: string;
+}
+
+/** 发现缓存里一个仓库的上次扫描结果（<hubHome>/skills/discovery.json） */
+export interface DiscoveryCacheEntry {
+  repo: string;
+  /** 扫描时使用的配置（与仓库列表当前配置不同 → stale） */
+  ref?: string;
+  subPath?: string;
+  /** 实际解析到的分支（未配置分支时是默认分支） */
+  resolvedRef?: string;
+  scannedAt: string;
+  skills: DiscoverySkill[];
+  /** 本次扫描失败的中文原因（已打码）；失败时 skills 为空 */
+  error?: string;
+}
+
+export interface DiscoveryCacheFile {
+  version: number;
+  /** key = 仓库名小写 */
+  repos: Record<string, DiscoveryCacheEntry>;
+  [key: string]: unknown;
+}
+
+/** GET skills/discovery 里的一个仓库条目 */
+export interface DiscoveryRepoView {
+  repo: string;
+  ref?: string;
+  subPath?: string;
+  preset: boolean;
+  /** 从未扫描过时没有 */
+  scannedAt?: string;
+  resolvedRef?: string;
+  skillCount?: number;
+  error?: string;
+  /** 缓存是按旧的分支/子目录扫的 */
+  stale?: boolean;
+}
+
+/** 汇总发现里的一个技能 */
+export interface DiscoveredSkill extends DiscoverySkill {
+  repo: string;
+  /** 安装时要带的分支（实际解析到的分支） */
+  ref?: string;
+  installedId?: string;
+}
+
+export interface DiscoveryView {
+  /** false = 从未扫描过任何仓库（客户端据此自动扫一次） */
+  cached: boolean;
+  lastScannedAt?: string;
+  repos: DiscoveryRepoView[];
+  skills: DiscoveredSkill[];
 }
 
 export interface DiscoverCandidate {
