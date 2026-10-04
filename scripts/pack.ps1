@@ -90,9 +90,12 @@ Write-Output '[pack] 包内文件：'
 $entries | ForEach-Object { Write-Output "  $_" }
 
 $expected = @('package/package.json', 'package/lib/index.js', 'package/lib/client.js', 'package/cordis.patch.yml')
-$extra = $entries | Where-Object { $expected -notcontains $_ }
+# npm 无视 files 白名单、总会带上的文件（仓库根有就会进包）。
+$alwaysIncluded = @('package/README.md', 'package/LICENSE')
+foreach ($required in $expected) { if ($entries -notcontains $required) { throw "包里缺少 $required" } }
+$extra = $entries | Where-Object { $expected -notcontains $_ -and $alwaysIncluded -notcontains $_ }
 if ($extra) { throw "包里有预期之外的文件：$($extra -join ', ')" }
 if ($entries -contains 'package/lib/.client.raw.js') { throw '包内混进了中间产物 lib/.client.raw.js' }
 
 $size = (Get-Item -LiteralPath $tgzPath).Length
-Write-Output "[pack] 大小 $size 字节；内容校验通过（仅 $($expected.Count) 项）。"
+Write-Output "[pack] 大小 $size 字节；内容校验通过（$($expected.Count) 项产物 + npm 固定附带的 README / LICENSE）。"
