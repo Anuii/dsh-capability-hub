@@ -1,0 +1,74 @@
+# 决策记录 — dsh-capability-hub（能力中心）
+
+本文记录设计决策；代码注释中的 `D-xx` 编号指向这里。
+决策编号是稳定标识（A 形态与边界、B 技能、C MCP 管理、D 懒加载运行时、E 运行态面板、F 工程与交付），
+引用时直接写编号即可，不要重新编号。
+
+## A. 形态与边界
+
+| ID | 决策 |
+|---|---|
+| D-A1 | 包名 dsh-capability-hub，界面显示名「能力中心」；源码在包目录 `dsh-capability-hub/`；不发布到 npm |
+| D-A2 | 一个独立页面，三个标签：技能 / MCP 服务器 / 运行态；官方插件管理页本插件那一行的「配置」按钮（keyed slot `plugins.row.config`）直达 MCP 标签 |
+| D-A3 | 界面只做中文，文案集中在字典文件 |
+| D-A4 | 依赖：可用 npm 通用库（打包进产物）；不依赖任何别人写的 DSH 插件；DSH 自带的包优先（MCP 通信用 DSH 自带 `@modelcontextprotocol/client` v2，声明 peer，不另装；`@deepseek-ai/*` 走宿主解析） |
+| D-A5 | 只管 DSH 自身；对 Claude Code / Codex 只读（导入），绝不写 |
+| D-A6 | 访问权限与 DSH 本身一致：接口挂在 `/api/` 前缀下继承 DSH browser-auth；不自建 loopback 围栏（隧道流量会被伪装成 loopback，围栏无效） |
+
+## B. 技能
+
+| ID | 决策 |
+|---|---|
+| D-B1 | 功能：浏览、只读查看、启用停用、删除（回收站，可恢复/清空）、体检、从 GitHub 安装、检查更新、更新。不做编辑与创建 |
+| D-B2 | 可写根：`~/.agents/skills`、`~/.dsh/skills`、当前会话工作区的项目级 `.dsh/skills` 与 `.agents/skills`；`customSkillDirs` 与内置技能只读；项目级只显示当前会话工作区，不提供切换 |
+| D-B3 | 启停 = 改写 `disable-model-invocation` 一行；只改该行，保留 BOM/CRLF/其余字节；原子写 |
+| D-B4 | 体检：按 DSH 官方规则判定「能否加载 / 模型能否看到」并写原因；有问题照常显示不隐藏，不自动修复；显示同名遮蔽 |
+| D-B5 | 删除 = 整个技能目录移入插件回收站；`npx skills` 的 lock 条目随之入回收站，恢复时放回；手动清空 |
+| D-B6 | 安装：输入仓库/粘贴链接 → 列出仓库内技能 → 勾选安装；skills.sh 搜索；预置常用仓库（可增删）；默认装到 `~/.agents/skills`，可选装到当前项目 |
+| D-B7 | 来源记录：`~/.agents/skills` 下的技能写 `~/.agents/.skill-lock.json`（兼容 `npx skills` v3：不改 version、保留其他条目与未知字段、`skillFolderHash` 为上游目录内容 SHA-256、`updatedAt` ISO、`installedAt` 不变）；其他根记在插件自己的 `sources.json` |
+| D-B8 | 无来源技能：自动推测候选来源，用户确认后才登记；可手填 |
+| D-B9 | 检查更新只在用户点击时进行（单个或全部）；GitHub 凭据顺序 `GITHUB_TOKEN` → `gh auth token` → 匿名；令牌不出宿主进程、不落盘 |
+| D-B10 | 更新 = 从上游下载新版本直接覆盖（不做本地改动提醒）；旧版本进回收站可恢复；更新后自动恢复用户的启停状态 |
+| D-B11 | 检测技能目录被外部工具管理时给提示 |
+| D-B12 | 本插件验收通过后停用 web-ui-skill-explorer |
+
+## C. MCP 管理
+
+| ID | 决策 |
+|---|---|
+| D-C1 | 配置存插件自己的独立文件（所有 profile 共用一份，位于插件数据目录、不在任何 profile 目录内；MCP 功能本身不修改 profile），不写 cordis 配置（插件改自己的 cordis 配置会触发自身重载）；只存用户改过的字段，默认值不落盘；保存即生效 |
+| D-C2 | 添加方式：粘贴 `mcpServers` JSON 自动识别、简单表单、预设模板（fetch/time/memory/sequential-thinking/context7）、从 Claude Code / Codex 只读导入（预览勾选） |
+| D-C3 | 高级区覆盖全部字段（去掉 `directTools`、`freezeDirectTools`）；字段名与取值由表单封死，未知字段一律拒绝；每个服务器可切换 JSON 编辑模式，保存前同样校验 |
+| D-C4 | 保存时检查启动命令是否存在（只查 PATH，不执行）；服务器可带描述/标签/主页（仅展示） |
+| D-C5 | 每个服务器单独启停（`disabled`）；敏感值（env、headers 的值）默认遮罩，接口也打码，显式「显示」才下发明文 |
+| D-C6 | 保存/新增服务器后后台自动连一次拉工具清单写缓存，随即断开；每次成功调用后顺带刷新 |
+| D-C7 | 不迁移：`dsh-mcp-lazy` 从未被加载，当前没有任何 MCP 配置 |
+
+## D. 懒加载运行时
+
+| ID | 决策 |
+|---|---|
+| D-D1 | 只注册一个工具 `mcp`，参数 schema 恒定；描述 = 恒定前缀 + 已启用服务器名（配置顺序），不写工具数量 |
+| D-D2 | 动作：`search` / `describe` / `call` / `connect` / `instructions` / `status`；search、describe、status 只读缓存，不启动进程 |
+| D-D3 | 会话隔离：实例键 = 会话 id + 服务器名；子代理会话各自一套；会话结束全部回收 |
+| D-D4 | 生命周期二维：启动时机（首次使用 / 会话开始）× 回收（空闲回收 / 会话内常驻）：lazy、lazy-keep-alive、eager、keep-alive；默认 lazy |
+| D-D5 | `idleTimeout` 默认 10 分钟，0 = 不回收；关闭时结束整棵进程树（Windows `taskkill /T /F`），不留孤儿 |
+| D-D6 | 输出护栏默认 50KiB / 2000 行，保头部，超出部分落文件并把路径告诉模型 |
+| D-D7 | 失败退避：失败作为普通文本返回模型；默认 60 秒冷却；`connect` 可强制重试；取消不算失败 |
+| D-D8 | `envFrom` 在 Windows 用 `cmd.exe` 执行取值；失败拒绝启动该服务器，绝不注入空值；诊断不含 stdout |
+| D-D9 | 不做 `directTools`（工具提升） |
+
+## E. 运行态面板
+
+| ID | 决策 |
+|---|---|
+| D-E1 | 显示各服务器缓存（工具数、更新时间）、各会话活跃实例、最近失败与冷却；可手动刷新缓存、断开实例 |
+
+## F. 工程与交付
+
+| ID | 决策 |
+|---|---|
+| D-F1 | 永不失败外壳：每个功能模块独立 try/catch 加载，失败只降级；cordis 条目 id 用 `capability-hub`，避开 7 个启动关键 id |
+| D-F2 | 测试：`node:test` 单测 + 手写假 MCP server 集成测试 |
+| D-F3 | 先在隔离测试 profile（capability-hub-dev，端口 19411，夹具 home）验收；切换 = 装进桌面 profile、卸载 dsh-mcp-lazy、停用 skill-explorer |
+| D-F4 | 语言：TypeScript（仅可擦除语法），esbuild 打包；客户端产物为 DSH `__ModuleLoader__` 格式，React 等宿主种子模块外置 |

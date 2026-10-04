@@ -1,0 +1,13 @@
+# dsh-capability-hub — 组合包 patch 层
+#
+# 条目 id 刻意避开 DSH 硬编码的 7 个启动关键 id：
+#   agent-loop / webserver / modules / connection / headless-runner / acp / sdk-jsonrpc-server
+# 因此本插件任何失败都只是 warning，绝不会让 dsh web 终止启动。
+#
+# ⚠ 本文件**只 insert 条目，不写任何 config**。
+#   这个 patch 会随包被装进任何 profile（包括 desktop），写死开发路径会让正式环境去读写
+#   夹具目录（安全红线）。所有开发期覆盖（devOverrides.homeDir / failureDemo）只写在开发
+#   profile 自己的 <profile>/cordis.patch.yml 里 —— 见 docs/DEV.md。
+- insert:
+    - id: capability-hub
+      name: 'dsh-capability-hub'
