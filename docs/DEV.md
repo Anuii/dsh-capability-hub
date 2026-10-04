@@ -144,7 +144,7 @@ profile 做试验，出问题就直接落在真实用户目录上。所以开发
 
     dsh web: http://127.0.0.1:19411/?token=<43 字符令牌>
 
-DSH 安装路径由 `DSH_HOME`（安装目录）或 `DSH_CLI`（`app.asar` 内的 cli.js）覆盖，
+DSH 安装路径由 `DSH_INSTALL_DIR`（安装目录；不要用 `DSH_HOME`，那是 DSH 的数据目录）或 `DSH_CLI`（`app.asar` 内的 cli.js）覆盖，
 默认从 `%LOCALAPPDATA%\Programs\DeepSeek Harness` 推导；profile 名与端口分别用
 `-ProfileName` / `-Port` 覆盖，默认 `capability-hub-dev` / `19411`。
 

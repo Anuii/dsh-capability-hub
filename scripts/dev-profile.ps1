@@ -15,7 +15,7 @@
     pwsh -File scripts\dev-profile.ps1 status
 
   端口默认 19411，可用 -Port 覆盖；profile 名默认 capability-hub-dev，可用 -ProfileName 覆盖。
-  DSH 安装目录：优先 -DshHome 参数，其次 $env:DSH_HOME，最后按 %LOCALAPPDATA%\Programs\DeepSeek Harness 推导；
+  DSH 安装目录：优先 -DshInstallDir 参数，其次 $env:DSH_INSTALL_DIR（注意不是 DSH_HOME，那是 DSH 的数据目录），最后按 %LOCALAPPDATA%\Programs\DeepSeek Harness 推导；
   app.asar 内的 cli.js 可用 $env:DSH_CLI 覆盖。
 #>
 [CmdletBinding()]
@@ -25,7 +25,7 @@ param(
   [string]$Action = 'status',
   [int]$Port = 19411,
   [string]$ProfileName = 'capability-hub-dev',
-  [string]$DshHome
+  [string]$DshInstallDir
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,18 +41,18 @@ $PidFile     = Join-Path $LogDir 'dev-profile.pid'
 $Wrapper     = Join-Path $LogDir 'dev-profile-run.cmd'
 
 # DSH 安装目录：不写死具体机器上的路径，按参数 / 环境变量 / %LOCALAPPDATA% 依次推导。
-if (-not $DshHome) { $DshHome = $env:DSH_HOME }
-if (-not $DshHome) {
+if (-not $DshInstallDir) { $DshInstallDir = $env:DSH_INSTALL_DIR }
+if (-not $DshInstallDir) {
   $localAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $env:USERPROFILE 'AppData\Local' }
-  $DshHome = Join-Path $localAppData 'Programs\DeepSeek Harness'
+  $DshInstallDir = Join-Path $localAppData 'Programs\DeepSeek Harness'
 }
-$DshExe = Join-Path $DshHome 'DeepSeek Harness.exe'
+$DshExe = Join-Path $DshInstallDir 'DeepSeek Harness.exe'
 $DshCli = if ($env:DSH_CLI) { $env:DSH_CLI } else {
-  Join-Path $DshHome 'resources\app.asar\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\cli.js'
+  Join-Path $DshInstallDir 'resources\app.asar\dsh\node_modules\@deepseek-ai\dsh-desktop-host\lib\cli.js'
 }
 
 # 注意：$DshCli 在 app.asar 内，Test-Path 看不到（asar 是虚拟路径），所以只校验 exe。
-if (-not (Test-Path -LiteralPath $DshExe)) { throw "缺少 DSH 可执行文件：$DshExe（用 -DshHome 或 $env:DSH_HOME 指定 DSH 安装目录）" }
+if (-not (Test-Path -LiteralPath $DshExe)) { throw "缺少 DSH 可执行文件：$DshExe（用 -DshInstallDir 或 $env:DSH_INSTALL_DIR 指定 DSH 安装目录）" }
 if (-not (Test-Path -LiteralPath $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 
 # ---- 工具函数 ----------------------------------------------------------------
