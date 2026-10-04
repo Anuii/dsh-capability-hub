@@ -41,13 +41,14 @@
 都在包根执行：
 
     node build.mjs                                     # 产出 lib\index.js 与 lib\client.js
+    node build.mjs --watch                             # 监听源码增量重建（--also-out <目录> 同时写进另一个 lib 目录）
     node node_modules/typescript/bin/tsc --noEmit      # 类型检查（等价 npm run typecheck）
     node --test "test/**/*.test.ts"                    # 全部单测（等价 npm run test）
     node --test "test/platform/**/*.test.ts"           # 只跑某一层
 
 `lib\` 与 `node_modules\` 都在 `.gitignore` 里，是构建产物，不进版本库。构建用 esbuild：
 
-- 宿主半 `src\host\**` → `lib\index.js`（CJS）；
+- 宿主半 `src\host\**` → `lib\index.js`（ESM）；
 - 客户端半 `src\client\**` → `lib\client.js`，由 `scripts\client-wrapper.mjs` 套进 DSH 的
   「懒加载 CJS 工厂」（`window.__ModuleLoader__.load({ id, factory })`），React 等宿主种子模块外置。
 
@@ -116,7 +117,7 @@ SDK 只存在于 DSH 的 `app.asar` 内，本机 Node 解析不到，所以必�
 
 脚本做四件事：校验 `package.json` 的 `files` 白名单 → `build.mjs` → `npm pack` →
 列包内文件并断言没有多余的中间产物。产物 `dist\dsh-capability-hub-<版本>.tgz` 里只有
-`package.json`、`lib/index.js`、`lib/client.js`、`cordis.patch.yml`。
+`package.json`、`lib/index.js`、`lib/client.js`、`cordis.patch.yml`，外加 npm 无论如何都会附带的 `README.md` 与 `LICENSE`。
 
 `node` / `npm` 默认走 `PATH`，也可以用 `-Node` / `-Npm` 显式指定。
 
@@ -154,9 +155,27 @@ DSH 安装路径由 `DSH_INSTALL_DIR`（安装目录；不要用 `DSH_HOME`，�
 >    `.cmd`，在里面设 `ELECTRON_RUN_AS_NODE=1` 并重定向日志。
 > 2. 判断「在跑」要看**端口监听**，不要只看 pid 文件：wrapper `cmd` 可能在 DSH 起来后自行退出。
 
-### 4.3 装 / 更新插件
+### 4.3 装 / 更新插件：两种方式
 
-插件在 profile 里是 **tgz 快照安装**，不是链接安装：
+测试 profile 有两种装法，用 `scripts\dev-link.ps1 status` 看当前是哪一种：
+
+| 方式 | 适用 | profile 里的依赖 | 换代码 |
+|---|---|---|---|
+| **link 暂存目录**（日常开发，默认） | 边改边看 | `link:<profile>/.dev-link/dsh-capability-hub` | `dev-link.ps1 watch` 自动写入；客户端刷新页面，宿主 `dev-profile.ps1 restart` |
+| **tgz**（发版前验收、Desktop） | 验证「打出来的包」本身 | `file:<仓库根>/dist/dsh-capability-hub-<版本>.tgz` | 重新打包 → 先卸载再安装 → 重启 |
+
+link 方式：
+
+    pwsh -NoProfile -File scripts\dev-link.ps1 enable          # tgz → link（会停、启 profile）
+    pwsh -NoProfile -File scripts\dev-link.ps1 watch           # 前台监听：源码一改，约 1 秒后产物进暂存目录
+    pwsh -NoProfile -File scripts\dev-link.ps1 sync [-Restart] # 不想常驻监听时：build 一次并写入暂存目录
+    pwsh -NoProfile -File scripts\dev-link.ps1 disable         # link → 重新装 dist 里当前版本的 tgz
+
+客户端改动在 watch / sync 之后**刷新页面**即可（宿主 HMR 按文件元数据轮询，实测改源码到页面拿到新 rev 约 1 秒）；
+宿主改动要 `scripts\dev-profile.ps1 restart`（或 `sync -Restart`）。
+对测试 profile 做过任何插件操作（装、卸其他插件）后，pnpm 可能重建链接并清空暂存目录，再跑一次 `sync`。
+
+tgz 方式：
 
     pwsh -NoProfile -File scripts\pack.ps1                    # 1. 重新打包
     # 2. 用 DSH 命令行或界面「添加插件」把这个 tgz 装进测试 profile
@@ -176,32 +195,45 @@ DSH 安装路径由 `DSH_INSTALL_DIR`（安装目录；不要用 `DSH_HOME`，�
 动手之前先做这两步检查：
 
 1. **包根工作区干净**：`git status --short` 输出为空。改了源码就先提交。
-2. **目标目录是真实目录**：检查
+2. **已安装位置只有两种合法形态**：检查
    `%USERPROFILE%\.dsh\profiles\<你的测试 profile>\node_modules\dsh-capability-hub`
 
        Get-Item "<上面的路径>" -Force | Select-Object Attributes, LinkType, Target
 
-   `LinkType` / `Target` 有值（Junction / SymbolicLink）→ **立刻停手**。
-   空白（`Directory`）或目录不存在，才可以继续。
+   - `LinkType` 为空（真实目录，tgz 安装）或目录不存在 → 可以继续；
+   - `LinkType` 是 Junction 且 `Target` **正好是** `<profile>\.dev-link\dsh-capability-hub` → 可以继续；
+   - 链接指向任何别的地方（尤其是源码目录）→ **立刻停手**，不要做任何插件或 pnpm 操作。
 
-`scripts\dev-sync-client.ps1` 内置了第 2 条检查，任何一条不满足就直接退出报错。
+`dev-link.ps1` 每个动作都先做第 2 条检查（还会确认暂存目录本身和里面都没有链接、与仓库目录互不包含）；
+`dev-sync-client.ps1` 在 tgz 方式下检查真实目录，在 link 方式下改为调用 `dev-link.ps1 sync`。
 
-### 4.5 绝不要用 `link:` 依赖本仓库
+### 4.5 link 只许指向暂存目录，绝不指向源码目录
 
-不要在任何 profile 里把本插件配成 `link:`（或 `file:` 指向源码目录）的依赖。
-装了插件之后再执行安装 / 卸载，包管理器会删除 `node_modules\dsh-capability-hub`；如果那是一个
-指向源码目录的 junction，Windows 上的递归删除会**顺着链接把源码目录整个清空**。
+**实测**（2026-10-05，pnpm v11.7.0，`nodeLinker: hoisted`）：移除一个 `link:` 依赖时，pnpm 会顺着
+`node_modules\dsh-capability-hub` 这个 junction **把目标目录里的文件全部删掉**（目录本身留下）。
+当时 link 指向的是源码目录，于是源码目录被整个清空。
 
-预演这类操作时，只用「从来没有 link 过源码」的 profile，并且先做 4.4 的两步检查。
+所以 link 的目标只能是暂存目录 `<profile>\.dev-link\dsh-capability-hub`：
+
+- 里面只有四个可随时重新生成的文件（`package.json`、`cordis.patch.yml`、`lib\index.js`、`lib\client.js`），
+  由 `build.mjs --also-out` 与 `dev-link.ps1` 写入；被 pnpm 清空也只需再 `sync` 一次。
+  上面的结论就是用它复现的：`disable` 之后暂存目录被清空，仓库文件数与字节数不变。
+- 它放在 profile 目录内，模块解析的祖先链与 tgz 安装完全一致（向上能找到
+  `~/.dsh/profiles/node_modules`），宿主外置的 `@deepseek-ai/*`、`@modelcontextprotocol/*` 照常解析；
+  link 方式下 `smoke-stage-b.ps1` 同样 11/11。
+- 不要手工把 `link:`（或指向目录的 `file:`）写进任何 profile；只用 `dev-link.ps1 enable`。
+- `dev-link.ps1` 拒绝 desktop profile：Desktop 一律装 tgz，安装、升级由使用者本人在插件页完成。
 
 ### 4.6 装好之后长什么样
 
-- profile 的 `package.json` 里 `dependencies` 是本插件的 tgz 说明符（**不是** `link:`），
+- tgz 方式：profile 的 `package.json` 里 `dependencies` 是本插件的 tgz 说明符，
   `node_modules\dsh-capability-hub` 是从 tgz 解出来的真实目录；
+- link 方式：依赖是 `link:<profile>/.dev-link/dsh-capability-hub`，`node_modules\dsh-capability-hub`
+  是指向它的 junction；
 - 只安装不启用：依赖在、目录也在，但 `dsh.profile.bundles` 里没有它 → 插件不加载，
   `GET health` 404。这就是「安装 ≠ 启用」；
 - **启用是热生效的**：已打开的页面不用刷新，侧栏当场出现「能力中心」；
-- 例外：**替换已加载的包**（升级）后必须重启才能加载新代码。
+- 例外：**替换已加载的包**（升级、改了宿主代码）后必须重启才能加载新代码。
 
 ---
 
@@ -232,6 +264,8 @@ DSH 安装路径由 `DSH_INSTALL_DIR`（安装目录；不要用 `DSH_HOME`，�
 
 ## 6. 客户端热同步（改 UI 的日常循环）
 
+link 方式（第 4.3 节）下直接用 `dev-link.ps1 watch` 或 `sync`，不需要本节的脚本。tgz 方式下：
+
     pwsh -NoProfile -File scripts\dev-sync-client.ps1     # build + 只复制 lib\client.js
     # 然后刷新浏览器页面
 
@@ -251,7 +285,7 @@ DSH 安装路径由 `DSH_INSTALL_DIR`（安装目录；不要用 `DSH_HOME`，�
 `rebuilt()`。脚本同时打印复制前后的 SHA256 与两次的进程号，用来证明「不用重启」。
 `-Restart` 会在复制后顺带重启 profile，正常情况下不需要。
 
-改宿主半（`src\host\**`）不走这条路：只 build 不会影响已安装的那一份，必须重新打包 + 覆盖安装 + 重启（见第 4 节）。
+改宿主半（`src\host\**`）不走这条路：link 方式下 `dev-link.ps1 sync -Restart`；tgz 方式下只 build 不会影响已安装的那一份，必须重新打包 + 覆盖安装 + 重启（见第 4 节）。
 
 ---
 
@@ -359,8 +393,9 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 | 接口 403 | Host/Origin 信任闸：Host 不是 loopback，或 Origin 与 Host 不一致 |
 | 页面没有「能力中心」 | `globalThis.__DSH_BOOT__` 里有没有 `dsh-capability-hub`；客户端诊断 hook |
 | 工具没注册 | `boot.json` 的 `toolError` |
-| 改了界面没生效 | 是否 build 过；是否刷新过页面；必要时再跑一次 `dev-sync-client.ps1` |
-| 改了宿主没生效 | 宿主半必须重新打包 + 覆盖安装 + 重启（第 4 节） |
+| 改了界面没生效 | `dev-link.ps1 status` 看暂存产物是否「一致」；是否刷新过页面；tgz 方式下再跑一次 `dev-sync-client.ps1` |
+| 改了宿主没生效 | link 方式：`dev-link.ps1 sync -Restart`；tgz 方式：重新打包 + 覆盖安装 + 重启（第 4 节） |
+| 装卸别的插件后能力中心消失 | pnpm 重建链接时清空了暂存目录：`dev-link.ps1 sync -Restart` |
 
 ---
 
@@ -374,7 +409,7 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
         host/                宿主半：平台外壳 + skills-local / skills-remote / mcp-config / mcp-runtime
         client/              客户端半：外壳、三个标签页、共用 UI kit
       test/                  node:test 单测 + 集成测试 + 夹具
-      scripts/               开发脚本：打包、测试 profile、热同步、冒烟、截图
+      scripts/               开发脚本：打包、测试 profile、link 暂存、热同步、冒烟、截图
       docs/                  开发文档、客户端指南、宿主 primitives 参考、设计决策
       lib/                   构建产物（不进版本库）
 

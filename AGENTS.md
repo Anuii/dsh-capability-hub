@@ -13,11 +13,12 @@ node build.mjs                                  # 构建 lib/index.js 与 lib/cl
 .\node_modules\.bin\tsc.cmd --noEmit           # 类型检查，须 0 错
 node --test "test/**/*.test.ts"                 # 全部单测（在线测试需 $env:RUN_LIVE='1'）
 pwsh -NoProfile -File scripts\pack.ps1          # 打包到 dist\（被 .gitignore 忽略）
+pwsh -NoProfile -File scripts\dev-link.ps1 watch # 测试 profile 跟随源码：改客户端刷新页面，改宿主再 dev-profile.ps1 restart
 ```
 mcp-runtime 集成测试与 YAML 对拍要在 Electron-as-node 下运行，命令见 docs/DEV.md 第 2 节。
 
 ## 硬规则
-1. **绝不用 `link:` 把本仓库装进任何 DSH profile**：Windows 上 pnpm 删除指向源码的 junction 时会清空整个源码目录。一律用 `scripts/pack.ps1` 打出的 tgz 安装。对任何 profile 做插件或 pnpm 操作之前，先确认 `git status --short` 为空，且该 profile 的 `node_modules\dsh-capability-hub` 不是链接（LinkType 为空）。
+1. **`link:` 只许指向暂存目录，绝不指向源码目录**：Windows 上 pnpm 移除 link 依赖时会顺着 junction 清空目标目录。测试 profile 只用 `scripts/dev-link.ps1` 建的 link（目标是 `<profile>\.dev-link\dsh-capability-hub`，里面只有可重建的构建产物）；其他 profile（包括 Desktop）一律装 `scripts/pack.ps1` 打出的 tgz。对任何 profile 做插件或 pnpm 操作之前，先确认 `git status --short` 为空，且该 profile 的 `node_modules\dsh-capability-hub` 要么是真实目录，要么是指向上述暂存目录的链接（`dev-link.ps1 status` 会检查）；指向别处立即停手。详见 docs/DEV.md 第 4 节。
 2. **使用者的真实数据只读**：`~/.agents`（含 `.skill-lock.json`）、`~/.dsh/storages/dsh-capability-hub`、`~/.claude*`、`~/.codex`。开发与走查只在隔离的测试 profile 里做，用 devOverrides 把 homeDir 指向 `.dev/home` 夹具。使用者日常用的 Desktop profile 只读，安装、升级由使用者本人在插件页完成。
 3. **走查不得新建会话**：测试 profile 与 Desktop 共用 `~/.dsh` 的会话存储，新会话会出现在使用者真实的会话列表里。
 4. **不按进程名杀进程**（不用 `taskkill /IM`），只清理自己启动的 PID 或占用的端口。

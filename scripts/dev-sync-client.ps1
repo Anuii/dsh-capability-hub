@@ -16,7 +16,8 @@
   所以覆盖文件后最多等一个轮询周期，刷新页面就会请求新的 rev。
 
   安全：目标目录必须是**真实目录**（Attributes 里没有 ReparsePoint、LinkType 为空），
-  否则立刻退出并报错。这条检查是为了防止包管理器顺着 junction 删除时把源码目录一起清空
+  否则立刻退出并报错。例外：link 方式（目标是 scripts\dev-link.ps1 建的 junction）下改为调用
+  dev-link.ps1 sync，由它核对链接目标正好是暂存目录。这条检查是为了防止包管理器顺着 junction 删除时把源码目录一起清空
   （见 docs/DEV.md 第 4 节）。
 
   用法（在包根）：
@@ -116,6 +117,17 @@ if (-not (Test-Path -LiteralPath $SourceClient)) {
 }
 
 # ---- 2. 安全检查与复制 ------------------------------------------------------
+# link 方式（scripts\dev-link.ps1）：已安装位置是指向暂存目录的 junction，交给 dev-link.ps1 sync 写入暂存目录；
+# 它会核对链接目标正好是暂存目录，指向别处一律报错停手。
+$installedItem = if (Test-Path -LiteralPath $TargetDir) { Get-Item -LiteralPath $TargetDir -Force } else { $null }
+if ($null -ne $installedItem -and -not [string]::IsNullOrEmpty($installedItem.LinkType)) {
+  Write-Output '== 检测到 link 方式：改用 scripts\dev-link.ps1 sync'
+  $linkArgs = @{ NoBuild = $true; Port = $Port; ProfileName = $ProfileName }
+  if ($Restart) { $linkArgs.Restart = $true }
+  & (Join-Path $PSScriptRoot 'dev-link.ps1') sync @linkArgs
+  exit $LASTEXITCODE
+}
+
 $pidBefore = Get-PortPid $Port
 Write-Output "== target: $TargetClient"
 Assert-RealDirectory -Path $ProfileRoot -Label 'profile 根目录' | Out-Null

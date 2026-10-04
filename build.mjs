@@ -13,10 +13,18 @@
  * 客户端半 external：平台种子表的 9 个键必须外置（否则会出现两份 React）；
  * 另外把用到但不在种子表里的宿主客户端包也外置，它们按 package.json 的
  * dsh.client.inject 在 boot 图里先加载。
+ *
+ * 用法：
+ *   node build.mjs                              # 构建到 lib/
+ *   node build.mjs --also-out <目录>            # 同时把 index.js / client.js 写进另一个 lib 目录（可重复）
+ *   node build.mjs --watch [--also-out <目录>]  # 监听源码，变化后增量重建并写出
+ *
+ * --also-out 给开发期的 link 暂存目录用（见 docs/DEV.md 第 4 节、scripts/dev-link.ps1）。
+ * 产物内容没变时不重写文件：宿主 HMR 按文件元数据判断变化，避免无意义的重载。
  */
-import { build } from "esbuild";
+import { build, context } from "esbuild";
 import { rm, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { wrapClientBundle } from "./scripts/client-wrapper.mjs";
 
@@ -49,15 +57,63 @@ const INJECTED_CLIENT_MODULES = [
 ];
 
 const CLIENT_EXTERNALS = [...SEED_MODULES, ...INJECTED_CLIENT_MODULES];
-const watch = process.argv.includes("--watch");
 
-await rm(join(root, "lib"), { recursive: true, force: true });
-await mkdir(join(root, "lib"), { recursive: true });
+// ---- 参数 -------------------------------------------------------------------
+const argv = process.argv.slice(2);
+const watch = argv.includes("--watch");
+const libDir = join(root, "lib");
+const alsoOut = [];
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] !== "--also-out") continue;
+  const dir = argv[i + 1];
+  if (dir === undefined || dir.startsWith("--")) throw new Error("--also-out 后面要跟一个目录");
+  alsoOut.push(resolve(dir));
+  i++;
+}
+const outDirs = [libDir, ...alsoOut.filter((dir) => dir !== libDir)];
 
-// ---- 宿主半 ----
-await build({
+// ---- 写出 -------------------------------------------------------------------
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+
+/** 内容不变就跳过；Windows 上目标偶尔被读者占用（EBUSY/EPERM），短暂重试。 */
+async function writeIfChanged(file, contents) {
+  try {
+    const current = await readFile(file, "utf8");
+    if (current === contents) return false;
+  } catch {}
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await writeFile(file, contents, "utf8");
+      return true;
+    } catch (error) {
+      if (attempt >= 5 || !["EBUSY", "EPERM", "EACCES"].includes(error?.code)) throw error;
+      await sleep(100 * (attempt + 1));
+    }
+  }
+}
+
+async function emit(name, contents) {
+  const written = [];
+  for (const dir of outDirs) {
+    await mkdir(dir, { recursive: true });
+    if (await writeIfChanged(join(dir, name), contents)) written.push(dir);
+  }
+  return written;
+}
+
+function stamp() {
+  return new Date().toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+function report(name, written) {
+  if (written.length === 0) console.log(`[build ${stamp()}] ${name} 未变化`);
+  else console.log(`[build ${stamp()}] ${name} → ${written.map((dir) => (dir === libDir ? "lib" : dir)).join("、")}`);
+}
+
+// ---- 构建选项 ---------------------------------------------------------------
+const hostOptions = {
   entryPoints: [join(root, "src/host/index.ts")],
-  outfile: join(root, "lib/index.js"),
+  outfile: join(libDir, "index.js"),
   bundle: true,
   platform: "node",
   format: "esm",
@@ -67,12 +123,12 @@ await build({
   external: HOST_EXTERNALS,
   banner: { js: `// ${pkg.name} ${pkg.version} — 宿主半（ESM）\n` },
   logLevel: "info",
-});
+  write: false,
+};
 
-// ---- 浏览器半 ----
-await build({
+const clientOptions = {
   entryPoints: [join(root, "src/client/index.tsx")],
-  outfile: join(root, "lib/.client.raw.js"),
+  outfile: join(libDir, ".client.raw.js"),
   bundle: true,
   platform: "browser",
   format: "cjs",
@@ -84,10 +140,44 @@ await build({
   legalComments: "none",
   external: CLIENT_EXTERNALS,
   logLevel: "info",
-});
+  write: false,
+};
 
-const raw = await readFile(join(root, "lib/.client.raw.js"), "utf8");
-await writeFile(join(root, "lib/client.js"), wrapClientBundle(raw, { id: PACKAGE_ID }), "utf8");
-await rm(join(root, "lib/.client.raw.js"), { force: true });
+async function emitHost(result) {
+  report("index.js", await emit("index.js", result.outputFiles[0].text));
+}
 
-console.log(`[build] ${PACKAGE_ID}：lib/index.js 与 lib/client.js 已生成${watch ? "" : ""}`);
+async function emitClient(result) {
+  const wrapped = wrapClientBundle(result.outputFiles[0].text, { id: PACKAGE_ID });
+  report("client.js", await emit("client.js", wrapped));
+}
+
+/** esbuild 插件：每次（重新）构建成功后写出产物。 */
+function emitter(onSuccess) {
+  return {
+    name: "emit",
+    setup(b) {
+      b.onEnd(async (result) => {
+        if (result.errors.length > 0) {
+          console.log(`[build ${stamp()}] 构建失败，保留上一份产物`);
+          return;
+        }
+        await onSuccess(result);
+      });
+    },
+  };
+}
+
+if (watch) {
+  const host = await context({ ...hostOptions, plugins: [emitter(emitHost)] });
+  const client = await context({ ...clientOptions, plugins: [emitter(emitClient)] });
+  await Promise.all([host.watch(), client.watch()]);
+  console.log(`[build] 监听中（Ctrl+C 结束）：${outDirs.join("、")}`);
+  console.log("[build] 客户端改动：刷新页面即可；宿主改动：需要重启 profile。");
+} else {
+  // 全量构建：先清空仓库内的 lib/，保证打包时没有残留中间产物；--also-out 的目录只覆盖不清空。
+  await rm(libDir, { recursive: true, force: true });
+  await emitHost(await build(hostOptions));
+  await emitClient(await build(clientOptions));
+  console.log(`[build] ${PACKAGE_ID}：lib/index.js 与 lib/client.js 已生成`);
+}
