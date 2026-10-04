@@ -32,6 +32,10 @@ const CSS = [
   ".chrt_dialogBody{display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto}",
   ".chrt_dialogText{margin:0;font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary)}",
   ".chrt_small{font-size:11px;color:var(--dsw-alias-label-tertiary)}",
+  // 「运行中」区域（MCP 页底部）：与上方服务器列表隔开一段；空状态与横幅的内边距。
+  ".chrt_region{display:flex;flex-direction:column;margin-top:8px}",
+  ".chrt_empty{margin:0;padding:12px 16px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}",
+  ".chrt_pad{padding:12px 16px}",
 ].join("");
 
 /** 类名表。 */
@@ -49,6 +53,9 @@ export const styles = {
   dialogBody: PREFIX + "dialogBody",
   dialogText: PREFIX + "dialogText",
   small: PREFIX + "small",
+  region: PREFIX + "region",
+  empty: PREFIX + "empty",
+  pad: PREFIX + "pad",
 } as const;
 
 /** 把运行态页样式注入 <head>（幂等）。 */

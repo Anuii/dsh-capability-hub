@@ -11,7 +11,7 @@ import * as React from "react";
 import { kit } from "./styles.ts";
 import { clampBadges, passthroughAttrs, rowKeyDecision } from "./pure.ts";
 import { StatusDot, type StatusTone } from "./Badge.tsx";
-import { ChevronGlyph, GripIcon } from "./icons.tsx";
+import { ChevronGlyph, GripIcon, SectionChevron } from "./icons.tsx";
 
 /** 列表容器：一个圆角面板，纵向排若干 ListGroup。 */
 export function ListSurface(props: {
@@ -37,27 +37,69 @@ export function ListGroup(props: {
   headTitle?: string;
   count?: number | string;
   badges?: React.ReactNode;
+  /** 标题行最右侧的控件（例如刷新按钮）；点击不会触发折叠。 */
+  end?: React.ReactNode;
+  /**
+   * 可折叠：给了 onToggle，标题行就是一个按钮（Tab 聚焦、Enter/Space 切换、aria-expanded），
+   * 折叠时不渲染内容。展开状态由调用方持有（expanded，缺省视为展开）。
+   */
+  expanded?: boolean;
+  onToggle?(): void;
+  /** children 是若干子分组（嵌套的 ListGroup），而不是行。 */
+  nested?: boolean;
+  /** 嵌套层级：1 = 二级分组（无外框、标题行缩进、底色更浅）。 */
+  depth?: 0 | 1;
   children?: React.ReactNode;
   testId?: string;
 }): React.ReactElement {
+  const foldable = props.onToggle !== undefined;
+  const expanded = props.expanded !== false;
+  const stop = (event: React.SyntheticEvent): void => event.stopPropagation();
+  const headParts = [
+    foldable ? React.createElement(SectionChevron, { key: "chevron", open: expanded, className: kit.sectionChevron }) : null,
+    React.createElement("span", { key: "title", className: kit.groupTitle }, props.title),
+    props.meta === undefined ? null : React.createElement("span", {
+      key: "meta",
+      className: kit.groupMeta,
+      title: props.metaTitle ?? props.meta,
+    }, props.meta),
+    React.createElement("span", { key: "spacer", className: kit.groupSpacer }),
+    props.badges === undefined ? null : React.createElement("span", { key: "badges", className: kit.groupBadges }, props.badges),
+    props.count === undefined ? null : React.createElement("span", { key: "count", className: kit.groupCount }, String(props.count)),
+  ];
+  const headTitle = props.meta === undefined ? props.headTitle : undefined;
   const head = props.title === undefined
     ? null
-    : React.createElement("header", { className: kit.groupHead, title: props.meta === undefined ? props.headTitle : undefined },
-      React.createElement("span", { className: kit.groupTitle }, props.title),
-      props.meta === undefined ? null : React.createElement("span", {
-        className: kit.groupMeta,
-        title: props.metaTitle ?? props.meta,
-      }, props.meta),
-      React.createElement("span", { className: kit.groupSpacer }),
-      props.badges === undefined ? null : React.createElement("span", { className: kit.groupBadges }, props.badges),
-      props.count === undefined ? null : React.createElement("span", { className: kit.groupCount }, String(props.count)));
-  return React.createElement("section", { className: kit.group, "data-testid": props.testId },
-    head,
-    React.createElement("ul", { className: kit.rows },
-      props.children,
-      React.Children.count(props.children) === 0
-        ? React.createElement("li", { className: kit.rowsEmpty }, "\u2014")
-        : null));
+    : foldable
+      ? React.createElement("div", { className: kit.groupHeadWrap },
+        React.createElement("button", {
+          type: "button",
+          className: kit.groupHead,
+          "data-fold": "",
+          "aria-expanded": expanded,
+          title: headTitle,
+          "data-testid": props.testId === undefined ? undefined : props.testId + "-toggle",
+          onClick: () => props.onToggle?.(),
+        }, headParts),
+        props.end === undefined ? null : React.createElement("span", { className: kit.groupEnd, onClick: stop, onKeyDown: stop }, props.end))
+      : React.createElement("header", { className: kit.groupHead, title: headTitle },
+        headParts,
+        props.end === undefined ? null : React.createElement("span", { className: kit.groupEnd }, props.end));
+  const body = !expanded
+    ? null
+    : props.nested === true
+      ? React.createElement("div", { className: kit.nested }, props.children)
+      : React.createElement("ul", { className: kit.rows },
+        props.children,
+        React.Children.count(props.children) === 0
+          ? React.createElement("li", { className: kit.rowsEmpty }, "\u2014")
+          : null);
+  return React.createElement("section", {
+    className: kit.group,
+    "data-testid": props.testId,
+    "data-depth": props.depth === 1 ? "1" : undefined,
+    "data-collapsed": expanded ? undefined : "",
+  }, head, body);
 }
 
 /**

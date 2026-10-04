@@ -33,6 +33,10 @@ export interface ServerDetailBodyProps {
   now: number;
   refreshing: boolean;
   onRefresh(): void;
+  /** 该服务器在全部会话里的活跃实例数（0 时不显示「运行中的实例」一节）。 */
+  instances: number;
+  /** 「断开全部实例」：由 MCP 页弹确认框（0.3.0 从运行态标签移入，D-E1）。 */
+  onDisconnectAll(): void;
   showToast(text: string, tone?: "success"): void;
 }
 
@@ -181,6 +185,20 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
       ? null
       : React.createElement("ul", { className: styles.toolList, "data-testid": "mcp-detail-tool-list" },
           tools.map((tool) => React.createElement("li", { key: tool, className: styles.toolItem }, tool)))),
+
+    props.instances === 0
+      ? null
+      : React.createElement(Section, {
+          title: t("mcp.detail.instances"),
+          testId: "mcp-detail-instances",
+          end: React.createElement(Button, {
+            size: "sm",
+            variant: "outline",
+            "data-testid": "mcp-detail-disconnect-all",
+            onClick: props.onDisconnectAll,
+          }, t("mcp.detail.disconnectAll", { count: props.instances })),
+        },
+        React.createElement("p", { className: styles.cacheLine, "data-testid": "mcp-detail-instances-text" }, t("mcp.detail.instancesText", { count: props.instances }))),
 
     React.createElement(Section, { title: t("mcp.detail.secrets"), testId: "mcp-detail-secrets" },
       React.createElement(SecretBlock, {

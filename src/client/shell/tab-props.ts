@@ -13,8 +13,8 @@
  *     要么自己去调 `../shell/api.ts`（见 docs/CLIENT-GUIDE.md 第 3、4 节）。
  */
 
-/** 三个标签的 id（顺序即界面上从左到右的顺序）。 */
-export type PanelTab = "skills" | "mcp" | "runtime";
+/** 标签 id（顺序即界面上从左到右的顺序）。0.3.0 起运行态并入 MCP 页（D-A2），只剩两个。 */
+export type PanelTab = "skills" | "mcp";
 
 /** 标签页组件收到的 props（panel.tsx 传给它引入的每一个标签组件）。 */
 export interface TabProps {

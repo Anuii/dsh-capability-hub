@@ -28,8 +28,12 @@ import {
   SkeletonRows,
   Toolbar,
   kit,
+  searchFlag,
   type MenuItem,
 } from "../shell/kit/index.ts";
+import { RunningSection } from "../runtime/index.tsx";
+import { disconnectServer } from "../runtime/data.ts";
+import { DisconnectDialog, type DisconnectTarget } from "../runtime/dialogs.tsx";
 import { ImportView } from "./intake/import.tsx";
 import { JsonPasteView } from "./intake/json-paste.tsx";
 import { PresetView } from "./intake/presets.tsx";
@@ -48,6 +52,7 @@ import { ServerForm } from "./form.tsx";
 import { ServerList } from "./list.tsx";
 import {
   SERVER_FILTERS,
+  activeInstanceCount,
   cooldownRemainingMs,
   draftFromValues,
   draftFromView,
@@ -84,8 +89,11 @@ interface ToastState {
   seq: number;
   text: string;
   tone?: "success";
-  /** 附加一个「去运行态看缓存」的动作（保存/导入成功时用）。 */
-  runtimeAction?: boolean;
+}
+
+/** 开发预览：URL 带 ?hubPreviewRunning=1 时「运行中」区域用示例数据（见 runtime/region.ts）。 */
+function previewRunningFlag(): boolean {
+  return typeof location !== "undefined" && searchFlag(location.search, "hubPreviewRunning");
 }
 
 /** 抽屉头部的一行副标题：太长就截断（完整值在概览里）。 */
@@ -130,16 +138,17 @@ function McpTabInner(props: TabProps): React.ReactElement {
   const [filter, setFilter] = React.useState<ServerFilterId>("all");
   const [now, setNow] = React.useState<number>(() => Date.now());
   const [toast, setToast] = React.useState<ToastState | undefined>(undefined);
+  /** 抽屉里「断开全部实例」的确认目标与进行中标记。 */
+  const [pendingDisconnect, setPendingDisconnect] = React.useState<DisconnectTarget | undefined>(undefined);
+  const [disconnecting, setDisconnecting] = React.useState<boolean>(false);
+  /** 递增即让底部「运行中」区域立即刷新一次。 */
+  const [runningTick, setRunningTick] = React.useState<number>(0);
+  const previewRunning = React.useMemo(previewRunningFlag, []);
   const seq = React.useRef<number>(0);
 
-  const showToast = React.useCallback((text: string, tone?: "success", runtimeAction?: boolean): void => {
+  const showToast = React.useCallback((text: string, tone?: "success"): void => {
     seq.current += 1;
-    setToast({
-      seq: seq.current,
-      text,
-      ...(tone === undefined ? {} : { tone }),
-      ...(runtimeAction === undefined ? {} : { runtimeAction }),
-    });
+    setToast({ seq: seq.current, text, ...(tone === undefined ? {} : { tone }) });
   }, []);
 
   const load = React.useCallback((): void => {
@@ -219,7 +228,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
       if (saved.length === 0) return;
       load();
       for (const name of saved) probeTools(name, 0, true);
-      showToast(t("mcp.paste.savedMany", { count: saved.length }), "success", true);
+      showToast(t("mcp.paste.savedMany", { count: saved.length }), "success");
     },
     [load, probeTools, showToast],
   );
@@ -282,6 +291,24 @@ function McpTabInner(props: TabProps): React.ReactElement {
       },
       (error: unknown) => showToast(t("mcp.detail.refreshFailed", { name: view.serverName, message: errorMessage(error) })),
     ).finally(() => setRefreshing(undefined));
+  };
+
+  /** 抽屉里的「断开全部实例」：该服务器在全部会话里的实例（D-E1，0.3.0 从运行态移入）。 */
+  const confirmDisconnectAll = (target: DisconnectTarget): void => {
+    setDisconnecting(true);
+    void disconnectServer(target.name).then(
+      (result) => {
+        setPendingDisconnect(undefined);
+        if (result.closed === 0) showToast(t("mcp.detail.disconnectNone", { name: target.name }));
+        else showToast(t("mcp.detail.disconnectOk", { name: target.name, count: result.closed }), "success");
+        void fetchRuntime().then((payload) => setRuntime(payload), () => undefined);
+        setRunningTick((tick) => tick + 1);
+      },
+      (error: unknown) => {
+        setPendingDisconnect(undefined);
+        showToast(t("mcp.detail.disconnectFailed", { name: target.name, message: errorMessage(error) }));
+      },
+    ).finally(() => setDisconnecting(false));
   };
 
   const confirmDelete = (): void => {
@@ -407,6 +434,13 @@ function McpTabInner(props: TabProps): React.ReactElement {
           t("mcp.warnings.title", { count: warnings.length }) + " " + warnings.join("；")),
     body,
 
+    // 0.3.0：原「运行态」标签并入这里，成为页面底部可折叠的「运行中」区域（D-E1）。
+    React.createElement(RunningSection, {
+      ...(props.sessionId === undefined ? {} : { sessionId: props.sessionId }),
+      preview: previewRunning,
+      reloadSignal: runningTick,
+    }),
+
     // 详情 / 编辑抽屉（同一个抽屉，内容按 panel 切换）。
     React.createElement(Drawer, {
       open: panel !== undefined,
@@ -457,6 +491,8 @@ function McpTabInner(props: TabProps): React.ReactElement {
           now,
           refreshing: refreshing === detailView.serverName,
           onRefresh: () => refreshCache(detailView),
+          instances: activeInstanceCount(runtime, detailView.serverName),
+          onDisconnectAll: () => setPendingDisconnect({ name: detailView.serverName }),
           showToast: (text: string, tone?: "success") => showToast(text, tone),
         })
       : panel !== undefined && panel.kind === "form"
@@ -508,6 +544,13 @@ function McpTabInner(props: TabProps): React.ReactElement {
       className: styles.intakeModal,
     }, React.createElement("div", { className: kit.scope }, intakeNode)),
 
+    React.createElement(DisconnectDialog, {
+      target: pendingDisconnect,
+      busy: disconnecting,
+      onConfirm: confirmDisconnectAll,
+      onCancel: () => setPendingDisconnect(undefined),
+    }),
+
     React.createElement(DeleteServerDialog, {
       server: pendingDelete,
       busy: deleting,
@@ -521,17 +564,6 @@ function McpTabInner(props: TabProps): React.ReactElement {
           key: toast.seq,
           text: toast.text,
           ...(toast.tone === undefined ? {} : { tone: toast.tone }),
-          ...(toast.runtimeAction === true
-            ? {
-                actions: [{
-                  label: t("mcp.paste.toRuntime"),
-                  onClick: () => {
-                    setToast(undefined);
-                    props.openTab("runtime");
-                  },
-                }],
-              }
-            : {}),
           holdMs: 5000,
           onDone: () => setToast((current) => (current !== undefined && current.seq === toast.seq ? undefined : current)),
         }));

@@ -257,7 +257,7 @@ FACTS.headerTitle = await evaluate("(() => { const h = document.querySelector('[
 FACTS.subtitleGone = await evaluate("(() => { const p = document.querySelector('[data-testid=capability-hub-page] header p'); return p === null; })()");
 FACTS.envCardNotOnPage = await evaluate("document.querySelector('[data-testid=capability-hub-env]') === null");
 FACTS.degradedBannerVisible = await evaluate("!!document.querySelector('[data-testid=capability-hub-degraded]')");
-FACTS.tabsMounted = await evaluate("JSON.stringify(['skills','mcp','runtime'].map((id) => !!document.querySelector('[data-testid=capability-hub-panel-' + id + ']')))");
+FACTS.tabsMounted = await evaluate("JSON.stringify(['skills','mcp'].map((id) => !!document.querySelector('[data-testid=capability-hub-panel-' + id + ']')))");
 await shot("ui0-06-shell-light.png");
 // 降级横幅：正常情况下它**不在**页面上；把 dev profile 的 devOverrides.failureDemo 打开后
 // 再跑一次这个脚本，就会多出一张 ui0-09-degraded-banner.png（见 docs\DEV.md 第 10 节）。

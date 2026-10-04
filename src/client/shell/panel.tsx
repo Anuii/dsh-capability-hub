@@ -22,17 +22,15 @@ import { degradeInfo, degradeNames } from "./degrade.ts";
 import { Banner, KitPreview, searchFlag } from "./kit/index.ts";
 import { SkillsTab } from "../skills/index.tsx";
 import { McpTab } from "../mcp/index.tsx";
-import { RuntimeTab } from "../runtime/index.tsx";
 import type { PanelTab, TabProps } from "./tab-props.ts";
 
-/** 三个标签的 id（契约见 tab-props.ts，这里再导出一次方便老代码引用）。 */
+/** 标签 id（契约见 tab-props.ts，这里再导出一次方便老代码引用）。 */
 export type { PanelTab } from "./tab-props.ts";
 
 /** 标签定义（顺序即 UI 顺序）。 */
 const TABS: Array<{ id: PanelTab; labelKey: string }> = [
   { id: "skills", labelKey: "tab.skills" },
   { id: "mcp", labelKey: "tab.mcp" },
-  { id: "runtime", labelKey: "tab.runtime" },
 ];
 
 /** 外部（插件管理页的配置按钮）可以要求直达某个标签。 */
@@ -120,7 +118,7 @@ function DiagnosticsBody(props: {
 }
 
 /**
- * 标签正文：三个标签各自在自己的目录里实现（src/client/skills|mcp|runtime），
+ * 标签正文：两个标签各自在自己的目录里实现（src/client/skills|mcp；0.3.0 起运行态是 MCP 页底部的「运行中」区域），
  * 外壳只负责按 TabProps 契约传值（见 tab-props.ts 与 docs/CLIENT-GUIDE.md 第 3 节）。
  */
 function TabBody({ tab, props }: { tab: PanelTab; props: TabProps }): React.ReactElement {
@@ -129,8 +127,6 @@ function TabBody({ tab, props }: { tab: PanelTab; props: TabProps }): React.Reac
       return React.createElement(SkillsTab, props);
     case "mcp":
       return React.createElement(McpTab, props);
-    case "runtime":
-      return React.createElement(RuntimeTab, props);
   }
 }
 

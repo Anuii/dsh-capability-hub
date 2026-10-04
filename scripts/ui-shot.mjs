@@ -12,7 +12,7 @@
  * 做四件事：
  *   1. 从 .dev\logs\dev-profile.out.log 解析 token；
  *   2. 用 Edge headless + 远程调试端口打开带 token 的 URL（自动 303 落 cookie）；
- *   3. 点开侧栏「能力中心」→ 依次切三个标签，每步存一张 PNG；
+ *   3. 点开侧栏「能力中心」→ 依次切两个标签（技能 / MCP），每步存一张 PNG；
  *   4. 收集 DOM 事实（标签文本、data-testid 存在性、诊断卡片折叠/展开两态文本）写成 facts.json。
  *      诊断信息默认折叠，脚本会先点开再读它的 innerText。
  */
@@ -150,9 +150,9 @@ await sleep(1200);
 facts.pagePresent = await evaluate("!!document.querySelector('[data-testid=capability-hub-page]')");
 await shot("01-page.png");
 
-// 2. 依次切三个标签
+// 2. 依次切两个标签
 facts.tabs = await evaluate("JSON.stringify([...document.querySelectorAll('[role=tab]')].map((node) => node.textContent))");
-for (const tab of ["skills", "mcp", "runtime"]) {
+for (const tab of ["skills", "mcp"]) {
   facts["clicked-" + tab] = await evaluate(
     "(() => { const node = document.querySelector('[data-testid=capability-hub-tab-" + tab + "]'); if (!node) return false; node.click(); return true; })()",
   );
@@ -160,7 +160,7 @@ for (const tab of ["skills", "mcp", "runtime"]) {
   facts["activeTab-" + tab] = await evaluate(
     "(() => { const node = document.querySelector('[data-testid=capability-hub-tab-" + tab + "]'); return node ? node.getAttribute('aria-selected') : null; })()",
   );
-  // 三个标签是同时挂载的（切换只改 hidden），所以「存在」恒为真 ——
+  // 两个标签是同时挂载的（切换只改 hidden），所以「存在」恒为真 ——
   // 判断可见性要看 hidden 属性。
   facts["panel-" + tab] = await evaluate(
     "(() => { const node = document.querySelector('[data-testid=capability-hub-panel-" + tab + "]'); return node ? !node.hidden : false; })()",
