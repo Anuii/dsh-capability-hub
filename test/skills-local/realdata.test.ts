@@ -12,7 +12,7 @@ import type { SkillSummary } from '../../src/host/skills-local/types.ts';
  * 真实数据核对：把一份**技能目录快照**复制到临时目录（源目录只读），以副本作为 user-agents 根跑 list，
  * 核对解析结果：技能总数、模型可见数、CRLF 技能的启停只改一行、无 error/warning 级诊断。
  *
- * 快照不属于本仓库，默认位置是 <工作区根>/.dev/snapshots/agents-skills-20261004；
+ * 快照不属于本仓库，默认位置是 <仓库根>/.dev/snapshots/agents-skills-20261004（.dev/ 不进版本库）；
  * 用 CAPABILITY_HUB_REAL_SKILLS_DIR 指向你自己的副本。计数写死是针对那份快照的：
  * 直接读活的 ~/.agents/skills 会因日常安装技能而漂移（环境变化，不是缺陷）。
  * 源目录不存在（例如换机器）时测试自动跳过，不做任何写入。
@@ -20,7 +20,7 @@ import type { SkillSummary } from '../../src/host/skills-local/types.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REAL_SOURCE = process.env.CAPABILITY_HUB_REAL_SKILLS_DIR
-  ?? path.resolve(HERE, '..', '..', '..', '.dev', 'snapshots', 'agents-skills-20261004');
+  ?? path.resolve(HERE, '..', '..', '.dev', 'snapshots', 'agents-skills-20261004');
 void os;
 const EXPECTED_TOTAL = 31;
 const EXPECTED_MODEL_VISIBLE = 15;

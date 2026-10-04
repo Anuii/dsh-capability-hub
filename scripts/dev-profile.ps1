@@ -5,7 +5,7 @@
 .DESCRIPTION
   把 DSH 的 Electron 可执行文件当 Node 用（ELECTRON_RUN_AS_NODE=1，与 dsh.cmd 完全一致），
   以「真正脱离调用者进程树」的方式后台启动 capability-hub-dev profile，
-  日志落在 <repo>\..\.dev\logs\。
+  日志落在 <repo>\.dev\logs\。
   绝不触碰 desktop profile 与真实用户目录。
 
   用法：
@@ -32,7 +32,7 @@ $ErrorActionPreference = 'Stop'
 
 # ---- 固定路径 ----------------------------------------------------------------
 $PackageRoot = Split-Path -Parent $PSScriptRoot
-$RepoRoot    = Split-Path -Parent $PackageRoot
+$RepoRoot    = $PackageRoot   # .dev\ 与 dist\ 都在仓库根下（已被 .gitignore 忽略）
 $DevRoot     = Join-Path $RepoRoot '.dev'
 $LogDir      = Join-Path $DevRoot 'logs'
 $OutLog      = Join-Path $LogDir 'dev-profile.out.log'

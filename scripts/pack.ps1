@@ -7,13 +7,13 @@
 
     1. 校验 package.json 的 files 白名单（漏了 lib/ 就会打出空壳包）；
     2. 运行 build.mjs 生成 lib/index.js 与 lib/client.js；
-    3. 用本机 npm 打包到 <工作区根>\dist\（从这里取 tgz）；
+    3. 用本机 npm 打包到 <仓库根>\dist\（从这里取 tgz；dist\ 不进版本库）；
     4. 用 tar -tzf 列出包内文件，并断言没有中间产物 lib/.client.raw.js。
 
   用法（在包根）：
     pwsh -File scripts\pack.ps1
     pwsh -File scripts\pack.ps1 -NoBuild            # 跳过构建，只重打包
-    pwsh -File scripts\pack.ps1 -DistDir <目录>      # 换输出目录（默认 <工作区根>\dist）
+    pwsh -File scripts\pack.ps1 -DistDir <目录>      # 换输出目录（默认 <仓库根>\dist）
     pwsh -File scripts\pack.ps1 -Node <node.exe> -Npm <npm.cmd>   # 显式指定解释器
 
   约定：dist 目录里的 tgz 是**手工安装用的快照**，打完不要删；
@@ -30,7 +30,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $PackageRoot = Split-Path -Parent $PSScriptRoot
-$RepoRoot    = Split-Path -Parent $PackageRoot
+$RepoRoot    = $PackageRoot
 if (-not $DistDir) { $DistDir = Join-Path $RepoRoot 'dist' }
 # 解释器：优先参数 / 环境变量，其次 PATH。不写死某台机器上的安装路径。
 if (-not $Node) { $Node = $env:DSH_NODE }

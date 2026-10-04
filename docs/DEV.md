@@ -12,7 +12,7 @@
 | 占位符 | 含义 |
 |---|---|
 | `<包根>` | 本文件所在目录（`package.json` 的目录） |
-| `<工作区根>` | 包根的上一级；`dist\`、`.dev\` 都在这里 |
+| `<仓库根>` | 本仓库根目录；本地的 `dist\`（安装包）与 `.dev\`（夹具、日志、截图）也放在这里，都被 .gitignore 忽略 |
 | `%LOCALAPPDATA%\Programs\DeepSeek Harness` | DSH 安装目录（默认位置） |
 | `%USERPROFILE%\.dsh\profiles\<你的测试 profile>` | 测试 profile 的目录 |
 
@@ -69,7 +69,7 @@ CRLF 技能的启停只改一行）。快照不属于本仓库，指向你自己
     $env:CAPABILITY_HUB_REAL_SKILLS_DIR='<绝对路径>\agents-skills-snapshot'
     node --test "test/skills-local/realdata.test.ts"
 
-- 默认位置是 `<工作区根>\.dev\snapshots\agents-skills-20261004`；
+- 默认位置是 `<仓库根>\.dev\snapshots\agents-skills-20261004`；
 - 目录不存在（例如换一台机器）→ 自动 skip，不做任何写入；
 - `CAPABILITY_HUB_TEST_REAL_DATA=0` 可以整体跳过。
 
@@ -112,7 +112,7 @@ SDK 只存在于 DSH 的 `app.asar` 内，本机 Node 解析不到，所以必�
 
     pwsh -NoProfile -File scripts\pack.ps1
     pwsh -NoProfile -File scripts\pack.ps1 -NoBuild          # 跳过构建，只重打包
-    pwsh -NoProfile -File scripts\pack.ps1 -DistDir <目录>    # 换输出目录（默认 <工作区根>\dist）
+    pwsh -NoProfile -File scripts\pack.ps1 -DistDir <目录>    # 换输出目录（默认 <仓库根>\dist）
 
 脚本做四件事：校验 `package.json` 的 `files` 白名单 → `build.mjs` → `npm pack` →
 列包内文件并断言没有多余的中间产物。产物 `dist\dsh-capability-hub-<版本>.tgz` 里只有
@@ -139,7 +139,7 @@ profile 做试验，出问题就直接落在真实用户目录上。所以开发
     pwsh -NoProfile -File scripts\dev-profile.ps1 restart    # 改完宿主代码用这个
     pwsh -NoProfile -File scripts\dev-profile.ps1 stop       # 停掉整棵进程树
 
-日志在 `<工作区根>\.dev\logs\`：`dev-profile.out.log`（启动那一行带鉴权 URL）、
+日志在 `<仓库根>\.dev\logs\`：`dev-profile.out.log`（启动那一行带鉴权 URL）、
 `dev-profile.err.log`、`dev-profile.pid`。启动行长这样：
 
     dsh web: http://127.0.0.1:19411/?token=<43 字符令牌>
@@ -214,7 +214,7 @@ DSH 安装路径由 `DSH_HOME`（安装目录）或 `DSH_CLI`（`app.asar` 内�
       config:
         devOverrides:
           enabled: true
-          homeDir: '<工作区根>/.dev/home'   # 把 homeDir 钉到夹具，别动真实用户目录
+          homeDir: '<仓库根>/.dev/home'   # 把 homeDir 钉到夹具，别动真实用户目录
           failureDemo: false                # true = 打开两个「故意失败」的演示模块
           failModules: []                   # 例如 ['mcp-config'] = 强制该模块装载失败
 
@@ -327,8 +327,8 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 
 ## 9. 截图与 DOM 证据（Edge headless + CDP）
 
-    node scripts\ui-shot.mjs --out <工作区根>\.dev\shots
-    node scripts\ui-shot-kit.mjs --out <工作区根>\.dev\shots\ui0
+    node scripts\ui-shot.mjs --out <仓库根>\.dev\shots
+    node scripts\ui-shot-kit.mjs --out <仓库根>\.dev\shots\ui0
 
 脚本自己从启动日志里取令牌，用 Edge headless + CDP 打开页面：关掉「预览版说明」模态框 →
 点开侧栏「能力中心」→ 依次切三个标签（每步一张 PNG）→ 读取 DOM 事实写成 `facts.json`。

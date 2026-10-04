@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 const EDGE = process.env.DSH_EDGE || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 if (!existsSync(EDGE)) throw new Error("找不到 Edge：用 $env:DSH_EDGE 指定 msedge.exe 的路径。");
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const repoRoot = resolve(packageRoot, "..");
+const repoRoot = packageRoot; // .dev/ 在仓库根下（被 .gitignore 忽略）
 const logDir = join(repoRoot, ".dev", "logs");
 const outLog = join(logDir, "dev-profile.out.log");
 

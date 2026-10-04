@@ -139,7 +139,7 @@
 **第 5 步：看效果**
 
     pwsh -NoProfile -File scripts\dev-profile.ps1 restart
-    node scripts\ui-shot.mjs --out <工作区根>\.dev\shots
+    node scripts\ui-shot.mjs --out <仓库根>\.dev\shots
 
 浏览器产物有 rev 校验（脚本按文件 mtime/size 算 rev），改完 build 后浏览器刷新即可拿到新产物；
 拿不到就 restart 一次。

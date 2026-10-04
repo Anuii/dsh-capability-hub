@@ -3,7 +3,7 @@
  *
  * 用法（包根）：
  *   node scripts\ui-shot-kit.mjs
- *   ... --out <工作区根>\.dev\shots\ui0
+ *   ... --out <仓库根>\.dev\shots\ui0
  *
  * 产物（全部落在 --out）：
  *   ui0-01-kit-light.png         kit 预览（亮色，抽屉关闭）
@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 const EDGE = process.env.DSH_EDGE || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 if (!existsSync(EDGE)) throw new Error("找不到 Edge：用 $env:DSH_EDGE 指定 msedge.exe 的路径。");
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const repoRoot = resolve(packageRoot, "..");
+const repoRoot = packageRoot; // .dev/ 在仓库根下（被 .gitignore 忽略）
 const outLog = join(repoRoot, ".dev", "logs", "dev-profile.out.log");
 
 function argOf(name, fallback) {

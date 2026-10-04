@@ -39,7 +39,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $PackageRoot = Split-Path -Parent $PSScriptRoot
-$RepoRoot    = Split-Path -Parent $PackageRoot
+$RepoRoot    = $PackageRoot
 $SourceClient = Join-Path $PackageRoot 'lib\client.js'
 $ProfileRoot  = Join-Path $env:USERPROFILE ('.dsh\profiles\' + $ProfileName)
 $TargetDir    = Join-Path $ProfileRoot 'node_modules\dsh-capability-hub'

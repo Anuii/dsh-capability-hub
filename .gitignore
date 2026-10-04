@@ -3,3 +3,5 @@ lib/
 .dev/
 *.tsbuildinfo
 *.tgz
+dist/
+.local/

@@ -34,7 +34,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $PackageRoot = Split-Path -Parent $PSScriptRoot
-$RepoRoot    = Split-Path -Parent $PackageRoot
+$RepoRoot    = $PackageRoot
 $LogDir      = Join-Path $RepoRoot ".dev\logs"
 $OutLog      = Join-Path $LogDir 'dev-profile.out.log'
 $Jar         = Join-Path $LogDir 'smoke-stage-b-cookies.txt'
