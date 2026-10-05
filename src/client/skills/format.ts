@@ -423,6 +423,54 @@ export function toggleLabel(skill: SkillSummary): string {
     : t("skills.toggle.disable", { name });
 }
 
+/* ---------------- 调用权限（D-B17） ---------------- */
+
+/**
+ * 技能的调用权限，口径与 DSH 一致（dsh-skill-filesystem）：
+ *   模型调用 = disable-model-invocation 不是 true（列表上的开关就是它，可改）；
+ *   用户调用 = user-invocable 不是 false（只读展示，键缺省即允许）。
+ */
+export interface InvocationAccess {
+  model: boolean;
+  user: boolean;
+  /** user-invocable 是否在 frontmatter 里显式写了 */
+  userExplicit: boolean;
+}
+
+export function invocationAccess(skill: Pick<SkillSummary, "modelInvocationDisabled" | "userInvocable">): InvocationAccess {
+  return {
+    model: !skill.modelInvocationDisabled,
+    user: skill.userInvocable !== false,
+    userExplicit: skill.userInvocable !== null,
+  };
+}
+
+/** 行尾那一小段文字：模型、用户 / 仅模型 / 仅用户 / 不可调用。 */
+export function invocationLabel(access: InvocationAccess): string {
+  if (access.model && access.user) return t("skills.access.both");
+  if (access.model) return t("skills.access.modelOnly");
+  if (access.user) return t("skills.access.userOnly");
+  return t("skills.access.none");
+}
+
+/** 模型调用的说明（详情与悬停提示共用）。 */
+export function modelAccessText(access: InvocationAccess): string {
+  return access.model ? t("skills.access.modelAllowed") : t("skills.access.modelDenied");
+}
+
+/** 用户调用的说明：区分「默认允许」与「显式写了」。 */
+export function userAccessText(access: InvocationAccess): string {
+  if (!access.user) return t("skills.access.userDenied");
+  return access.userExplicit ? t("skills.access.userAllowed") : t("skills.access.userDefault");
+}
+
+/** 行尾文字的悬停提示：两种调用各一行。 */
+export function invocationTitle(access: InvocationAccess): string {
+  return t("skills.access.title") + "\n" +
+    t("skills.access.model") + "：" + modelAccessText(access) + "\n" +
+    t("skills.access.user") + "：" + userAccessText(access);
+}
+
 /* ---------------- 格式化 ---------------- */
 
 export function formatBytes(size: number): string {

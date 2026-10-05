@@ -5,7 +5,7 @@
  *   标题 = name（没有 name 时用目录名 + 「无名称」标记）+ 淡色目录标签（.agents / .dsh）
  *   副标题 = description（没有就是空行，保持行高一致）
  *   标记 = 不可加载 / 可更新 / 被遮蔽（最多 2 个，由 kit 截断）
- *   trailing = 开关（只读或不可安全改写时禁用，工具提示写原因）
+ *   行尾 = 调用权限文字（模型、用户 / 仅模型 / 仅用户 / 不可调用，D-B17）+ 开关（模型调用；只读或不可安全改写时禁用，工具提示写原因）
  * 其余信息（来源、更新、诊断、文件、SKILL.md）全在详情抽屉里。
  *
  * 分组（tree.ts）：一级 = 层级（DSH 内置默认折叠 / 用户级 / 项目级），二级 = 来源仓库。
@@ -19,6 +19,9 @@ import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import {
   displayName,
+  invocationAccess,
+  invocationLabel,
+  invocationTitle,
   rowBadges,
   toggleBlockReason,
   toggleLabel,
@@ -72,6 +75,7 @@ function SkillRow(props: {
   const name = displayName(skill);
   const blocked = toggleBlockReason(skill);
   const badges = rowBadges(skill, props.context);
+  const access = invocationAccess(skill);
   return React.createElement(ListRow, {
     testId: "skills-row-" + skill.id,
     title: name.text,
@@ -84,6 +88,13 @@ function SkillRow(props: {
       ...(badge.title === undefined ? {} : { title: badge.title }),
       testId: "skills-badge-" + badge.key + "-" + skill.id,
     }, badge.label)),
+    // 调用权限（D-B17）：开关管模型调用，这段文字把两种调用一起说清楚，悬停看来源。
+    note: {
+      text: invocationLabel(access),
+      title: invocationTitle(access),
+      muted: !access.model && !access.user,
+      testId: "skills-access-" + skill.id,
+    },
     trailing: React.createElement(Switch, {
       checked: !skill.modelInvocationDisabled,
       disabled: props.busy || blocked !== undefined,

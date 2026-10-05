@@ -28,6 +28,9 @@ import {
   formatDateTime,
   groupByRoot,
   hasProblems,
+  invocationAccess,
+  invocationLabel,
+  invocationTitle,
   isConflict,
   isProjectRoot,
   levelLabel,
@@ -392,4 +395,25 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
   const conflict = new FakeApiError("CONFLICT", "原路径已存在同名的目录/文件");
   assert.equal(isConflict(conflict), true);
   assert.equal(isConflict(new Error("读取失败：原路径已存在同名的目录/文件")), true, "没有 code 时按文案兜底");
+});
+
+test("调用权限（D-B17）：与 DSH 口径一致，四种组合各有一段文字，悬停说明来源", () => {
+  const both = invocationAccess(makeSkill({ id: "a:x" }));
+  assert.deepEqual(both, { model: true, user: true, userExplicit: false });
+  assert.equal(invocationLabel(both), "模型、用户");
+  assert.match(invocationTitle(both), /模型调用：允许/);
+  assert.match(invocationTitle(both), /用户调用：允许（未设置 user-invocable，默认允许）/);
+
+  const modelOnly = invocationAccess(makeSkill({ id: "a:x", userInvocable: false }));
+  assert.equal(invocationLabel(modelOnly), "仅模型");
+  assert.match(invocationTitle(modelOnly), /用户调用：禁止（user-invocable: false）/);
+
+  const userOnly = invocationAccess(makeSkill({ id: "a:x", modelInvocationDisabled: true, userInvocable: true }));
+  assert.deepEqual(userOnly, { model: false, user: true, userExplicit: true });
+  assert.equal(invocationLabel(userOnly), "仅用户");
+  assert.match(invocationTitle(userOnly), /模型调用：禁止（disable-model-invocation: true/);
+  assert.match(invocationTitle(userOnly), /用户调用：允许（user-invocable: true）/);
+
+  const none = invocationAccess(makeSkill({ id: "a:x", modelInvocationDisabled: true, userInvocable: false }));
+  assert.equal(invocationLabel(none), "不可调用");
 });

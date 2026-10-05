@@ -150,6 +150,11 @@ export interface ListRowProps {
    * 不是描边胶囊、不计入「每行最多 2 个标记」、不带颜色；title 放完整路径。
    */
   tag?: { text: string; title?: string; testId?: string };
+  /**
+   * 行尾控件左侧的一小段说明文字（技能的调用权限，如「仅用户」）：次要色、固定最小宽度右对齐，
+   * 多行之间上下对齐成一列；不是控件，不算进「每行最多 1 个可见控件」。muted = 更弱一级（例如「不可调用」）。
+   */
+  note?: { text: string; title?: string; testId?: string; muted?: boolean };
   trailing?: React.ReactNode;
   hoverActions?: RowAction[];
   /** 传入任意节点即渲染成拖动把手（MCP 页用）。 */
@@ -235,6 +240,14 @@ export function ListRow(props: ListRowProps): React.ReactElement {
             action.onClick();
           },
         }, action.label))),
+    props.note === undefined
+      ? null
+      : React.createElement("span", {
+        className: kit.rowNote,
+        title: props.note.title,
+        "data-muted": props.note.muted === true ? "" : undefined,
+        "data-testid": props.note.testId,
+      }, props.note.text),
     props.trailing),
   openable ? React.createElement(ChevronGlyph, { className: kit.rowChevron }) : null);
 }

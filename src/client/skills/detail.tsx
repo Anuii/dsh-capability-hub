@@ -21,12 +21,15 @@ import {
   fileName,
   formatBytes,
   formatDateTime,
+  invocationAccess,
   isFlatSkill,
   levelLabel,
   levelTone,
+  modelAccessText,
   sortFiles,
   toggleBlockReason,
   toggleLabel,
+  userAccessText,
 } from "./format.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
@@ -105,11 +108,10 @@ export function SkillDetailDrawer(props: SkillDetailProps): React.ReactElement {
         toggle: skill.format.safeToToggle ? t("skills.detail.safeYes") : t("skills.detail.safeNo"),
       }),
     },
+    // 调用权限（D-B17）：模型调用由右上开关控制；用户调用只读展示（键缺省即允许）。
+    { label: t("skills.access.model"), value: modelAccessText(invocationAccess(skill)), testId: "skills-detail-access-model" },
+    { label: t("skills.access.user"), value: userAccessText(invocationAccess(skill)), testId: "skills-detail-access-user" },
     { label: t("skills.detail.visibility"), value: skill.modelVisible ? t("skills.detail.visibleYes") : t("skills.detail.visibleNo") },
-    {
-      label: t("skills.detail.userInvocable"),
-      value: skill.userInvocable === null ? t("skills.detail.userInvocableNone") : skill.userInvocable ? t("skills.detail.yes") : t("skills.detail.no"),
-    },
     { label: t("skills.detail.mtime"), value: skill.mtimeMs > 0 ? formatDateTime(new Date(skill.mtimeMs).toISOString()) : t("skills.detail.none") },
     ...(skill.extraKeys.length === 0 ? [] : [{ label: t("skills.detail.extraKeys"), value: skill.extraKeys.join("、"), mono: true }]),
   ];
