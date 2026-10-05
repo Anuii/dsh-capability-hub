@@ -51,6 +51,8 @@ async function parse(response: Response): Promise<unknown> {
   try {
     return JSON.parse(text) as unknown;
   } catch {
+    // 插件路由不存在：最常见的原因是插件刚升级、DSH 还在运行旧的宿主代码（浏览器半已热更新）。
+    if (response.status === 404) throw new ApiError("ROUTE_MISSING", "接口不存在（HTTP 404）：能力中心刚升级过的话，需要重启 DSH 才会加载新的宿主代码。");
     if (!response.ok) throw new ApiError("BAD_RESPONSE", `服务端返回了非 JSON 响应（HTTP ${response.status}）`);
     throw new ApiError("BAD_RESPONSE", "服务端返回了非 JSON 响应");
   }
@@ -107,7 +109,8 @@ export interface HealthPayload {
   sdk: { status: string; version?: string; mainResolved?: string; message?: string };
   modules: Array<{ name: string; status: string; routes: string[]; message?: string; loadMs?: number }>;
   tool: { registered: boolean; name: string; description: string };
-  host: { dshVersion?: string; pid: number; nodeVersion: string; startedAt: string };
+  /** pluginVersion：宿主半的插件版本（0.3.1 起；更早的宿主没有这个字段）。 */
+  host: { dshVersion?: string; pluginVersion?: string; pid: number; nodeVersion: string; startedAt: string };
   sessionEvents: Array<{ kind: string; sessionId: string; parentSessionId?: string; at: string }>;
   /** 阶段 B 接线摘要。 */
   wiring?: {

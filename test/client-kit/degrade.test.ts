@@ -4,7 +4,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { degradeInfo, degradeNames } from "../../src/client/shell/degrade.ts";
+import { degradeInfo, degradeNames, hostVersionMismatch } from "../../src/client/shell/degrade.ts";
 import type { HealthPayload } from "../../src/client/shell/api.ts";
 
 function health(overrides: {
@@ -69,4 +69,14 @@ test("模块降级 + 工具退回桩：两个名字都进横幅", () => {
     runtimeSource: "stub",
   }));
   assert.deepEqual(degradeNames(info!, "mcp 工具"), ["mcp-config", "mcp-runtime", "mcp 工具"]);
+});
+
+test("升级后没重启：宿主与浏览器半版本不一致时给出提示；一致、开发构建或没有 health 时不提示", () => {
+  const base = health({});
+  const withHost = (pluginVersion?: string): HealthPayload => ({ ...base, host: { ...base.host, ...(pluginVersion === undefined ? {} : { pluginVersion }) } });
+  assert.equal(hostVersionMismatch(undefined, "0.3.1"), undefined);
+  assert.equal(hostVersionMismatch(withHost("0.3.1"), "0.3.1"), undefined);
+  assert.equal(hostVersionMismatch(withHost("0.3.0"), "0.3.1"), "0.3.0");
+  assert.equal(hostVersionMismatch(withHost(), "0.3.1"), "旧版本", "0.3.0 及更早的宿主没有 pluginVersion");
+  assert.equal(hostVersionMismatch(withHost("0.3.0"), "dev"), undefined, "直接跑源码（单测）不比对");
 });

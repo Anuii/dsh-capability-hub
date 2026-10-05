@@ -121,6 +121,7 @@ const hostOptions = {
   sourcemap: false,
   legalComments: "none",
   external: HOST_EXTERNALS,
+  define: { __HUB_VERSION__: JSON.stringify(pkg.version) },
   banner: { js: `// ${pkg.name} ${pkg.version} — 宿主半（ESM）\n` },
   logLevel: "info",
   write: false,
@@ -139,6 +140,7 @@ const clientOptions = {
   sourcemap: false,
   legalComments: "none",
   external: CLIENT_EXTERNALS,
+  define: { __HUB_VERSION__: JSON.stringify(pkg.version) },
   logLevel: "info",
   write: false,
 };

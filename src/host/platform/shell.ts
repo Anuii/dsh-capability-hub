@@ -35,6 +35,7 @@ import { createStubRuntime } from "./stub-runtime.ts";
 import { registerMcpTool, type ToolRegistration } from "./tool-registrar.ts";
 import { attachSessionBridge, type SessionBridge } from "./session-bridge.ts";
 import { createDemoModule } from "./demo.ts";
+import { HUB_VERSION } from "../../version.ts";
 import { createRejectingModule, createThrowingModule } from "./demo-failing.ts";
 import type { McpRuntime } from "./mcp-runtime-contract.ts";
 
@@ -194,6 +195,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
         }),
         host: () => ({
           ...(readDshVersion() === undefined ? {} : { dshVersion: readDshVersion() }),
+          pluginVersion: HUB_VERSION,
           pid: process.pid,
           nodeVersion: process.version,
           startedAt,

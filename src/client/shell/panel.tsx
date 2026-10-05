@@ -18,7 +18,8 @@ import { fetchHealth, type HealthPayload } from "./api.ts";
 import { t as tt } from "./strings.ts";
 import { useCurrentSession, type SessionsHook } from "./useCurrentWorkspace.ts";
 import { styles } from "./styles.ts";
-import { degradeInfo, degradeNames } from "./degrade.ts";
+import { degradeInfo, degradeNames, hostVersionMismatch } from "./degrade.ts";
+import { HUB_VERSION } from "../../version.ts";
 import { Banner, KitPreview, searchFlag } from "./kit/index.ts";
 import { SkillsTab } from "../skills/index.tsx";
 import { McpTab } from "../mcp/index.tsx";
@@ -161,6 +162,7 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
 
   const preview = kitPreviewEnabled();
   const degrade = degradeInfo(health);
+  const staleHost = hostVersionMismatch(health, HUB_VERSION);
   const tabProps: TabProps = {
     workspace: current.workspace,
     ...(current.sessionId === undefined ? {} : { sessionId: current.sessionId }),
@@ -183,6 +185,11 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
         }, "\u24d8")),
       React.createElement(TabBar, { active: tab, onSelect: setTab })),
     React.createElement("div", { className: styles.content },
+      // 升级后没重启：浏览器半已是新版本，宿主半还是旧的（新接口会 404）。
+      staleHost === undefined
+        ? null
+        : React.createElement(Banner, { tone: "warn", testId: "capability-hub-stale-host" },
+          tt("env.staleHost", { client: HUB_VERSION, host: staleHost })),
       // 降级横幅：只在「某个模块降级」或「mcp 工具退回桩」时出现（UI-DESIGN §2）。
       degrade === undefined
         ? null

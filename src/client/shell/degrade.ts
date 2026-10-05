@@ -28,6 +28,18 @@ export function degradeInfo(health: HealthPayload | undefined): DegradeInfo | un
   return { degraded, stubTool };
 }
 
+/**
+ * 宿主半与浏览器半的版本是否对不上：插件升级后浏览器半会热更新，宿主半要重启 DSH 才换。
+ * 返回宿主报告的版本（老宿主没有这个字段时为 "旧版本"）；对得上、或客户端是开发构建（"dev"）、
+ * 或还没拿到 health 时返回 undefined（不出横幅）。
+ */
+export function hostVersionMismatch(health: HealthPayload | undefined, clientVersion: string): string | undefined {
+  if (health === undefined || clientVersion === "dev") return undefined;
+  const host = health.host?.pluginVersion;
+  if (host === clientVersion) return undefined;
+  return typeof host === "string" && host !== "" ? host : "旧版本";
+}
+
 /** 横幅正文用的名字列表（模块名 + 可选的「mcp 工具」）。 */
 export function degradeNames(info: DegradeInfo, toolLabel: string): string[] {
   const names = [...info.degraded];
