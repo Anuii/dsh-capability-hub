@@ -20,6 +20,7 @@ import { pathExists, writeDirectoryFiles } from "./fsx.ts";
 import { recordedHash } from "./hash.ts";
 import { locateSkillDirectory } from "./tar.ts";
 import { rootSkillNameOf, skillMdTextOf, upstreamSkillFiles, upstreamSkillHash } from "./rootskill.ts";
+import type { SkillMetaReader } from "./skill-meta.ts";
 import { assertPathInsideDirectory, describeUnsafePath, safeRelativePath, safeSegmentName } from "./safepath.ts";
 import { skillDirOf, skillMdPathOf } from "./sourceurl.ts";
 import { assertRepoShape } from "./repos.ts";
@@ -37,6 +38,8 @@ export interface InstallDeps {
   github: GitHubClient;
   skills: SkillsLocalPort;
   sources: SourceStore;
+  /** 读 SKILL.md 的 name（根级技能的目录名用） */
+  meta: SkillMetaReader;
   now?: () => Date;
 }
 
@@ -117,7 +120,7 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
       if (located.path === "") {
         // FIX-7：技能 = 仓库根。lock 键 = 原始技能名（取不到就用仓库名），
         // 目录名 = sanitizeName(键)（与 npx skills 的 getInstallPath 一致）；仍须通过 safeSegmentName 校验。
-        const named = rootSkillNameOf(skillMdTextOf(files), repoBase);
+        const named = rootSkillNameOf(deps.meta, skillMdTextOf(files), repoBase);
         safeSegmentName(named.dirName, `上游 ${repo}@${tarball.ref} 的技能目录名（技能名 ${named.key}）`);
         dirName = named.dirName;
         storeName = named.key;

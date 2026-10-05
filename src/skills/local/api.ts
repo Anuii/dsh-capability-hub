@@ -10,7 +10,8 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import { badRequest, conflict, internal, notFound, readOnly } from "../../shared/errors.ts";
 import { atomicWriteFile, isDirectory, readFileText, removePath, statOrUndefined, walkEntries } from "./fsx.ts";
-import { evaluateFrontmatter, rewriteDisableModelInvocation } from "./frontmatter.ts";
+import { createFrontmatter, type Frontmatter } from "./frontmatter/index.ts";
+import type { YamlLib } from "../contract/yaml.ts";
 import {
   applyShadowing,
   isSafeDirName,
@@ -112,7 +113,14 @@ export function assertTrashTargetInsideRoot(target: unknown, rootPath: unknown, 
   }
 }
 
-export function createSkillsLocalImpl(ctx: HubContext): SkillsLocalImpl {
+/** 本地技能模块需要外壳注入的东西。 */
+export interface SkillsLocalDeps {
+  /** DSH 自带的 yaml 库（ADR-0006） */
+  yaml: YamlLib;
+}
+
+export function createSkillsLocalImpl(ctx: HubContext, deps: SkillsLocalDeps): SkillsLocalImpl {
+  const frontmatter = createFrontmatter(deps.yaml);
   const trash = new TrashStore(ctx.hubHome);
   let lockStash: LockStash | undefined;
 
@@ -121,7 +129,7 @@ export function createSkillsLocalImpl(ctx: HubContext): SkillsLocalImpl {
     for (const extra of extraSpecs) {
       if (!specs.some((s) => s.rootId === extra.rootId)) specs.push(extra);
     }
-    const env = newScanEnv();
+    const env = newScanEnv(frontmatter);
     const scanned = await scanRoots(specs, env);
     const skills: SkillSummary[] = [];
     for (const root of scanned) skills.push(...root.skills);
@@ -186,7 +194,7 @@ export function createSkillsLocalImpl(ctx: HubContext): SkillsLocalImpl {
       if (file === undefined) throw internal("内部错误：未记录技能文件路径。");
       const read = await readFileText(file);
       if (read === undefined) throw notFound("读不到技能文件：" + file);
-      const result = rewriteDisableModelInvocation(read.buffer, enabled);
+      const result = frontmatter.rewriteDisableModelInvocation(read.buffer, enabled);
       if (!result.ok) throw conflict("无法改写该技能：" + (result.reason ?? "未知原因"));
       if (result.changed) await atomicWriteFile(file, result.content);
       const after = await api.get(id, opts);
@@ -324,7 +332,10 @@ export function createSkillsLocalImpl(ctx: HubContext): SkillsLocalImpl {
           hasLockEntry: false,
           kind: existing.isDirectory() ? "dir" : "file",
         };
-        const existingName = await readSkillName(existing.isDirectory() ? path.join(target, "SKILL.md") : target);
+        const existingName = await readSkillName(
+          frontmatter,
+          existing.isDirectory() ? path.join(target, "SKILL.md") : target,
+        );
         if (existingName !== undefined) replaceMeta.name = existingName;
         try {
           await trash.stash(target, replaceMeta);
@@ -420,9 +431,9 @@ function findProjectRootSync(workspace: string): string {
   }
 }
 
-async function readSkillName(file: string): Promise<string | undefined> {
+async function readSkillName(frontmatter: Frontmatter, file: string): Promise<string | undefined> {
   const read = await readFileText(file);
   if (read === undefined) return undefined;
-  const evaluated = evaluateFrontmatter(read.buffer);
+  const evaluated = frontmatter.evaluate(read.buffer);
   return evaluated.name;
 }

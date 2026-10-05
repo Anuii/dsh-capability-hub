@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createSkillsLocalModule } from "../../../src/skills/local/module.ts";
 import type { RouteHandler, RouteRequest } from "../../../src/platform/contract/host.ts";
-import { agentsRoot, makeCtx, makeTempArea, skillMd, writeSkill, type TempArea } from "./fixtures.ts";
+import { agentsRoot, makeCtx, makeTempArea, skillMd, writeSkill, type TempArea, LOCAL_DEPS } from "./fixtures.ts";
 
 interface HttpError {
   status: number;
@@ -19,7 +19,7 @@ async function withRoutes(
 ): Promise<void> {
   const area = await makeTempArea(label);
   try {
-    const module = createSkillsLocalModule(makeCtx(area));
+    const module = createSkillsLocalModule(makeCtx(area), LOCAL_DEPS);
     const route = async (key: string, req: Partial<RouteRequest> = {}) => {
       const handler: RouteHandler | undefined = module.routes[key];
       assert.ok(handler !== undefined, "路由不存在：" + key);
@@ -153,7 +153,7 @@ test("路由：只读根与 L2 结构分别返回 READ_ONLY / CONFLICT", async (
   const area = await makeTempArea("route-errors");
   try {
     const customDir = path.join(area.root, "custom-skills");
-    const module = createSkillsLocalModule(makeCtx(area, { customSkillDirs: [customDir] }));
+    const module = createSkillsLocalModule(makeCtx(area, { customSkillDirs: [customDir] }), LOCAL_DEPS);
     await writeSkill(customDir, "ro", skillMd("ro", "d"));
     await writeSkill(agentsRoot(area), "l2", "---\nname: l2\ndescription: d\ntags: [a]\n---\n");
     const call = (body: unknown) =>

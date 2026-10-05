@@ -5,6 +5,7 @@
  * 只读 ~/.agents/.skill-lock.json 用于哈希比对，绝不写入真实用户目录。
  */
 
+import * as YAML from "yaml";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -29,7 +30,7 @@ function liveModule(options: { skills?: NonNullable<Parameters<typeof makeFakeAp
   const hubHome = makeTempDir();
   const ctx = makeCtx({ homeDir: home, hubHome, logger: makeLogger().logger });
   const skills = makeFakeApi({ skills: options.skills ?? [] });
-  const module = createSkillsRemoteModule(ctx, { skills });
+  const module = createSkillsRemoteModule(ctx, { skills, yaml: YAML });
   return { ctx, skills, module, home, hubHome };
 }
 

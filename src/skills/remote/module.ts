@@ -14,6 +14,8 @@ import { createSourceStore, type SourceStore } from "./lockstore.ts";
 import { createRepoStore, type RepoStore } from "./repos.ts";
 import { createDiscoveryStore } from "./repo-discovery.ts";
 import { createRepoCatalog } from "./repo-catalog.ts";
+import { createSkillMetaReader } from "./skill-meta.ts";
+import type { YamlLib } from "../contract/yaml.ts";
 import { createSkillsRemoteRoutes } from "./routes.ts";
 import type { RemoteOptions, SkillsLocalPort } from "./types.ts";
 import type { HubContext, HubModule } from "../../platform/contract/host.ts";
@@ -21,6 +23,8 @@ import type { LockStash } from "../contract/local.ts";
 
 export interface SkillsRemoteDeps {
   skills: SkillsLocalPort;
+  /** DSH 自带的 yaml 库（ADR-0006）：读上游 SKILL.md 的 name / description */
+  yaml: YamlLib;
 }
 
 export interface SkillsRemoteModule extends HubModule {
@@ -48,6 +52,7 @@ export function createSkillsRemoteModule(
   const github = new GitHubClient(githubOptions);
   const sources: SourceStore = createSourceStore(scopedCtx);
   const repos: RepoStore = createRepoStore(scopedCtx);
+  const meta = createSkillMetaReader(deps.yaml);
 
   const routes = createSkillsRemoteRoutes({
     ctx: scopedCtx,
@@ -61,9 +66,11 @@ export function createSkillsRemoteModule(
       repos,
       store: createDiscoveryStore(scopedCtx),
       redactor,
+      meta,
       ...(options.now === undefined ? {} : { now: options.now }),
     }),
     redactor,
+    meta,
     now: options.now,
   });
 

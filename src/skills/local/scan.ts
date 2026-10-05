@@ -13,7 +13,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Diagnostic, RootId, RootInfo, SkillSummary } from "../contract/local.ts";
 import type { HubContext } from "../../platform/contract/host.ts";
-import { evaluateFrontmatter } from "./frontmatter.ts";
+import type { Frontmatter } from "./frontmatter/index.ts";
 import { isDirectory, pathExists, readFileText, statOrUndefined } from "./fsx.ts";
 
 export interface RootSpec {
@@ -128,10 +128,12 @@ export interface ScanEnv {
   skillFiles: Map<string, string>;
   /** skillId -> 该技能的文件形态 */
   skillKinds: Map<string, "dir" | "file">;
+  /** frontmatter 的判断（用 DSH 自带的 yaml 库） */
+  frontmatter: Frontmatter;
 }
 
-export function newScanEnv(): ScanEnv {
-  return { linkedRoots: new Set(), linkedSkills: new Map(), skillFiles: new Map(), skillKinds: new Map() };
+export function newScanEnv(frontmatter: Frontmatter): ScanEnv {
+  return { linkedRoots: new Set(), linkedSkills: new Map(), skillFiles: new Map(), skillKinds: new Map(), frontmatter };
 }
 
 interface Candidate {
@@ -223,7 +225,7 @@ async function summarize(spec: RootSpec, candidate: Candidate, env: ScanEnv): Pr
     };
   }
 
-  const evaluated = evaluateFrontmatter(read.buffer);
+  const evaluated = env.frontmatter.evaluate(read.buffer);
   diagnostics.push(...evaluated.diagnostics);
 
   if (evaluated.doc !== undefined && evaluated.doc.eol === "mixed") {

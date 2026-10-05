@@ -28,7 +28,7 @@
 import { describeUnsafePath } from "./safepath.ts";
 import { hashFiles, hashTarDirectory, type FolderHash, type HashFile } from "./hash.ts";
 import { filesUnderDirectory, type TarEntry } from "./tar.ts";
-import { parseMiniFrontmatter } from "./frontmatter.ts";
+import type { SkillMetaReader } from "./skill-meta.ts";
 import { upstream } from "../../shared/errors.ts";
 
 /**
@@ -147,8 +147,12 @@ export interface RootSkillName {
  *   - 安装目录名 = `sanitizeName(skill.name || basename(skill.path))`（2285、2183–2185）。
  * 名字本来就干净时两者相同（本机 31/31 的技能都是这种）。
  */
-export function rootSkillNameOf(skillMdText: string | undefined, repoBase: string): RootSkillName {
-  const parsed = skillMdText === undefined ? undefined : parseMiniFrontmatter(skillMdText).name?.trim();
+export function rootSkillNameOf(
+  meta: SkillMetaReader,
+  skillMdText: string | undefined,
+  repoBase: string,
+): RootSkillName {
+  const parsed = skillMdText === undefined ? undefined : meta(skillMdText).name;
   const usable = parsed !== undefined && parsed !== "" ? parsed : undefined;
   const key = usable ?? repoBase;
   const out: RootSkillName = { key, dirName: sanitizeName(key) };

@@ -29,6 +29,7 @@ import {
   writeFlatSkill,
   writeSkill,
   type TempArea,
+  LOCAL_DEPS,
 } from "./fixtures.ts";
 
 async function withArea(label: string, fn: (area: TempArea) => Promise<void>): Promise<void> {
@@ -48,7 +49,7 @@ test("平铺技能：list 的 path 是该 .md 文件本身（绝不是技能根�
     const flat = await writeFlatSkill(root, "solo.md", skillMd("solo", "平铺技能"));
     await writeSkill(root, "boxed", skillMd("boxed", "目录技能"));
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const list = await impl.list({});
     const byId = new Map(list.skills.map((s) => [s.id, s]));
 
@@ -76,7 +77,7 @@ test("平铺技能：view 只返回它自己，绝不列出整个技能根", asy
     await writeSkill(root, "other", skillMd("other", "邻居"), { "assets/x.txt": "X" });
     await fs.writeFile(path.join(root, "loose.txt"), "散落文件");
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const view = await impl.view("user-agents:solo.md", {});
     assert.equal(view.content, original, "content 必须是这个文件的原文");
     assert.equal(view.skill.path, flat);
@@ -101,7 +102,7 @@ test("删除平铺技能：只把这一个 .md 移入回收站，技能根与其
     const before = await fingerprintDir(root);
     assert.equal(before.length > 3, true);
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const stash = makeLockStashStub({ "user-agents:solo.md": { source: "owner/repo", skillPath: "solo.md" } });
     impl.bindLockStash(stash);
 
@@ -154,7 +155,7 @@ test("恢复平铺技能：文件回到原处、字节完全相同，其他内�
     await writeSkill(root, "keep", skillMd("keep", "邻居"), { "assets/a.txt": "A" });
 
     const before = await fingerprintDir(root);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const stash = makeLockStashStub({ "user-agents:solo.md": { source: "o/r" } });
     impl.bindLockStash(stash);
 
@@ -177,7 +178,7 @@ test("恢复平铺技能：原文件已存在 -> CONFLICT；replace=true 的覆�
   await withArea("flat-restore-replace", async (area) => {
     const root = agentsRoot(area);
     const flat = await writeFlatSkill(root, "solo.md", skillMd("solo", "旧内容"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const item = await impl.moveToTrash("user-agents:solo.md", { reason: "delete" });
 
     await writeFlatSkill(root, "solo.md", skillMd("solo", "新内容"));
@@ -214,7 +215,7 @@ test("平铺技能：purge 只清回收站条目，技能根不受影响", async
     await writeSkill(root, "keep", skillMd("keep", "邻居"));
     const before = await fingerprintDir(root);
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const item = await impl.moveToTrash("user-agents:solo.md", { reason: "delete" });
     assert.equal(await impl.purge(item.trashId), 1);
     assert.equal(await exists(path.join(area.hubHome, "skills", "trash", item.trashId)), false);
@@ -237,7 +238,7 @@ test("启停平铺技能：只改这个 .md 文件，根内其他文件字节不
     await fs.writeFile(path.join(root, "loose.txt"), "散落");
     const before = await fingerprintDir(root);
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const off = await impl.setEnabled("user-agents:solo.md", false, {});
     assert.equal(off.modelInvocationDisabled, true);
     assert.equal(off.modelVisible, false);
@@ -273,7 +274,7 @@ test("平铺与目录同名（跨根）：skillId 各自独立，遮蔽按根优
     await writeSkill(dshSkillsRoot(area), "dup", skillMd("dup", "user-dsh 的目录型"));
     await writeFlatSkill(agentsRoot(area), "dup.md", skillMd("dup", "user-agents 的平铺型"));
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const list = await impl.list({});
     const byId = new Map(list.skills.map((s) => [s.id, s]));
 
@@ -297,7 +298,7 @@ test("平铺与目录同名（同根）：两个 id 并存，先扫到的目录�
     await writeSkill(root, "dup", skillMd("dup", "目录型"));
     await writeFlatSkill(root, "dup.md", skillMd("dup", "平铺型"));
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const list = await impl.list({});
     const byId = new Map(list.skills.map((s) => [s.id, s]));
     assert.equal(byId.has("user-agents:dup"), true);
@@ -317,7 +318,7 @@ test("根目录下的非技能 .md（README.md）：按官方规则由 frontmatt
     const readme = await writeFlatSkill(root, "README.md", "# 说明\n\n这不是技能，没有 frontmatter。\n");
     const good = await writeFlatSkill(root, "notes.md", skillMd("notes", "有 frontmatter 的平铺技能"));
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const list = await impl.list({});
     const byId = new Map(list.skills.map((s) => [s.id, s]));
 
@@ -430,7 +431,7 @@ test("防护（端到端）：伪造 originalPath 等于技能根的历史条目
       kind: "dir",
     });
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await assert.rejects(
       () => impl.restore(trashId, {}),
       (error: { status: number; code: string; message: string }) => {
@@ -476,7 +477,7 @@ test("防护（端到端）：伪造指向技能根之外的 originalPath，rest
       kind: "file",
     });
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await assert.rejects(
       () => impl.restore(trashId, {}),
       (error: { status: number; code: string; message: string }) => {

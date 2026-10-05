@@ -16,6 +16,7 @@ import { installedIdOf, loadInstalledIndex, scanRepoSkills } from "./browse.ts";
 import type { GitHubClient } from "./github.ts";
 import type { Redactor } from "./redact.ts";
 import type { RepoStore } from "./repos.ts";
+import type { SkillMetaReader } from "./skill-meta.ts";
 import type { DiscoveryCacheEntry, DiscoveryCacheFile, SkillsLocalPort } from "./types.ts";
 import type { DiscoveredSkill, DiscoveryRepoView, DiscoveryView, RepoRecord } from "../contract/remote.ts";
 import type { HubContext } from "../../platform/contract/host.ts";
@@ -125,6 +126,8 @@ export interface DiscoveryDeps {
   repos: RepoStore;
   store: DiscoveryStore;
   redactor: Redactor;
+  /** 读 SKILL.md 的 name / description（DSH 同一个 yaml 库） */
+  meta: SkillMetaReader;
   now?: () => Date;
 }
 
@@ -148,7 +151,7 @@ function errorText(error: unknown): string {
 
 /** 扫一个仓库，成功失败都变成一条缓存条目（不抛错，取消除外） */
 export async function scanOne(
-  deps: Pick<DiscoveryDeps, "github" | "redactor" | "now">,
+  deps: Pick<DiscoveryDeps, "github" | "redactor" | "meta" | "now">,
   record: RepoRecord,
   signal?: AbortSignal,
 ): Promise<DiscoveryCacheEntry> {
@@ -157,7 +160,7 @@ export async function scanOne(
   if (record.ref !== undefined) base.ref = record.ref;
   if (record.subPath !== undefined) base.subPath = record.subPath;
   try {
-    const scanned = await scanRepoSkills(deps.github, {
+    const scanned = await scanRepoSkills(deps.github, deps.meta, {
       repo: record.repo,
       ref: record.ref,
       subPath: record.subPath,

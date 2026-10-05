@@ -11,6 +11,7 @@ import { assertRepoShape } from "./repos.ts";
 import { browseRepo } from "./browse.ts";
 import { discoverSources } from "./discover.ts";
 import type { RepoCatalog } from "./repo-catalog.ts";
+import type { SkillMetaReader } from "./skill-meta.ts";
 import { installSkills, registerSource, unregisterSource, assertInstallTarget } from "./install.ts";
 import { applyUpdates, checkUpdates } from "./updates.ts";
 import { normalizeSkillsShResponse } from "./github.ts";
@@ -30,6 +31,8 @@ export interface RoutesDeps {
   repos: RepoStore;
   /** 仓库列表 + 发现（增改删的补扫规则都在里面） */
   catalog: RepoCatalog;
+  /** 读 SKILL.md 的 name / description（DSH 同一个 yaml 库） */
+  meta: SkillMetaReader;
   redactor: Redactor;
   now?: RemoteOptions["now"];
 }
@@ -96,7 +99,7 @@ function resolveRepoInput(raw: string, explicitRef?: string): { repo: string; re
 }
 
 export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, RouteHandler> {
-  const { ctx, skills, github, sources, repos, catalog } = deps;
+  const { ctx, skills, github, sources, repos, catalog, meta } = deps;
   const now = deps.now;
 
   const routes: Record<string, RouteHandler> = {};
@@ -224,7 +227,7 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
     const workspace = optionalString(body, "workspace");
     const resolved = resolveRepoInput(repoRaw, ref);
     return await browseRepo(
-      { github, skills },
+      { github, skills, meta },
       { repo: resolved.repo, ref: resolved.ref, subPath: resolved.subPath, workspace, signal: req.signal },
     );
   };
@@ -266,7 +269,7 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
     const resolved = resolveRepoInput(repoRaw, ref);
     const target: InstallTarget = assertInstallTarget(targetRaw);
     const results = await installSkills(
-      { ctx, github, skills, sources, now },
+      { ctx, github, skills, sources, meta, now },
       { repo: resolved.repo, ref: resolved.ref, skillPaths, target, workspace },
     );
     return { results };

@@ -11,7 +11,7 @@
 | D-A1 | 包名 dsh-capability-hub，界面显示名「能力中心」；源码在包目录 `dsh-capability-hub/`；不发布到 npm |
 | D-A2 | 一个独立页面；官方插件管理页本插件那一行的「配置」按钮（keyed slot `plugins.row.config`）直达 MCP 标签。0.2.0 为三个标签：技能 / MCP 服务器 / 运行态；**0.3.0 起为两个标签「技能 / MCP」，运行态并入 MCP 页（见 D-E1）** |
 | D-A3 | 界面只做中文，文案集中在字典文件 |
-| D-A4 | 依赖：可用 npm 通用库（打包进产物）；不依赖任何别人写的 DSH 插件；DSH 自带的包优先（MCP 通信用 DSH 自带 `@modelcontextprotocol/client` v2，声明 peer，不另装；`@deepseek-ai/*` 走宿主解析） |
+| D-A4 | 依赖：可用 npm 通用库（打包进产物）；不依赖任何别人写的 DSH 插件；DSH 自带的包优先（MCP 通信用 DSH 自带 `@modelcontextprotocol/client` v2，声明 peer，不另装；`@deepseek-ai/*` 走宿主解析）。**0.4.0**：SKILL.md frontmatter 也用 DSH 自带的 `yaml`（与 DSH 判断能否加载用的是同一份，ADR-0006） |
 | D-A5 | 只管 DSH 自身；对 Claude Code / Codex 只读（导入），绝不写 |
 | D-A6 | 访问权限与 DSH 本身一致：接口挂在 `/api/` 前缀下继承 DSH browser-auth；不自建 loopback 围栏（隧道流量会被伪装成 loopback，围栏无效） |
 

@@ -7,7 +7,7 @@
  */
 
 import { badRequest } from "../../shared/errors.ts";
-import { createSkillsLocalImpl, type SkillsLocalImpl } from "./api.ts";
+import { createSkillsLocalImpl, type SkillsLocalDeps, type SkillsLocalImpl } from "./api.ts";
 import type { HubContext, HubModule, RouteHandler } from "../../platform/contract/host.ts";
 import type { LockStash, SkillsLocalApi } from "../contract/local.ts";
 
@@ -46,8 +46,8 @@ function optionalBoolean(value: unknown, name: string): boolean | undefined {
   return value;
 }
 
-export function createSkillsLocalModule(ctx: HubContext): SkillsLocalModule {
-  const impl: SkillsLocalImpl = createSkillsLocalImpl(ctx);
+export function createSkillsLocalModule(ctx: HubContext, deps: SkillsLocalDeps): SkillsLocalModule {
+  const impl: SkillsLocalImpl = createSkillsLocalImpl(ctx, deps);
 
   const routes: Record<string, RouteHandler> = {
     "GET skills/list": async (req) => {

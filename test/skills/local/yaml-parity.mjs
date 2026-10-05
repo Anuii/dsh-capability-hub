@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 /**
- * 与官方 yaml 对拍：本插件的 frontmatter 解析 vs DSH 自带 YAML 解析器。
+ * 与官方对拍：本插件的 frontmatter 判断 vs DSH 自带 yaml 直接解析的结果。
+ *
+ * 0.4.0 起本插件运行时用的就是 DSH 自带的 yaml（ADR-0006），这里守住两件事：
+ *   - 开发与单测用的 devDependency yaml 与 DSH 安装目录里的版本相同；
+ *   - 本插件切出的 frontmatter 区段、取出的键值与 DSH 的做法一致（围栏、行尾、注释……）。
  *
  * 官方侧：用「Electron-as-node」把 DSH 安装目录里的 Electron 可执行文件当 node 用（不启动官方 App），
- * 再用 createRequire 指向 asar 内 @deepseek-ai/dsh-skill-filesystem/package.json 拿到官方用的 yaml（2.9.1）。
- * 本插件侧：直接 import src/skills/local/frontmatter.ts。
+ * 再用 createRequire 指向 asar 内 @deepseek-ai/dsh-skill-filesystem/package.json 拿到官方用的 yaml。
+ * 本插件侧：import src/skills/local/frontmatter/index.ts，注入 devDependency 里的 yaml。
  *
  * 运行（本机 Node 24，自带类型擦除）：
  *   node test/skills/local/yaml-parity.mjs
@@ -25,8 +29,13 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const parserPath = path.join(here, "..", "..", "..", "src", "skills", "local", "frontmatter.ts");
-const { evaluateFrontmatter } = await import(pathToFileURL(parserPath).href);
+const parserPath = path.join(here, "..", "..", "..", "src", "skills", "local", "frontmatter", "index.ts");
+const { createFrontmatter } = await import(pathToFileURL(parserPath).href);
+const YAML = await import("yaml");
+const localYamlVersion = JSON.parse(
+  fs.readFileSync(path.join(here, "..", "..", "..", "node_modules", "yaml", "package.json"), "utf8"),
+).version;
+const { evaluate: evaluateFrontmatter } = createFrontmatter(YAML);
 
 const LOCAL_APPDATA = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
 const DSH_INSTALL_DIR = process.env.DSH_INSTALL_DIR || path.join(LOCAL_APPDATA, "Programs", "DeepSeek Harness");
@@ -310,7 +319,19 @@ if (official.error !== undefined) {
 
 let pass = 0;
 const failures = [];
-console.log("官方 yaml 版本：" + official.data.yamlVersion + "，样本数：" + samples.length);
+console.log(
+  "官方 yaml 版本：" +
+    official.data.yamlVersion +
+    "，本插件开发用：" +
+    localYamlVersion +
+    "，样本数：" +
+    samples.length,
+);
+const versionMismatch = official.data.yamlVersion !== localYamlVersion;
+if (versionMismatch)
+  console.log(
+    " FAIL devDependency 的 yaml 版本与 DSH 不同：请把 package.json 的 yaml 改成 " + official.data.yamlVersion,
+  );
 console.log("");
 for (const s of samples) {
   const off = official.data.results[s.id];
@@ -353,6 +374,6 @@ for (const c of L2_CASES) {
 }
 console.log("L2（子集外）汇总：" + l2pass + "/" + L2_CASES.length + " 不崩且标为不可安全改写");
 
-const failed = failures.length > 0 || l2pass !== L2_CASES.length;
+const failed = versionMismatch || failures.length > 0 || l2pass !== L2_CASES.length;
 console.log(failed ? "结果：有不一致，见上方 FAIL 行。" : "结果：全部一致。");
 process.exit(failed ? 1 : 0);

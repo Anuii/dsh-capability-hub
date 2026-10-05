@@ -8,6 +8,7 @@
  * 「越界零写入」用「临时目录递归指纹比对 + 直接检查逃逸候选路径不存在」两项断言固定。
  */
 
+import * as YAML from "yaml";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -104,7 +105,7 @@ function buildModule(options: BuildOptions = {}) {
   const fake = makeFakeFetch(options.routes ?? []);
   const module = createSkillsRemoteModule(
     ctx,
-    { skills },
+    { skills, yaml: YAML },
     {
       fetchImpl: fake.fetch,
       envTokenProvider: () => undefined,

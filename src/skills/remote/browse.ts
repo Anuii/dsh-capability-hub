@@ -9,7 +9,7 @@
 import { filesUnderDirectory } from "./tar.ts";
 import { rootSkillFiles, sanitizeName } from "./rootskill.ts";
 import { safeRelativePath, safeSegmentName } from "./safepath.ts";
-import { parseMiniFrontmatter } from "./frontmatter.ts";
+import type { SkillMetaReader } from "./skill-meta.ts";
 import { skillDirOf, skillMdPathOf } from "./sourceurl.ts";
 import { upstream } from "../../shared/errors.ts";
 import type { GitHubClient } from "./github.ts";
@@ -35,6 +35,8 @@ export interface BrowseOptions {
 export interface BrowseDeps {
   github: GitHubClient;
   skills: SkillsLocalPort;
+  /** 读 SKILL.md 的 name / description（DSH 同一个 yaml 库） */
+  meta: SkillMetaReader;
 }
 
 export interface ScanResult {
@@ -50,6 +52,7 @@ export interface ScanResult {
  */
 export async function scanRepoSkills(
   github: GitHubClient,
+  meta: SkillMetaReader,
   options: { repo: string; ref?: string; subPath?: string; signal?: AbortSignal },
 ): Promise<ScanResult> {
   const tarball = await github.downloadTarball(options.repo, options.ref, options.signal);
@@ -95,7 +98,7 @@ export async function scanRepoSkills(
     const files = dirPath === "" ? rootSkillFiles(entries) : filesUnderDirectory(entries, dirPath);
     const skillMd =
       files.find((f) => f.rel.toLowerCase() === "skill.md") ?? files.find((f) => /^SKILL\.md$/i.test(f.rel));
-    const fm = skillMd ? parseMiniFrontmatter(skillMd.data.toString("utf8")) : { keys: [] as string[] };
+    const fm = skillMd ? meta(skillMd.data.toString("utf8")) : {};
     const item: DiscoverySkill = { skillPath: skillMdPathOf(dirPath), dirName };
     if (fm.name !== undefined) item.name = fm.name;
     if (fm.description !== undefined) item.description = fm.description;
@@ -152,7 +155,7 @@ export async function loadInstalledIndex(skills: SkillsLocalPort, workspace?: st
 }
 
 export async function browseRepo(deps: BrowseDeps, options: BrowseOptions): Promise<BrowseResult> {
-  const scanned = await scanRepoSkills(deps.github, options);
+  const scanned = await scanRepoSkills(deps.github, deps.meta, options);
   const index = await loadInstalledIndex(deps.skills, options.workspace);
   const skills: BrowseSkill[] = scanned.skills.map((skill) => {
     const item: BrowseSkill = { ...skill };

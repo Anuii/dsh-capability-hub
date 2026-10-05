@@ -15,6 +15,7 @@ import {
   skillMd,
   writeSkill,
   type TempArea,
+  LOCAL_DEPS,
 } from "./fixtures.ts";
 
 async function withArea(label: string, fn: (area: TempArea) => Promise<void>): Promise<void> {
@@ -42,7 +43,7 @@ test("list：只读根 / 不存在根 / .system 跳过 / 优先级与跨根遮�
     await writeSkill(bundled, "delta", skillMd("delta", "内置技能"));
 
     const ctx = makeCtx(area, { customSkillDirs: [customDir], bundledSkillDir: bundled });
-    const impl = createSkillsLocalImpl(ctx);
+    const impl = createSkillsLocalImpl(ctx, LOCAL_DEPS);
     const result = await impl.list({ workspace: area.workspace });
 
     const byId = new Map(result.skills.map((s) => [s.id, s]));
@@ -80,7 +81,7 @@ test("list：只读根 / 不存在根 / .system 跳过 / 优先级与跨根遮�
 
 test("list：根不存在不报错；未提供 workspace 时没有项目级根", async () => {
   await withArea("noroots", async (area) => {
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const result = await impl.list({});
     assert.equal(result.skills.length, 0);
     const ids = result.roots.map((r) => r.rootId);
@@ -101,7 +102,7 @@ test("list：projectRoot 向上找最近含 .git 的祖先", async () => {
     await fs.mkdir(nested, { recursive: true });
     await writeSkill(path.join(projectRoot, ".agents", "skills"), "proj", skillMd("proj", "项目级技能"));
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const result = await impl.list({ workspace: nested });
     const skill = result.skills.find((s) => s.id === "project-agents:proj");
     assert.ok(skill !== undefined, "应能扫到项目级技能");
@@ -114,7 +115,10 @@ test("rootPath：同步返回各根路径", async () => {
   await withArea("rootpath", async (area) => {
     const customDir = path.join(area.root, "custom-skills");
     const bundled = path.join(area.root, "bundled-skills");
-    const impl = createSkillsLocalImpl(makeCtx(area, { customSkillDirs: [customDir], bundledSkillDir: bundled }));
+    const impl = createSkillsLocalImpl(
+      makeCtx(area, { customSkillDirs: [customDir], bundledSkillDir: bundled }),
+      LOCAL_DEPS,
+    );
     assert.equal(impl.rootPath("user-agents", {}), agentsRoot(area));
     assert.equal(impl.rootPath("user-dsh", {}), dshSkillsRoot(area));
     assert.equal(impl.rootPath("custom-0", {}), customDir);
@@ -129,7 +133,7 @@ test("get：非法 id / 不存在的 id", async () => {
   await withArea("get", async (area) => {
     await fs.mkdir(agentsRoot(area), { recursive: true });
     await writeSkill(agentsRoot(area), "alpha", skillMd("alpha", "x"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     assert.equal((await impl.get("user-agents:alpha", {}))?.dirName, "alpha");
     assert.equal(await impl.get("user-agents:nope", {}), undefined);
     assert.equal(await impl.get("nocolon", {}), undefined);
@@ -144,7 +148,7 @@ test("setEnabled：CRLF 文件只改一行，其余字节逐字不变", async ()
     const file = path.join(dir, "SKILL.md");
     const before = await readBytes(file);
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const disabled = await impl.setEnabled("user-agents:demo", false, {});
     assert.equal(disabled.modelInvocationDisabled, true);
     assert.equal(disabled.modelVisible, false);
@@ -182,7 +186,7 @@ test("setEnabled：已有键就地替换，只有该行变化", async () => {
     const original = "---\nname: demo\ndescription: d\nlicense: MIT\ndisable-model-invocation: true\n---\n\n# body\n";
     const dir = await writeSkill(root, "demo", original);
     const file = path.join(dir, "SKILL.md");
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await impl.setEnabled("user-agents:demo", true, {});
     const after = await readBytes(file);
     const lines = after.toString("utf8").split("\n");
@@ -197,7 +201,7 @@ test("setEnabled：启用且键不存在时完全不动文件", async () => {
     const dir = await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"));
     const file = path.join(dir, "SKILL.md");
     const before = await readBytes(file);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const skill = await impl.setEnabled("user-agents:demo", true, {});
     assert.equal(skill.modelInvocationDisabled, false);
     assert.equal((await readBytes(file)).equals(before), true);
@@ -209,7 +213,7 @@ test("setEnabled：BOM 技能 -> CONFLICT(409)，且文件字节不变", async (
     const dir = await writeSkill(agentsRoot(area), "demo", "\uFEFF---\nname: demo\ndescription: d\n---\n");
     const file = path.join(dir, "SKILL.md");
     const before = await readBytes(file);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await assert.rejects(
       () => impl.setEnabled("user-agents:demo", false, {}),
       (error: { status: number; code: string; message: string }) => {
@@ -229,7 +233,7 @@ test("setEnabled：只读根 -> READ_ONLY(403)", async () => {
     const dir = await writeSkill(customDir, "demo", skillMd("demo", "d"));
     const file = path.join(dir, "SKILL.md");
     const before = await readBytes(file);
-    const impl = createSkillsLocalImpl(makeCtx(area, { customSkillDirs: [customDir] }));
+    const impl = createSkillsLocalImpl(makeCtx(area, { customSkillDirs: [customDir] }), LOCAL_DEPS);
     await assert.rejects(
       () => impl.setEnabled("custom-0:demo", false, {}),
       (error: { status: number; code: string }) => {
@@ -242,7 +246,7 @@ test("setEnabled：只读根 -> READ_ONLY(403)", async () => {
 
     const bundled = path.join(area.root, "bundled-skills");
     await writeSkill(bundled, "b1", skillMd("b1", "d"));
-    const impl2 = createSkillsLocalImpl(makeCtx(area, { bundledSkillDir: bundled }));
+    const impl2 = createSkillsLocalImpl(makeCtx(area, { bundledSkillDir: bundled }), LOCAL_DEPS);
     await assert.rejects(
       () => impl2.setEnabled("bundled:b1", false, {}),
       (error: { status: number; code: string }) => {
@@ -259,7 +263,7 @@ test("setEnabled：L2 结构 -> CONFLICT(409) 且说明原因", async () => {
     const dir = await writeSkill(agentsRoot(area), "demo", "---\nname: demo\ndescription: d\ntags: [a, b]\n---\n");
     const file = path.join(dir, "SKILL.md");
     const before = await readBytes(file);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await assert.rejects(
       () => impl.setEnabled("user-agents:demo", false, {}),
       (error: { status: number; code: string; message: string }) => {
@@ -282,7 +286,7 @@ test("setEnabled：非法布尔 -> CONFLICT，绝不改写", async () => {
     );
     const file = path.join(dir, "SKILL.md");
     const before = await readBytes(file);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await assert.rejects(
       () => impl.setEnabled("user-agents:demo", true, {}),
       (error: { status: number; code: string }) => {
@@ -302,7 +306,7 @@ test("view：返回 SKILL.md 原文与目录清单（跳过 node_modules/.git，
     extras["node_modules/pkg/index.js"] = "nope";
     extras[".git/config"] = "nope";
     await writeSkill(agentsRoot(area), "demo", original, extras);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const view = await impl.view("user-agents:demo", {});
     assert.equal(view.content, original, "必须是原文，不做 trim");
     assert.equal(view.skill.id, "user-agents:demo");
@@ -331,7 +335,7 @@ test("view：超过 500 项时截断", async () => {
     const extras: Record<string, string> = {};
     for (let i = 0; i < 520; i += 1) extras["assets/f" + String(i).padStart(4, "0") + ".txt"] = "x";
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"), extras);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const view = await impl.view("user-agents:demo", {});
     assert.equal(view.files.length, 500);
   });
@@ -340,7 +344,7 @@ test("view：超过 500 项时截断", async () => {
 test("delete：整目录移入回收站，LockStash.take 被调用，条目存入 meta", async () => {
   await withArea("trash-delete", async (area) => {
     const dir = await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"), { "references/a.md": "x" });
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const stash = makeLockStashStub({ "user-agents:demo": { source: "owner/repo", skillPath: "x/SKILL.md" } });
     impl.bindLockStash(stash);
 
@@ -373,7 +377,7 @@ test("delete：整目录移入回收站，LockStash.take 被调用，条目存�
 test("delete：没有 lock 条目时不写 hasLockEntry，take 仍被调用", async () => {
   await withArea("trash-nolock", async (area) => {
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const stash = makeLockStashStub();
     impl.bindLockStash(stash);
     const item = await impl.moveToTrash("user-agents:demo", { reason: "delete" });
@@ -389,7 +393,7 @@ test("delete：没有 lock 条目时不写 hasLockEntry，take 仍被调用", as
 test("delete：未绑定 LockStash 也能工作", async () => {
   await withArea("trash-nostash", async (area) => {
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const item = await impl.moveToTrash("user-agents:demo", { reason: "delete" });
     assert.equal(item.hasLockEntry, false);
   });
@@ -398,7 +402,7 @@ test("delete：未绑定 LockStash 也能工作", async () => {
 test("delete：reason 非法 / 只读根", async () => {
   await withArea("trash-guards", async (area) => {
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await assert.rejects(
       () => impl.moveToTrash("user-agents:demo", { reason: "nope" as unknown as "delete" }),
       (error: { status: number; code: string }) => {
@@ -408,7 +412,7 @@ test("delete：reason 非法 / 只读根", async () => {
     );
     const customDir = path.join(area.root, "custom-skills");
     await writeSkill(customDir, "ro", skillMd("ro", "d"));
-    const impl2 = createSkillsLocalImpl(makeCtx(area, { customSkillDirs: [customDir] }));
+    const impl2 = createSkillsLocalImpl(makeCtx(area, { customSkillDirs: [customDir] }), LOCAL_DEPS);
     await assert.rejects(
       () => impl2.moveToTrash("custom-0:ro", { reason: "delete" }),
       (error: { status: number; code: string }) => {
@@ -430,7 +434,7 @@ test("delete：reason 非法 / 只读根", async () => {
 test("restore：原路径空闲 -> 直接恢复并放回 lock 条目", async () => {
   await withArea("restore-simple", async (area) => {
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "恢复我"), { "references/a.md": "x" });
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const stash = makeLockStashStub({ "user-agents:demo": { source: "o/r" } });
     impl.bindLockStash(stash);
     const item = await impl.moveToTrash("user-agents:demo", { reason: "delete" });
@@ -448,7 +452,7 @@ test("restore：原路径空闲 -> 直接恢复并放回 lock 条目", async () 
 test("restore：原路径已存在且未指定 replace -> CONFLICT", async () => {
   await withArea("restore-conflict", async (area) => {
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "旧"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const item = await impl.moveToTrash("user-agents:demo", { reason: "delete" });
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "新"));
     await assert.rejects(
@@ -467,7 +471,7 @@ test("restore：原路径已存在且未指定 replace -> CONFLICT", async () =>
 test("restore：replace=true 时先把现有内容以 reason=replace 入回收站", async () => {
   await withArea("restore-replace", async (area) => {
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "旧"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const item = await impl.moveToTrash("user-agents:demo", { reason: "delete" });
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "新"));
 
@@ -486,7 +490,7 @@ test("restore：replace=true 时先把现有内容以 reason=replace 入回收�
 test("restore：恢复后启停状态保持（停用的技能恢复后仍是停用）", async () => {
   await withArea("restore-disabled", async (area) => {
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d", ["disable-model-invocation: true"]));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const item = await impl.moveToTrash("user-agents:demo", { reason: "delete" });
     const restored = await impl.restore(item.trashId, {});
     assert.equal(restored.modelInvocationDisabled, true);
@@ -496,7 +500,7 @@ test("restore：恢复后启停状态保持（停用的技能恢复后仍是停�
 
 test("restore：trashId 非法 / 不存在", async () => {
   await withArea("restore-bad", async (area) => {
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await assert.rejects(
       () => impl.restore("../evil", {}),
       (error: { status: number; code: string }) => {
@@ -518,7 +522,7 @@ test("restore：只读根上的历史条目不能恢复 -> READ_ONLY", async () 
   await withArea("restore-readonly", async (area) => {
     const customDir = path.join(area.root, "custom-skills");
     await writeSkill(customDir, "ro", skillMd("ro", "d"));
-    const impl = createSkillsLocalImpl(makeCtx(area, { customSkillDirs: [customDir] }));
+    const impl = createSkillsLocalImpl(makeCtx(area, { customSkillDirs: [customDir] }), LOCAL_DEPS);
     // 手工造一条指向只读根的回收站条目
     const trashId = "manual-readonly";
     const trashDir = path.join(area.hubHome, "skills", "trash", trashId);
@@ -555,7 +559,7 @@ test("purge：单条与全部；列出按时间倒序", async () => {
     await writeSkill(agentsRoot(area), "one", skillMd("one", "d"));
     await writeSkill(agentsRoot(area), "two", skillMd("two", "d"));
     await writeSkill(agentsRoot(area), "three", skillMd("three", "d"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const a = await impl.moveToTrash("user-agents:one", { reason: "delete" });
     await new Promise((r) => setTimeout(r, 5));
     const b = await impl.moveToTrash("user-agents:two", { reason: "delete" });
@@ -598,7 +602,7 @@ test("warnings：检测 CC Switch 统一存储位置与符号链接技能", asyn
     await fs.mkdir(agentsRoot(area), { recursive: true });
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"));
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     let list = await impl.list({});
     assert.deepEqual(list.warnings, [], "没有外部工具特征时不能误报");
 
@@ -634,7 +638,7 @@ test("warnings：技能目录是符号链接时提示（Windows 上目录联接�
     } catch {
       return; // 无权限时跳过（Windows 未开启开发者模式）
     }
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const list = await impl.list({});
     const skill = list.skills.find((s) => s.id === "user-agents:linked");
     assert.ok(skill !== undefined);
@@ -650,14 +654,17 @@ test("warnings：技能目录是符号链接时提示（Windows 上目录联接�
 });
 
 test("module 工厂：7 个路由 + api + bindLockStash 都存在", () => {
-  const module = createSkillsLocalModule({
-    homeDir: "C:/nope",
-    dshHome: "C:/nope/.dsh",
-    hubHome: "C:/nope/.dsh/storages/dsh-capability-hub",
-    profileName: "test",
-    logger: { debug() {}, info() {}, warn() {}, error() {} },
-    customSkillDirs: [],
-  });
+  const module = createSkillsLocalModule(
+    {
+      homeDir: "C:/nope",
+      dshHome: "C:/nope/.dsh",
+      hubHome: "C:/nope/.dsh/storages/dsh-capability-hub",
+      profileName: "test",
+      logger: { debug() {}, info() {}, warn() {}, error() {} },
+      customSkillDirs: [],
+    },
+    LOCAL_DEPS,
+  );
   assert.deepEqual(Object.keys(module.routes).sort(), [
     "GET skills/list",
     "GET skills/trash",
@@ -702,7 +709,7 @@ test("回归（端到端）：正文含 disable-model-invocation 示例行时，
     const before = await readBytes(file);
     const beforeParts = splitDoc(doc);
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const after = await readBytes(file);
     assert.equal(after.equals(before), true, "list 不应改文件");
     assert.equal((await impl.get("user-agents:demo", {}))?.modelInvocationDisabled, false);
@@ -746,7 +753,7 @@ test("回归（端到端）：CRLF 文件正文里已有该行时，启用改的
     const before = await readBytes(file);
     const beforeParts = splitDoc(doc);
 
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     assert.equal((await impl.get("user-agents:demo", {}))?.modelInvocationDisabled, true);
 
     const enabled = await impl.setEnabled("user-agents:demo", true, {});
@@ -788,7 +795,7 @@ test("回归（端到端）：带行尾注释的 frontmatter 可以正常体检�
     const dir = await writeSkill(agentsRoot(area), "demo", doc);
     const file = path.join(dir, "SKILL.md");
     const before = await readBytes(file);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
 
     const found = await impl.get("user-agents:demo", {});
     assert.equal(found?.loadable, true, "行尾注释不是缺陷，必须可加载");
@@ -825,7 +832,7 @@ test("回归（端到端）：CRLF + 行尾注释的启停往返逐字节相同"
     const dir = await writeSkill(agentsRoot(area), "demo", doc);
     const file = path.join(dir, "SKILL.md");
     const before = await readBytes(file);
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
 
     const off = await impl.setEnabled("user-agents:demo", false, {});
     assert.equal(off.modelInvocationDisabled, true);

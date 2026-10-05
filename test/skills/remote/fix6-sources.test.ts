@@ -9,6 +9,7 @@
  * 全部落盘都在 os.tmpdir() 下的临时目录里，绝不碰真实用户目录（PLAN §4）。
  */
 
+import * as YAML from "yaml";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -81,7 +82,7 @@ async function buildModule(options: EnvOptions = {}) {
   const fake = makeFakeFetch(options.routes ?? []);
   const module = createSkillsRemoteModule(
     ctx,
-    { skills },
+    { skills, yaml: YAML },
     {
       fetchImpl: fake.fetch,
       envTokenProvider: () => options.envToken,

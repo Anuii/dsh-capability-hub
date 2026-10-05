@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createSkillsLocalImpl } from "../../../src/skills/local/api.ts";
-import { agentsRoot, makeCtx, makeLockStashStub, makeTempArea, skillMd, writeSkill } from "./fixtures.ts";
+import { agentsRoot, makeCtx, makeLockStashStub, makeTempArea, skillMd, writeSkill, LOCAL_DEPS } from "./fixtures.ts";
 
 /**
  * 安全红线（PLAN §4）可执行核对：
@@ -70,7 +70,7 @@ test("安全红线：整套读写 API 前后，真实用户目录指纹不变", 
     await writeSkill(agentsRoot(area), "alpha", skillMd("alpha", "a"));
     await writeSkill(agentsRoot(area), "beta", skillMd("beta", "b", ["disable-model-invocation: true"]));
     await writeSkill(agentsRoot(area), "gamma", "\uFEFF---\nname: gamma\ndescription: g\n---\n");
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     impl.bindLockStash(makeLockStashStub({ "user-agents:alpha": { source: "x/y" } }));
 
     await impl.list({ workspace: area.workspace });

@@ -6,12 +6,15 @@
 import type { PlatformContext } from "./types.ts";
 import type { HubModule, RouteHandler } from "../contract/host.ts";
 import type { SdkLoadState } from "./sdk-loader.ts";
+import type { YamlLoadState } from "./yaml-loader.ts";
 import type { ModuleStatus } from "./modules.ts";
 
 /** demo 模块需要的环境（由外壳注入，避免模块之间 import）。 */
 export interface DemoDeps {
   ctx: PlatformContext;
   sdk: SdkLoadState;
+  /** DSH 自带的 yaml 库（技能模块解析 frontmatter 用）。 */
+  yaml: YamlLoadState;
   /** 模块状态快照（含降级）。 */
   modules(): ModuleStatus[];
   /** 会话桥事件快照（V5）。 */
@@ -50,6 +53,10 @@ export function createDemoModule(deps: DemoDeps): HubModule {
       deps.sdk.status === "loaded"
         ? { status: "loaded", ...deps.sdk.info }
         : { status: "failed", message: deps.sdk.message },
+    yaml:
+      deps.yaml.status === "loaded"
+        ? { status: "loaded", ...(deps.yaml.version === undefined ? {} : { version: deps.yaml.version }) }
+        : { status: "failed", message: deps.yaml.message },
     modules: deps.modules().map((entry) => ({
       name: entry.name,
       status: entry.status,

@@ -15,6 +15,7 @@
 import type { HubContext } from "../contract/host.ts";
 import type { HubModule, RouteTable } from "../contract/host.ts";
 import type { SdkLoadState } from "./sdk-loader.ts";
+import type { YamlLoadState } from "./yaml-loader.ts";
 import { createMcpConfigModule } from "../../mcp/config/module.ts";
 import { createSkillsLocalModule } from "../../skills/local/module.ts";
 import { createSkillsRemoteModule } from "../../skills/remote/module.ts";
@@ -202,11 +203,13 @@ function errorTextOf(error: unknown): string {
 export function createFeatureModuleEntries(options: {
   ctx: HubContext;
   sdk: SdkLoadState;
+  /** DSH 自带的 yaml 库：技能模块解析 frontmatter 用（ADR-0006）。 */
+  yaml: YamlLoadState;
   state: FeatureState;
   /** 调试开关：强制这些模块装载失败（降级验证用，见 devOverrides.failModules）。 */
   failModules?: string[];
 }): ModuleEntry[] {
-  const { ctx, sdk, state } = options;
+  const { ctx, sdk, yaml, state } = options;
   const log = ctx.logger;
   const forced = new Set(options.failModules ?? []);
 
@@ -228,7 +231,8 @@ export function createFeatureModuleEntries(options: {
         if (forced.has("skills-local")) {
           throw new Error("调试开关 devOverrides.failModules 要求 skills-local 失败（降级验证用）");
         }
-        const mod = createSkillsLocalModule(moduleCtx);
+        if (yaml.status !== "loaded") throw new Error(yaml.message);
+        const mod = createSkillsLocalModule(moduleCtx, { yaml: yaml.yaml });
         state.skillsLocal = mod;
         return mod as unknown as HubModule;
       },
@@ -243,7 +247,8 @@ export function createFeatureModuleEntries(options: {
         if (local === undefined) {
           throw new Error("依赖 skills-local 未加载：远程技能与来源记录不可用");
         }
-        const mod = createSkillsRemoteModule(moduleCtx, { skills: local.api });
+        if (yaml.status !== "loaded") throw new Error(yaml.message);
+        const mod = createSkillsRemoteModule(moduleCtx, { skills: local.api, yaml: yaml.yaml });
         // 双向绑定：skills-local 删除 user-agents 技能时，lock 条目要跟着进回收站并在恢复时放回。
         try {
           local.bindLockStash(mod.lockStash);

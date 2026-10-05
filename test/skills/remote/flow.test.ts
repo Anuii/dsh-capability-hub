@@ -1,3 +1,4 @@
+import * as YAML from "yaml";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -55,7 +56,7 @@ async function buildModule(
   const fake = makeFakeFetch(options.routes ?? []);
   const module = createSkillsRemoteModule(
     ctx,
-    { skills },
+    { skills, yaml: YAML },
     {
       fetchImpl: fake.fetch,
       envTokenProvider: () => options.envToken,

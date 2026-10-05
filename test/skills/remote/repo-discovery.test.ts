@@ -2,6 +2,7 @@
  * 汇总发现（D-B16）：发现缓存、已安装现算、逐仓库失败隔离、增删改只动该仓库、子目录校验。
  * 全程用假 fetch，不联网；所有落盘都在临时目录。
  */
+import * as YAML from "yaml";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -117,7 +118,7 @@ async function build(
   const fake = makeFakeFetch(options.routes ?? []);
   const module = createSkillsRemoteModule(
     ctx,
-    { skills },
+    { skills, yaml: YAML },
     {
       fetchImpl: fake.fetch,
       envTokenProvider: () => options.envToken,

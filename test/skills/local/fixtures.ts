@@ -2,6 +2,8 @@
  * 测试夹具：全部在 os.tmpdir() 下自建，绝不触碰真实用户目录。
  */
 
+import * as YAML from "yaml";
+import type { SkillsLocalDeps } from "../../../src/skills/local/api.ts";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -215,3 +217,6 @@ export function sliceLines(buf: Buffer): { index: number; text: string }[] {
   if (start < buf.length) out.push({ index, text: buf.subarray(start).toString("utf8") });
   return out;
 }
+
+/** 本地技能模块的注入：yaml 用 devDependency 里与 DSH 同版本（2.9.1）的那份。 */
+export const LOCAL_DEPS: SkillsLocalDeps = { yaml: YAML };

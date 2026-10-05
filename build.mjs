@@ -33,7 +33,7 @@ const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const PACKAGE_ID = pkg.name;
 
 /** 宿主半外置（全部由 DSH 宿主提供）。 */
-const HOST_EXTERNALS = ["@deepseek-ai/*", "@modelcontextprotocol/*", "node:*"];
+const HOST_EXTERNALS = ["@deepseek-ai/*", "@modelcontextprotocol/*", "yaml", "node:*"];
 
 /** 平台种子表（实表 9 项，F2-Q1）——必须 require，不能打包。 */
 const SEED_MODULES = [

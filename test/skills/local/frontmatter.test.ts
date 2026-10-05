@@ -1,15 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
-import {
-  blockScalarValue,
-  decodeDocument,
-  evaluateFrontmatter,
-  frontmatterBoolean,
-  rewriteDisableModelInvocation,
-  SKILL_NAME_PATTERN,
-} from "../../../src/skills/local/frontmatter.ts";
+import * as YAML from "yaml";
+import { createFrontmatter, SKILL_NAME_PATTERN } from "../../../src/skills/local/frontmatter/index.ts";
 import { firstDiff, sliceLines } from "./fixtures.ts";
+
+// 通过 frontmatter 模块的两个入口测（判断 / 改写）；yaml 用 devDependency 里与 DSH 同版本（2.9.1）的那份。
+const frontmatter = createFrontmatter(YAML);
+const evaluateFrontmatter = frontmatter.evaluate;
+const rewriteDisableModelInvocation = frontmatter.rewriteDisableModelInvocation;
+/** 文档层（围栏、行尾）的结果也从判断入口拿。 */
+const decodeDocument = (buffer: Buffer) => ({ doc: evaluateFrontmatter(buffer).doc! });
 
 const b = (text: string) => Buffer.from(text, "utf8");
 
@@ -113,10 +114,12 @@ test("折叠块标量 > 的 description 正确解析", () => {
 });
 
 test("折叠块标量：空行转成换行、>- 去掉末尾换行", () => {
-  assert.equal(blockScalarValue(">", "", ["  a", "", "  b"]), "a\nb\n");
-  assert.equal(blockScalarValue(">", "-", ["  a", "", "  b"]), "a\nb");
-  assert.equal(blockScalarValue("|", "", ["  a", "  b"]), "a\nb\n");
-  assert.equal(blockScalarValue("|", "-", ["  a", "  b"]), "a\nb");
+  const description = (header: string, lines: string[]) =>
+    evaluateFrontmatter(b("---\nname: demo\ndescription: " + header + "\n" + lines.join("\n") + "\n---\n")).description;
+  assert.equal(description(">", ["  a", "", "  b"]), "a\nb\n");
+  assert.equal(description(">-", ["  a", "", "  b"]), "a\nb");
+  assert.equal(description("|", ["  a", "  b"]), "a\nb\n");
+  assert.equal(description("|-", ["  a", "  b"]), "a\nb");
 });
 
 test("嵌套 metadata 下的同名子键不被误改", () => {
@@ -344,11 +347,24 @@ test("非 UTF-8 文件不崩且判为不可加载、不可改写", () => {
   assert.equal(r.content.equals(buffer), true);
 });
 
-test("frontmatterBoolean 直接行为与官方一致", () => {
-  assert.deepEqual(frontmatterBoolean({}, "x"), { present: false });
-  assert.deepEqual(frontmatterBoolean({ x: true }, "x"), { present: true, value: true });
-  assert.deepEqual(frontmatterBoolean({ x: "ON" }, "x"), { present: true, value: true });
-  assert.deepEqual(frontmatterBoolean({ x: "zzz" }, "x"), { present: true, invalid: true });
+test("布尔取值与官方一致：缺省 / true / ON / 非法", () => {
+  const withValue = (value: string | undefined) =>
+    evaluateFrontmatter(
+      b(
+        "---\nname: demo\ndescription: hi\n" +
+          (value === undefined ? "" : "disable-model-invocation: " + value + "\n") +
+          "---\n",
+      ),
+    );
+  assert.equal(withValue(undefined).modelInvocationDisabled, false, "缺省 = 不禁止");
+  assert.equal(withValue("true").modelInvocationDisabled, true);
+  assert.equal(withValue("ON").modelInvocationDisabled, true);
+  const invalid = withValue("zzz");
+  assert.equal(invalid.loadable, false);
+  assert.equal(
+    invalid.diagnostics.some((d) => d.code === "BOOLEAN_INVALID"),
+    true,
+  );
 });
 
 test("重复顶层键：yaml 会报错，因此判为不可加载", () => {

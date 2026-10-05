@@ -10,6 +10,7 @@
  * 所有落盘都在临时目录里（PLAN §4 红线）。
  */
 
+import * as YAML from "yaml";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -40,7 +41,7 @@ async function buildModule(
   const fake = makeFakeFetch([]);
   const module = createSkillsRemoteModule(
     ctx,
-    { skills },
+    { skills, yaml: YAML },
     {
       fetchImpl: fake.fetch,
       envTokenProvider: () => undefined,

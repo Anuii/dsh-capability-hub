@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSkillsLocalImpl } from "../../../src/skills/local/api.ts";
-import { makeCtx, makeTempArea, QUIET_LOGGER } from "./fixtures.ts";
+import { makeCtx, makeTempArea, QUIET_LOGGER, LOCAL_DEPS } from "./fixtures.ts";
 import type { SkillSummary } from "../../../src/skills/contract/local.ts";
 
 /**
@@ -67,7 +67,7 @@ test("真实数据只读核对：31 个技能 / 15 个模型可见 / 无诊断",
       logger: QUIET_LOGGER,
       customSkillDirs: [],
     };
-    const impl = createSkillsLocalImpl(ctx);
+    const impl = createSkillsLocalImpl(ctx, LOCAL_DEPS);
     const result = await impl.list({});
 
     const skills: SkillSummary[] = result.skills;
@@ -167,7 +167,7 @@ test("真实数据只读核对：启停 CRLF 技能只改一行（在副本上�
   try {
     await fs.mkdir(path.join(homeDir, ".agents"), { recursive: true });
     await copyDir(path.join(REAL_SOURCE, "retro"), path.join(homeDir, ".agents", "skills", "retro"));
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const file = path.join(homeDir, ".agents", "skills", "retro", "SKILL.md");
     const before = await fs.readFile(file);
     const skill = await impl.setEnabled("user-agents:retro", true, {});

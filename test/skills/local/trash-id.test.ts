@@ -14,7 +14,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createSkillsLocalImpl } from "../../../src/skills/local/api.ts";
 import { TRASH_ID_PATTERN, isValidTrashId, newTrashId } from "../../../src/skills/local/trash.ts";
-import { agentsRoot, makeCtx, makeTempArea, skillMd, writeSkill, type TempArea } from "./fixtures.ts";
+import { agentsRoot, makeCtx, makeTempArea, skillMd, writeSkill, type TempArea, LOCAL_DEPS } from "./fixtures.ts";
 
 async function withArea(label: string, fn: (area: TempArea) => Promise<void>): Promise<void> {
   const area = await makeTempArea(label);
@@ -51,7 +51,7 @@ function is400(error: { status: number; code: string; message: string }): boolea
 
 test('FIX-5 trashId：restore / purge 拒绝 "." / ".." / 路径分隔符 / 控制字符 / 超长', async () => {
   await withArea("fix5-trashid-bad", async (area) => {
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     for (const bad of BAD_IDS) {
       await assert.rejects(() => impl.restore(bad, {}), is400, "restore 必须拒绝：" + JSON.stringify(bad));
       await assert.rejects(() => impl.purge(bad), is400, "purge 必须拒绝：" + JSON.stringify(bad));
@@ -80,7 +80,7 @@ test('FIX-5 trashId：restore / purge 拒绝 "." / ".." / 路径分隔符 / 控�
 
 test("FIX-5 trashId：真实条目照常删除 → 恢复 / 清理（校验不能误伤正常流程）", async () => {
   await withArea("fix5-trashid-ok", async (area) => {
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"));
     const item = await impl.moveToTrash("user-agents:demo", { reason: "delete" });
     assert.equal(isValidTrashId(item.trashId), true, "真实 trashId 必须通过校验");
@@ -116,7 +116,7 @@ test("FIX-5 trashId：历史/手工条目（非时间戳形态但仍是安全单
         kind: "dir",
       }),
     );
-    const impl = createSkillsLocalImpl(makeCtx(area));
+    const impl = createSkillsLocalImpl(makeCtx(area), LOCAL_DEPS);
     const restored = await impl.restore(trashId, {});
     assert.equal(restored.id, "user-agents:legacy");
     assert.equal(await fs.readFile(path.join(root, "legacy", "SKILL.md"), "utf8"), skillMd("legacy", "d"));

@@ -32,6 +32,7 @@ import {
   type ModuleStatus,
 } from "./modules.ts";
 import { loadMcpSdk, type SdkLoadState } from "./sdk-loader.ts";
+import { loadYaml, type YamlLoadState } from "./yaml-loader.ts";
 import { createStubRuntime } from "./stub-runtime.ts";
 import { registerMcpTool, type ToolRegistration } from "./tool-registrar.ts";
 import { attachSessionBridge, type SessionBridge } from "./session-bridge.ts";
@@ -185,6 +186,11 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     logger.warn(`${sdkState.message}（mcp 工具将退回桩实现，只返回「不可用」）`);
   }
 
+  // ---- 1b. DSH 自带的 yaml 库（技能模块解析 frontmatter 用；永不抛） ----
+  const yamlState: YamlLoadState = await loadYaml();
+  if (yamlState.status === "loaded") logger.info(`yaml 库已加载：v${yamlState.version ?? "?"}`);
+  else logger.warn(`${yamlState.message}（技能模块将降级）`);
+
   // ---- 2. 模块表（4 个真实模块按依赖顺序；demo 放最前，失败演示放最后） ----
   const state: FeatureState = makeFeatureState();
   /** 工具与运行时的当前状态（demo 的 health 通过闭包实时读取）。 */
@@ -199,6 +205,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
         createDemoModule({
           ctx,
           sdk: sdkState,
+          yaml: yamlState,
           modules: () => registry.statuses(),
           sessionEvents: () => bridge?.events() ?? [],
           tool: () => ({
@@ -231,6 +238,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     ...createFeatureModuleEntries({
       ctx,
       sdk: sdkState,
+      yaml: yamlState,
       state,
       ...(config.devOverrides?.failModules === undefined ? {} : { failModules: config.devOverrides.failModules }),
     }),
