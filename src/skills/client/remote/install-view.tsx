@@ -26,6 +26,7 @@ import {
   SkeletonRows,
   Toolbar,
   kit,
+  useFold,
 } from "../../../kit/index.ts";
 import { listSkills } from "../data.ts";
 import {
@@ -47,20 +48,18 @@ import {
   discoveryFilterKey,
   filterDiscovered,
   groupDiscovered,
-  initialRepoFold,
   inputIntent,
   installPlan,
   installedCounts,
   normalizeRepoInput,
   relativeTime,
   repoConfigText,
-  repoExpanded,
+  repoDefaultExpanded,
+  repoFoldKey,
   repoScanText,
   shouldAutoScan,
   sliceVisible,
-  toggleRepoFold,
   type InstalledFilter,
-  type RepoFold,
 } from "./discovery-model.ts";
 import { errorMessage, fieldErrors } from "../format.ts";
 import { styles } from "../styles.ts";
@@ -149,8 +148,8 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
   const [dq, setDq] = React.useState<string>("");
   const [installedFilter, setInstalledFilter] = React.useState<InstalledFilter>("all");
   const [repoFilter, setRepoFilter] = React.useState<string>("");
-  /** 仓库分组的折叠（大仓库默认折叠；筛选中先全部展开）。 */
-  const [repoFold, setRepoFold] = React.useState<RepoFold>(initialRepoFold);
+  /** 仓库分组的折叠（大仓库默认折叠；筛选中先全部展开，见 kit/fold.ts）。 */
+  const repoFold = useFold(discoveryFilterKey({ query: dq, installed: installedFilter, repo: repoFilter }));
   /** 每个仓库分组已经渲染了多少行（每批 200）；换一种筛选就重来。 */
   const [limits, setLimits] = React.useState<{ filterKey: string; byRepo: ReadonlyMap<string, number> }>({
     filterKey: "",
@@ -683,7 +682,8 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
       <ListRow
         key={key}
         testId={"skills-discovered-" + item.repo + "-" + item.dirName}
-        /* 原生勾选框：宿主 Checkbox 的 label 是可见文字，会与行标题重复（名称只出现一次）。 */ leading={
+        // 原生勾选框：宿主 Checkbox 的 label 是可见文字，会与行标题重复（名称只出现一次）。
+        leading={
           <input
             type="checkbox"
             className={kit.check}
@@ -870,7 +870,7 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
       body = (
         <ListSurface testId="skills-discovery-list">
           {groups.map((group) => {
-            const open = repoExpanded(repoFold, filterKey, group);
+            const open = repoFold.expanded(repoFoldKey(group), repoDefaultExpanded(group));
             const { visible, rest } = sliceVisible(group.skills, limitOf(group.repo));
             const record = repos.find((item) => sameRepo(item.repo, group.repo));
             const ref = record?.resolvedRef ?? record?.ref;
@@ -881,7 +881,7 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
                   {...(ref === undefined ? {} : { meta: "@" + ref })}
                   count={t("skills.root.count", { count: filterKey === "" ? group.total : group.skills.length })}
                   expanded={open}
-                  onToggle={() => setRepoFold((current) => toggleRepoFold(current, filterKey, group))}
+                  onToggle={() => repoFold.toggle(repoFoldKey(group), repoDefaultExpanded(group))}
                   testId={"skills-discovery-group-" + group.repo}
                 >
                   {visible.map((skill) => skillRow(skill, false))}

@@ -14,7 +14,7 @@
  */
 import * as React from "react";
 import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge, EmptyState, ListGroup, ListRow, ListSurface, SkeletonRows, kit } from "../../kit/index.ts";
+import { Badge, EmptyState, ListGroup, ListRow, ListSurface, SkeletonRows, kit, useFold } from "../../kit/index.ts";
 import { useRemoteState } from "./remote/use-store.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
@@ -32,14 +32,11 @@ import {
 import {
   LEVELS,
   buildSkillTree,
+  defaultExpanded,
   dirOptions,
   dirTagIndex,
   filterKeyOf,
-  initialFoldState,
-  isFoldExpanded,
   levelLabel,
-  toggleFold,
-  type FoldState,
   type LevelView,
 } from "./tree.ts";
 import type { ListResult, SkillSummary } from "../contract/local.ts";
@@ -84,7 +81,8 @@ function SkillRow(props: {
       testId={"skills-row-" + skill.id}
       title={name.text}
       {...(props.tag === undefined ? {} : { tag: { ...props.tag, testId: "skills-dir-tag-" + skill.id } })}
-      /* 空描述也渲染副标题：行高保持 52px，列表看起来是一条直线（UI-DESIGN §1） */ subtitle={skill.description ?? ""}
+      // 空描述也渲染副标题：行高保持 52px，列表看起来是一条直线（UI-DESIGN §1）
+      subtitle={skill.description ?? ""}
       badges={badges.map((badge) => (
         <Badge
           key={badge.key}
@@ -95,13 +93,17 @@ function SkillRow(props: {
           {badge.label}
         </Badge>
       ))}
-      /* 调用权限（D-B17）：开关管模型调用，这段文字把两种调用一起说清楚，悬停看来源。 */ /* 默认的「模型、用户」调淡，例外（仅模型 / 仅用户 / 不可调用）才醒目。 */ note={{
+      // 调用权限（D-B17）：开关管模型调用，这段文字把两种调用一起说清楚，悬停看来源。
+      // 默认的「模型、用户」调淡，例外（仅模型 / 仅用户 / 不可调用）才醒目。
+      note={{
         text: invocationLabel(access),
         title: invocationTitle(access),
         muted: access.model && access.user,
         testId: "skills-access-" + skill.id,
       }}
-      /* 只读技能（DSH 内置、自定义只读目录）不放开关——禁用的开关容易被看成「已关闭」； */ /* 留一个同宽空位让行尾文字仍对齐。层级标题上已标「只读」。 */ trailing={
+      // 只读技能（DSH 内置、自定义只读目录）不放开关——禁用的开关容易被看成「已关闭」；
+      // 留一个同宽空位让行尾文字仍对齐。层级标题上已标「只读」。
+      trailing={
         !skill.writable ? (
           <span className={kit.trailingSpacer} aria-hidden="true" />
         ) : (
@@ -156,7 +158,6 @@ export function DirFilter(props: {
 
 /** 技能列表（工具栏由 index.tsx 渲染）。 */
 export function SkillList(props: SkillListProps): React.ReactElement {
-  const [fold, setFold] = React.useState<FoldState>(initialFoldState);
   const remote = useRemoteState();
   const sourcesReady = remote.sourcesLoaded && remote.sourcesError === undefined;
   const hasWorkspace = typeof props.workspace === "string" && props.workspace.trim() !== "";
@@ -171,9 +172,9 @@ export function SkillList(props: SkillListProps): React.ReactElement {
   });
   const tags = React.useMemo(() => dirTagIndex(props.list.roots), [props.list.roots]);
   // 筛选时有匹配的分组先全部展开，但仍可手动折叠（只在这一次筛选里有效），清空后回到原来的折叠。
-  const filterKey = filterKeyOf(props.query, props.filter, props.dir);
-  const toggle = (key: string): void => setFold((current) => toggleFold(current, filterKey, key));
-  const expanded = (key: string): boolean => isFoldExpanded(fold, filterKey, key);
+  const fold = useFold(filterKeyOf(props.query, props.filter, props.dir));
+  const toggle = (key: string): void => fold.toggle(key, defaultExpanded(key));
+  const expanded = (key: string): boolean => fold.expanded(key, defaultExpanded(key));
 
   /** 一行；目录标签只在该层级里有不止一个技能目录时显示。 */
   const rowIn =

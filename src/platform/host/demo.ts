@@ -50,15 +50,13 @@ export function createDemoModule(deps: DemoDeps): HubModule {
       deps.sdk.status === "loaded"
         ? { status: "loaded", ...deps.sdk.info }
         : { status: "failed", message: deps.sdk.message },
-    modules: deps
-      .modules()
-      .map((entry) => ({
-        name: entry.name,
-        status: entry.status,
-        routes: entry.routes,
-        ...(entry.message === undefined ? {} : { message: entry.message }),
-        ...(entry.loadMs === undefined ? {} : { loadMs: entry.loadMs }),
-      })),
+    modules: deps.modules().map((entry) => ({
+      name: entry.name,
+      status: entry.status,
+      routes: entry.routes,
+      ...(entry.message === undefined ? {} : { message: entry.message }),
+      ...(entry.loadMs === undefined ? {} : { loadMs: entry.loadMs }),
+    })),
     tool: deps.tool(),
     registration: deps.registration(),
     wiring: deps.wiring(),

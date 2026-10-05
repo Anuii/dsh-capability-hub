@@ -200,12 +200,14 @@ export function KitPreview(): React.ReactElement {
     <Drawer
       open={drawerOpen}
       title="find-skills"
-      /* 副标题单行截断：完整路径在 title 提示里（UI-C） */ subtitle={"~\\.agents\\skills\\find-skills"}
+      // 副标题单行截断：完整路径在 title 提示里（UI-C）
+      subtitle={"~\\.agents\\skills\\find-skills"}
       subtitleTitle={"C:\\Users\\you\\.agents\\skills\\find-skills"}
       testId="kit-drawer"
       onClose={() => setDrawerOpen(false)}
       headerEnd={<Switch checked label="启用 find-skills" onChange={() => undefined} />}
-      /* 底部操作区**只在有操作时才给**，而且不放「关闭」——已经有头部 × 和 Esc 了。 */ footer={
+      // 底部操作区**只在有操作时才给**，而且不放「关闭」——已经有头部 × 和 Esc 了。
+      footer={
         <Button variant="ghost" className={kit.dangerButton} data-testid="kit-drawer-delete" onClick={() => undefined}>
           删除
         </Button>

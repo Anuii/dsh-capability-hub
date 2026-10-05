@@ -189,41 +189,12 @@ export function discoveryFilterKey(filter: DiscoveryFilter): string {
   return [query, filter.installed, filter.repo.toLowerCase()].join("\u0000");
 }
 
-/**
- * 仓库分组的折叠：只记用户点过的（true = 展开），没点过的用默认值。
- *   不筛选：默认 = 技能数不超过 LARGE_REPO 就展开；
- *   筛选中：有匹配的分组默认全部展开，仍可手动折叠，只对这一次筛选有效。
- */
-export interface RepoFold {
-  normal: ReadonlyMap<string, boolean>;
-  filtered: { filterKey: string; open: ReadonlyMap<string, boolean> };
+/** 仓库分组默认是否展开：技能数超过 LARGE_REPO 的仓库默认折叠（筛选中一律先展开，见 kit/fold.ts）。 */
+export function repoDefaultExpanded(group: Pick<DiscoveryGroup, "total">): boolean {
+  return group.total <= LARGE_REPO;
 }
 
-export function initialRepoFold(): RepoFold {
-  return { normal: new Map(), filtered: { filterKey: "", open: new Map() } };
-}
-
-function filteredOpen(fold: RepoFold, filterKey: string): ReadonlyMap<string, boolean> {
-  return fold.filtered.filterKey === filterKey ? fold.filtered.open : new Map();
-}
-
-export function repoExpanded(
-  fold: RepoFold,
-  filterKey: string,
-  group: Pick<DiscoveryGroup, "repo" | "total">,
-): boolean {
-  const key = group.repo.toLowerCase();
-  if (filterKey === "") return fold.normal.get(key) ?? group.total <= LARGE_REPO;
-  return filteredOpen(fold, filterKey).get(key) ?? true;
-}
-
-export function toggleRepoFold(
-  fold: RepoFold,
-  filterKey: string,
-  group: Pick<DiscoveryGroup, "repo" | "total">,
-): RepoFold {
-  const key = group.repo.toLowerCase();
-  const next = !repoExpanded(fold, filterKey, group);
-  if (filterKey === "") return { ...fold, normal: new Map(fold.normal).set(key, next) };
-  return { ...fold, filtered: { filterKey, open: new Map(filteredOpen(fold, filterKey)).set(key, next) } };
+/** 仓库分组的折叠键（仓库名不区分大小写）。 */
+export function repoFoldKey(group: Pick<DiscoveryGroup, "repo">): string {
+  return group.repo.toLowerCase();
 }

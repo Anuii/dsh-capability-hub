@@ -15,6 +15,10 @@
 export { injectKitStyles, kit, KIT_CSS } from "./styles.ts";
 export { defineSheet, injectStyleTag } from "./css.ts";
 export type { Sheet } from "./css.ts";
+export { EMPTY_FOLD, foldExpanded, foldToggle } from "./fold.ts";
+export type { FoldState } from "./fold.ts";
+export { useFold } from "./use-fold.ts";
+export type { Fold } from "./use-fold.ts";
 export {
   countByPredicates,
   clampBadges,

@@ -159,57 +159,20 @@ export interface TreeInput {
 export const levelKey = (level: SkillLevel): string => "level:" + level;
 export const repoKey = (level: SkillLevel, repo: string | undefined): string => "repo:" + level + ":" + (repo ?? "");
 
-/** 默认被折叠的分组：只有 DSH 内置。 */
-export const DEFAULT_COLLAPSED: readonly string[] = [levelKey("builtin")];
+/** 分组默认是否展开：只有 DSH 内置默认折叠（筛选中一律先展开，见 kit/fold.ts）。 */
+export function defaultExpanded(key: string): boolean {
+  return key !== levelKey("builtin");
+}
 
 export function isFiltering(query: string, filter: FilterId, dir: string | undefined): boolean {
   return query.trim() !== "" || filter !== "all" || (dir ?? "") !== "";
 }
 
 /**
- * 当前这一次筛选的标识：不筛选时是 ""；搜索词、状态筛选、目录筛选任何一项变了，标识就变。
+ * 当前这一次筛选的标识（kit/fold.ts 的 scope）：不筛选时是 ""；搜索词、状态筛选、目录筛选任何一项变了，标识就变。
  */
 export function filterKeyOf(query: string, filter: FilterId, dir: string | undefined): string {
   return isFiltering(query, filter, dir) ? [query.trim().toLowerCase(), filter, dir ?? ""].join("\u0000") : "";
-}
-
-/**
- * 折叠状态，分两份：
- *   normal   = 不筛选时用户的折叠（初始只有 DSH 内置被折叠）；
- *   filtered = 某一次筛选里用户的折叠，只对 filterKey 那一次筛选有效。
- * 进入（或换成另一种）筛选时有匹配的分组全部展开；筛选中仍可手动折叠；清空筛选回到 normal，原样不动。
- */
-export interface FoldState {
-  normal: ReadonlySet<string>;
-  filtered: { filterKey: string; collapsed: ReadonlySet<string> };
-}
-
-export function initialFoldState(): FoldState {
-  return { normal: new Set(DEFAULT_COLLAPSED), filtered: { filterKey: "", collapsed: new Set() } };
-}
-
-/** 某次筛选里被折叠的分组（筛选换了就当作没有）。 */
-function filteredCollapsed(state: FoldState, filterKey: string): ReadonlySet<string> {
-  return state.filtered.filterKey === filterKey ? state.filtered.collapsed : new Set();
-}
-
-/** 某个分组是否展开。 */
-export function isFoldExpanded(state: FoldState, filterKey: string, key: string): boolean {
-  if (filterKey === "") return !state.normal.has(key);
-  return !filteredCollapsed(state, filterKey).has(key);
-}
-
-function toggled(set: ReadonlySet<string>, key: string): Set<string> {
-  const next = new Set(set);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  return next;
-}
-
-/** 用户点了某个分组的标题：不筛选时改 normal，筛选时只改这一次筛选的折叠。 */
-export function toggleFold(state: FoldState, filterKey: string, key: string): FoldState {
-  if (filterKey === "") return { ...state, normal: toggled(state.normal, key) };
-  return { ...state, filtered: { filterKey, collapsed: toggled(filteredCollapsed(state, filterKey), key) } };
 }
 
 function repoGroups(

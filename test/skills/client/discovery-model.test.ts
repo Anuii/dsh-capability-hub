@@ -2,6 +2,7 @@
  * 仓库视图（D-B16）的纯逻辑：汇总筛选与计数、跨仓库安装计划、相对时间、首次自动扫描、增量渲染。
  */
 import test from "node:test";
+import { EMPTY_FOLD, foldExpanded, foldToggle, type FoldState } from "../../../src/kit/fold.ts";
 import assert from "node:assert/strict";
 import {
   DISCOVERY_PAGE,
@@ -9,11 +10,10 @@ import {
   discoveredKey,
   discoveryFilterKey,
   groupDiscovered,
-  initialRepoFold,
   inputIntent,
   normalizeRepoInput,
-  repoExpanded,
-  toggleRepoFold,
+  repoDefaultExpanded,
+  repoFoldKey,
   filterDiscovered,
   installPlan,
   installedCounts,
@@ -189,25 +189,31 @@ test("汇总按仓库分组：顺序跟仓库列表，总数不受筛选影响�
 });
 
 test("仓库分组折叠：大仓库默认折叠；筛选中先全部展开、可手动折叠；清空后回到原来的状态", () => {
+  // 汇总分组 = kit/fold.ts + 本页的默认值（repoDefaultExpanded）+ 筛选标识（discoveryFilterKey）
+  const isOpen = (state: FoldState, scope: string, group: { repo: string; total: number }): boolean =>
+    foldExpanded(state, scope, repoFoldKey(group), repoDefaultExpanded(group));
+  const toggle = (state: FoldState, scope: string, group: { repo: string; total: number }): FoldState =>
+    foldToggle(state, scope, repoFoldKey(group), repoDefaultExpanded(group));
   const big = { repo: "ComposioHQ/awesome-claude-skills", total: LARGE_REPO + 1 };
   const small = { repo: "mattpocock/skills", total: 37 };
-  let fold = initialRepoFold();
+  let fold = EMPTY_FOLD;
   const none = discoveryFilterKey({ query: "", installed: "all", repo: "" });
   assert.equal(none, "");
-  assert.equal(repoExpanded(fold, none, big), false, "超过 50 个默认折叠");
-  assert.equal(repoExpanded(fold, none, small), true);
-  fold = toggleRepoFold(fold, none, big);
-  assert.equal(repoExpanded(fold, none, big), true, "用户展开后记住");
-  fold = toggleRepoFold(fold, none, small);
+  assert.equal(isOpen(fold, none, big), false, "超过 50 个默认折叠");
+  assert.equal(isOpen(fold, none, small), true);
+  fold = toggle(fold, none, big);
+  assert.equal(isOpen(fold, none, big), true, "用户展开后记住");
+  assert.equal(isOpen(fold, none, { ...big, repo: big.repo.toUpperCase() }), true, "仓库名不区分大小写");
+  fold = toggle(fold, none, small);
   const searching = discoveryFilterKey({ query: "pdf", installed: "all", repo: "" });
-  assert.equal(repoExpanded(fold, searching, small), true, "筛选中先全部展开");
-  fold = toggleRepoFold(fold, searching, small);
-  assert.equal(repoExpanded(fold, searching, small), false, "筛选中可以折叠");
+  assert.equal(isOpen(fold, searching, small), true, "筛选中先全部展开");
+  fold = toggle(fold, searching, small);
+  assert.equal(isOpen(fold, searching, small), false, "筛选中可以折叠");
   assert.equal(
-    repoExpanded(fold, discoveryFilterKey({ query: "", installed: "not", repo: "" }), small),
+    isOpen(fold, discoveryFilterKey({ query: "", installed: "not", repo: "" }), small),
     true,
     "换一种筛选又展开",
   );
-  assert.equal(repoExpanded(fold, none, small), false, "清空后回到不筛选时的折叠");
-  assert.equal(repoExpanded(fold, none, big), true);
+  assert.equal(isOpen(fold, none, small), false, "清空后回到不筛选时的折叠");
+  assert.equal(isOpen(fold, none, big), true);
 });
