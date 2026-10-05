@@ -1,8 +1,8 @@
 /**
  * 运行态标签的测试夹具（纯数据，不碰 DOM / 网络）。
  *
- * 形状以宿主 GET mcp/runtime 的真实返回为准（src/mcp/runtime/contract.ts:106-131
- * 与 runtime.ts:963-1013）：cooldownUntil 只在冷却未结束时出现；instances 里没有实例的会话不会出现。
+ * 形状以契约 src/mcp/contract/runtime.ts 与宿主 src/mcp/runtime/status-view.ts 为准：
+ * cooldownUntil 只在冷却未结束时出现；没有实例的会话不会出现。
  */
 import type { RuntimeServerView, RuntimeSessionView, RuntimeStatus } from "../../../../src/mcp/contract/runtime.ts";
 

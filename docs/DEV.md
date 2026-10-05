@@ -3,8 +3,8 @@
 面向第一次拿到这份源码的贡献者：怎么搭环境、构建、跑测试、打包，以及怎么在一个隔离的
 测试 profile 里把插件装起来看效果。
 
-本文只讲开发循环，不讲界面规范；界面相关的约定见 [CLIENT-GUIDE.md](CLIENT-GUIDE.md) 与
-[PRIMITIVES.md](PRIMITIVES.md)，设计决策见 [DECISIONS.md](DECISIONS.md)。
+本文只讲开发循环。整体结构见 [ARCHITECTURE.md](ARCHITECTURE.md)；界面相关的约定见 [CLIENT-GUIDE.md](CLIENT-GUIDE.md) 与
+[PRIMITIVES.md](PRIMITIVES.md)；产品决策见 [DECISIONS.md](DECISIONS.md)，架构决策见 [adr/](adr/)。
 
 文中用「」标注代码 / 文件名。**所有路径都是相对路径或 `%VAR%` 占位符**，按自己的环境替换即可。
 下列环境变量在本文里使用：
@@ -44,12 +44,14 @@
     node build.mjs --watch                             # 监听源码增量重建（--also-out <目录> 同时写进另一个 lib 目录）
     node node_modules/typescript/bin/tsc --noEmit      # 类型检查（等价 npm run typecheck）
     node --test "test/**/*.test.ts"                    # 全部单测（等价 npm run test）
-    node --test "test/platform/**/*.test.ts"           # 只跑某一层
+    node --test "test/skills/**/*.test.ts"             # 只跑一个功能
+    node --test test/architecture/imports.test.ts      # 只跑 import 规则（ADR-0001）
+    npm run format                                     # prettier 排版（npm run format:check 只检查）
 
 `lib\` 与 `node_modules\` 都在 `.gitignore` 里，是构建产物，不进版本库。构建用 esbuild：
 
-- 宿主半 `src\host\**` → `lib\index.js`（ESM）；
-- 客户端半 `src\client\**` → `lib\client.js`，由 `scripts\client-wrapper.mjs` 套进 DSH 的
+- 宿主半入口 `src\platform\host\index.ts` → `lib\index.js`（ESM；DSH 自带的 `@modelcontextprotocol/*`、`yaml`、`@deepseek-ai/*` 外置，运行时从 DSH 加载）；
+- 客户端半入口 `src\platform\client\index.tsx` → `lib\client.js`，由 `scripts\client-wrapper.mjs` 套进 DSH 的
   「懒加载 CJS 工厂」（`window.__ModuleLoader__.load({ id, factory })`），React 等宿主种子模块外置。
 
 ### 2.1 在线测试（可选）
@@ -98,7 +100,7 @@ SDK 只存在于 DSH 的 `app.asar` 内，本机 Node 解析不到，所以必�
 
 ### 2.4 YAML 对拍
 
-把本插件的 frontmatter 解析结果与 DSH 自带的 YAML 解析器逐样本对比：
+0.4.0 起 frontmatter 用的就是 DSH 自带的 yaml（ADR-0006）。这个脚本守住两件事：开发用的 devDependency `yaml` 与 DSH 安装目录里的版本相同；本插件切出的 frontmatter 区段与取值与 DSH 直接解析的结果逐样本一致：
 
     node test/skills/local/yaml-parity.mjs
 
@@ -286,7 +288,7 @@ link 方式（第 4.3 节）下直接用 `dev-link.ps1 watch` 或 `sync`，不�
 `rebuilt()`。脚本同时打印复制前后的 SHA256 与两次的进程号，用来证明「不用重启」。
 `-Restart` 会在复制后顺带重启 profile，正常情况下不需要。
 
-改宿主半（`src\host\**`）不走这条路：link 方式下 `dev-link.ps1 sync -Restart`；tgz 方式下只 build 不会影响已安装的那一份，必须重新打包 + 覆盖安装 + 重启（见第 4 节）。
+改宿主半（`src\platform\host\**` 与各功能的宿主模块）不走这条路：link 方式下 `dev-link.ps1 sync -Restart`；tgz 方式下只 build 不会影响已安装的那一份，必须重新打包 + 覆盖安装 + 重启（见第 4 节）。
 
 ---
 

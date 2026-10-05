@@ -11,7 +11,7 @@
   - `src/mcp/`：`config/`、`runtime/`（宿主）、`client/`（MCP 页，`client/running/` 是「运行中」区域）、`contract/`
   - `src/platform/`：`host/`（组装宿主模块、接 DSH）、`client/`（页头、标签、HTTP 客户端）
   - `src/kit/`：界面组件，不知道任何功能
-  - `src/shared/`：不知道任何功能的叶子工具（例如宿主侧统一的错误码与错误工厂 `errors.ts`），任何区域都可以引用
+  - `src/shared/`：不知道任何功能的叶子工具（错误码 `errors.ts`、错误文字 `error-text.ts`、请求参数 `request.ts`），任何区域都可以引用
 - `test/` 的目录结构与 `src/` 一一对应；`test/architecture/imports.test.ts` 扫描 import 语句，违反下列规则即失败：
   1. 四个宿主功能模块互不 import，只能引用自己、契约（仅类型）与共享区（`src/version.ts`、`src/shared/`）；
   2. 宿主外壳不引用客户端代码；

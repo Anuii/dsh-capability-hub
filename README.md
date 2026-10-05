@@ -75,6 +75,7 @@ MCP 配置存在插件数据目录下，所有 profile 共用一份；插件**�
 
 ## 开发
 
+- 整体结构（一页）：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；架构决策：[docs/adr/](docs/adr/)
 - 环境、构建、类型检查、测试、打包、测试 profile、客户端热同步：[docs/DEV.md](docs/DEV.md)
 - 写客户端界面（标签页、kit、宿主组件约定）：[docs/CLIENT-GUIDE.md](docs/CLIENT-GUIDE.md)
 - 宿主 UI 组件与主题变量参考：[docs/PRIMITIVES.md](docs/PRIMITIVES.md)
@@ -87,10 +88,13 @@ MCP 配置存在插件数据目录下，所有 profile 共用一份；插件**�
     build.mjs              esbuild 构建脚本（种子模块 / 外置清单）
     cordis.patch.yml       插件交给 DSH 的装配声明（只 insert，不写 config）
     scripts/               打包、测试 profile 启停与 link 暂存、客户端热同步、接口冒烟、截图
-    src/host/              宿主半：平台外壳 + skills-local / skills-remote / mcp-config / mcp-runtime
-    src/client/            客户端半：外壳、技能 / MCP 两个标签页（运行中区域在 runtime/）、共用 UI kit
-    test/                  node:test 单测 + MCP 运行时集成测试 + 夹具
-    docs/                  开发指南、客户端指南、宿主 primitives 参考、设计决策、界面规范
+    src/skills/            技能：local/（宿主·本地技能）、remote/（宿主·远程技能）、client/（技能页与仓库视图）、contract/
+    src/mcp/               MCP：config/、runtime/（宿主）、client/（MCP 页与「运行中」）、contract/
+    src/platform/          外壳：host/（组装模块、接 DSH）、client/（页头、标签、HTTP 客户端）、contract/
+    src/kit/               界面组件、样式写法、折叠、状态仓库
+    src/shared/            宿主与客户端共用的叶子工具（错误码、错误文字、请求参数）
+    test/                  与 src/ 同构的 node:test 单测 + 架构规则 + MCP 运行时集成测试 + 夹具
+    docs/                  架构、开发指南、客户端指南、宿主 primitives 参考、产品决策、架构决策（adr/）、界面规范
 
 ## 许可证
 

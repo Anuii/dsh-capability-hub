@@ -62,15 +62,15 @@ const { Button, Input, Switch, StateDot } = require("@deepseek-ai/dsh-client-ui-
 | `className` / `children` | string / node | 否 | — |
 | `...rest` | 原生 button 属性 | — | 透传；`ref` 指向原生 button |
 
-~~~js
-React.createElement(Button, { variant: "primary", onClick: save }, t("save"))
+~~~tsx
+<Button variant="primary" onClick={save}>{t("save")}</Button>
 ~~~
 
 ### Input — `[PRIM]:3523`
 props：`icon`（可选 ReactNode，前置 16px 图标）、`ref`（可选，指向原生 input；**卸载时会被清空**）、`...rest`（原生 input 属性全透传，`value` / `onChange` / `placeholder` 都靠它）。
 返回的是**外层 span 包裹的原生 input**（`[PRIM]:3526`）。
-~~~js
-React.createElement(Input, { value: q, onChange: e => setQ(e.target.value), placeholder: t("search") })
+~~~tsx
+<Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} />
 ~~~
 
 ### Checkbox — `[PRIM]:3497-3520`
@@ -84,8 +84,8 @@ React.createElement(Input, { value: q, onChange: e => setQ(e.target.value), plac
 | `title` | string | 否 | 悬停提示 |
 | `className` | string | 否 | 加在 label 上 |
 
-~~~js
-React.createElement(Checkbox, { checked: ack, onChange: setAck, label: t("iUnderstand") })
+~~~tsx
+<Checkbox checked={ack} onChange={setAck} label={t("iUnderstand")} />
 ~~~
 
 ### Switch — `[PRIM]:3383-3408`
@@ -100,8 +100,8 @@ React.createElement(Checkbox, { checked: ack, onChange: setAck, label: t("iUnder
 | `className` | string | 否 | — |
 
 尺寸 36×20；off 态滑块恒读 `--dsw-alias-switch-thumb`，两主题下都保持浅色（README:44）。
-~~~js
-React.createElement(Switch, { checked: on, onChange: v => setEnabled(id, v), label: t("enable"), disabled: busy })
+~~~tsx
+<Switch checked={on} onChange={(v) => setEnabled(id, v)} label={t("enable")} disabled={busy} />
 ~~~
 
 ### Modal — `[PRIM]:5190-5262`
@@ -119,40 +119,43 @@ React.createElement(Switch, { checked: on, onChange: v => setEnabled(id, v), lab
 | `onKeyDownCapture` / `shortcutModal` | fn / string | 否 | 嵌套对话框抢在 document Escape 前处理按键 / 命令作用域 |
 
 **注意**：JSDoc 明确要求"**用 `data-modal-autofocus` 标记初始焦点控件，不要用 React `autoFocus`**"（`[PRIM]:5200`，README:30）。但宿主自己在 `dsh-client-ui-plugin-manager\lib\client.js:2769` 对 footer 里的 Button 用了 `autoFocus: true` —— 两处不一致，标 **未确认**，建议按 JSDoc 走。
-~~~js
-React.createElement(Modal, {
-  open, onClose, title: t("confirmTitle"), closeLabel: t("close"), description: t("confirmDesc"),
-  footer: React.createElement(Button, { variant: "primary", "data-modal-autofocus": true, onClick: ok }, t("ok"))
-}, body)
+~~~tsx
+<Modal
+  open={open} onClose={onClose} title={t("confirmTitle")} closeLabel={t("close")} description={t("confirmDesc")}
+  footer={<Button variant="primary" data-modal-autofocus onClick={ok}>{t("ok")}</Button>}
+>
+  {body}
+</Modal>
 ~~~
 
 ### Toast — `[PRIM]:6797-6882`
 props：`text`（**必填**，已解析横幅文案）、`icon`（可选前置字形，`tone="success"` 时忽略）、`tone`（`'success'` 渲染绿勾，省略则图标座保留警示色调）、`actions`（`{prefix,label,onClick?}[]`——注意产物里是 `onClick`，不是 `onSelect`，`prefix` 是连接词如"或"，`label` 渲染成蓝色可点文字）、`holdMs`（默认 3000，同时驱动卸载计时与 CSS 淡出延迟）、`anchor`（横幅水平中心跟随该元素，省略则居中于视口）、`onDone`（**必填（推断）**，淡出完成后调用，**在这里卸载**）。
 
 经 body portal 渲染；重新显示同一文案需由 owner 换 `key` 重挂载（`[PRIM]:6799-6801`）。
-~~~js
-{toast && React.createElement(Toast, { key: seq, text: toast, holdMs: 4000, onDone: () => setToast(null) })}
+~~~tsx
+{toast && <Toast key={seq} text={toast} holdMs={4000} onDone={() => setToast(null)} />}
 ~~~
 
 ### Tooltip — `[PRIM]:4647-4685`
 
 props：`label`（可选，气泡文字；空串 = 只显示快捷键；可传 resolver，**仅在可见时求值**）、`shortcutKeys`（可选，平台格式化键帽，接在文字后）、`side`（可选，默认 `'right'`）、`align`（可选，默认 `'center'`，仅 bottom/top 有效）、`portal`（可选，默认 false；挂到 body 躲开祖先 overflow / stacking context）、`delayMs` / `focusDelayMs`（可选，默认 0）、`gap`（可选，默认 8，仅 bottom/top）、`disabled`（可选，抑制气泡但锚点渲染不变，避免重挂载打断 CSS 过渡）、`maxWidth`（可选，气泡宽度上限）、`openOnClick`（可选，默认 false；点击钉住气泡，再次点击 / Escape / Tab / 外部 pointerdown 关闭）、`children`（**必填**，单个锚点元素；它自己的 ref 会被一并转发）。
 
-~~~js
-React.createElement(Tooltip, { label: t("refresh"), side: "bottom" },
-  React.createElement(Button, { icon: IconRefreshOutlineRegular, onClick: reload }))
+~~~tsx
+<Tooltip label={t("refresh")} side="bottom">
+  <Button icon={IconRefreshOutlineRegular} onClick={reload} />
+</Tooltip>
 ~~~
 
 ### Tag — `[PRIM]:3320-3333`
 `tone`（默认 `'outline'`，八种调色板；`SettingsValueField` 内部用 `'neutral'`、`SettingsSecretField` 用 `'neutral'` / `'quiet'`，见 `[PRIM]:7004,7065`）、`className`、`children`（文案由渲染点负责）。**只读。**
-~~~js
-React.createElement(Tag, { tone: "neutral" }, t("overridden"))
+~~~tsx
+<Tag tone="neutral">{t("overridden")}</Tag>
 ~~~
 
 ### Pill — `[PRIM]:3230-3248`
 `active`（默认 false）、`onClick`、`className`、`children`。**给 `onClick` 时渲染 button，否则渲染静态 span** —— 这是它与 `Tag` 的核心差别（README:78：尺寸也决定用法，Pill 可坐在 24px 文本行上）。
-~~~js
-React.createElement(Pill, { active: tab === "mcp", onClick: () => setTab("mcp") }, t("mcpServers"))
+~~~tsx
+<Pill active={tab === "mcp"} onClick={() => setTab("mcp")}>{t("mcpServers")}</Pill>
 ~~~
 
 ### StateDot — `[PRIM]:3052-3095`
@@ -165,8 +168,8 @@ React.createElement(Pill, { active: tab === "mcp", onClick: () => setTab("mcp") 
 | `className` | string | 否 | — |
 
 **`aria-hidden`**：无障碍名字由渲染点自己给（`[PRIM]:3060`）。
-~~~js
-React.createElement(StateDot, { state: "ongoing" })
+~~~tsx
+<StateDot state="ongoing" />
 ~~~
 
 ### SegmentedTabs — `[PRIM]:3251-3276`（标签页首选）
@@ -180,11 +183,11 @@ React.createElement(StateDot, { state: "ongoing" })
 | `className` | string | 否 | 面板由调用方自己渲染 |
 
 真实用法（`dsh-client-ui-agent-preset\lib\client.js:724-748`）：`items[i]` 给 `id: "<guideId>-explanation-tab"` 与 `panelId`；面板 div 写 `role="tabpanel"` + `aria-labelledby={id}` + `hidden`。
-~~~js
-React.createElement(SegmentedTabs, {
-  label: t("sections"), value: page, onChange: setPage,
-  items: [{ value: "skills", label: t("skills"), id: "hub-skills-tab", panelId: "hub-skills-panel" }]
-})
+~~~tsx
+<SegmentedTabs
+  label={t("sections")} value={page} onChange={setPage}
+  items={[{ value: "skills", label: t("skills"), id: "hub-skills-tab", panelId: "hub-skills-panel" }]}
+/>
 ~~~
 
 ### SegmentedControl — `[PRIM]:3430-3466`
@@ -207,8 +210,8 @@ README:80：它固定 24px 高、标题与内容**并排**；"名字压在描述
 
 ### JsonTree — `[PRIM]:8654`
 `data`（**必填**）、`label`（无障碍名，**必填（推断）**）、`className`、`collapsedStringLines`（默认 3）、`stringWrapping`、`copyable`（默认 true）、`expandTopLevel`（默认 true）、`labels`（本地化 chrome）。
-~~~js
-React.createElement(JsonTree, { data: server.config, label: t("config"), collapsedStringLines: 3 })
+~~~tsx
+<JsonTree data={server.config} label={t("config")} collapsedStringLines={3} />
 ~~~
 
 ### CodeBlock — `[PRIM]:10769`
@@ -218,18 +221,18 @@ owner 自带语言与复制工具条时设 `showHeader={false}`（README:67）�
 ### RiskConfirmation — `[PRIM]:5269-5312`（**敏感操作确认，MCP 页会用到**）
 `open`、`title`、`description`、`acknowledgeLabel`、`cancelLabel`、`closeLabel`、`confirmLabel`、`acknowledged`、`disabled`（默认 false）、`onAcknowledgedChange`、`onCancel`、`onConfirm`。
 主操作在 `acknowledged` 为真前不可用（`[PRIM]:5272`）。真实调用点：`dsh-client-ui-permission-presets\lib\client.js:419-434`。
-~~~js
-React.createElement(RiskConfirmation, {
-  open: !!pending, title: t("t"), description: t("d"), acknowledgeLabel: t("ack"),
-  cancelLabel: t("cancel"), closeLabel: t("close"), confirmLabel: t("confirm"),
-  acknowledged: ack, onAcknowledgedChange: setAck, onCancel: close, onConfirm: () => doIt(pending)
-})
+~~~tsx
+<RiskConfirmation
+  open={!!pending} title={t("t")} description={t("d")} acknowledgeLabel={t("ack")}
+  cancelLabel={t("cancel")} closeLabel={t("close")} confirmLabel={t("confirm")}
+  acknowledged={ack} onAcknowledgedChange={setAck} onCancel={close} onConfirm={() => doIt(pending)}
+/>
 ~~~
 
 ### PathLabel — `[PRIM]:3337-3380`
 `path`（**必填**）、`className`、`...attributes`（透传到外层 span）。目录弱化、文件名突出、悬停显示完整路径；放不下时左缘渐隐（README:53）。
-~~~js
-React.createElement(PathLabel, { path: "C:/Users/you/.dsh/mcp.json" })
+~~~tsx
+<PathLabel path="C:/Users/you/.dsh/mcp.json" />
 ~~~
 
 ### MarkdownText / MarkdownDelegateProvider — `[PRIM]:11789`、`[PRIM]:11034`
@@ -242,8 +245,8 @@ labels: { code: { copyLabel, copiedLabel, toolbarLabels: { codeLabel, wrapLabel,
 ~~~
 
 `MarkdownDelegateProvider` props：`children`、`openExternalLink`、`openFile`、`fileImages`。**无 provider 也能用**（`createContext({})` 默认值，`[PRIM]:11032`），只是本地链接保持纯文本、不触发打开。
-~~~js
-React.createElement(MarkdownText, { text: skill.description, variant: "compact" })
+~~~tsx
+<MarkdownText text={skill.description} variant="compact" />
 ~~~
 
 ### settings-form 四件套（`[PRIM]:6918 / 6973 / 7052 / 7166`）
@@ -352,7 +355,7 @@ if (typeof document !== "undefined" && document.querySelector('style[data-plugin
   tag.textContent = css; document.head.appendChild(tag);
 }
 ~~~
-能力中心已有 `src\platform\client\styles.ts`，沿用即可。
+能力中心统一用 `src\kit\css.ts` 的 `injectStyleTag(id, css)`（ADR-0004），不要再手写一份。
 
 **⑥ 第三方插件的前车之鉴**：`[3P]`（`@linxin666/dsh-client-ui-skill-explorer`，**技能浏览器，与本任务最像**）的客户端产物**只 require 了 `react` 与 `react/jsx-runtime`**（`[3P]:7-8`），完全没用 primitives——它自己实现了全部 UI。所以**它不能作为 import 说明符的证据**，但它证明不用 primitives 也能跑通（代价是 UI 与宿主风格脱节）。
 

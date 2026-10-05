@@ -31,129 +31,101 @@
 
 ## 2. 目录与职责
 
-    src\client\index.tsx              入口，只导出 inject 与 apply
-    src\platform\client\applier.ts       装配：样式、字典、会话源、各 slot 注册（永不失败）
-    src\platform\client\page.tsx         侧栏行 + 中央面板（main slot）注册
-    src\platform\client\panel.tsx        页面本体：三标签 + 默认折叠的「诊断信息」卡片（标签页作者的样板）
-    src\platform\client\config-button.tsx 插件管理页那一行的「配置」入口
-    src\platform\client\api.ts           API 客户端（信封、错误、鉴权说明）
-    src\platform\client\styles.ts        class 名与 <style> 注入
-    src\platform\client\strings.ts       中英字典 + t()
-    src\platform\client\useCurrentWorkspace.ts  当前工作区 / 当前会话
+整体结构见 **docs/ARCHITECTURE.md**（一页）。客户端相关的部分：
+
+    src\platform\client\index.tsx      入口，只导出 inject 与 apply
+    src\platform\client\applier.ts     装配：样式、字典、会话源、各 slot 注册（永不失败）
+    src\platform\client\page.tsx       侧栏行 + 中央面板（main slot）注册
+    src\platform\client\panel.tsx      页面本体：页头、两个标签、ⓘ 诊断、降级与「需要重启」横幅
+    src\platform\client\api.ts         API 客户端（信封、错误、鉴权说明）——标签页可以用
+    src\platform\client\tab-props.ts   标签页 props（TabProps）——标签页可以用
+    src\skills\client\                 技能页与「添加技能」（仓库视图）
+    src\mcp\client\                    MCP 页；running\ 是页面底部的「运行中」区域
+    src\kit\                            界面组件、样式写法（css.ts）、折叠（fold.ts）、状态仓库（store.ts）
+    src\<功能>\contract\               宿主与客户端共用的接口类型（只能 import type）
+
+谁能引用谁由 `test/architecture/imports.test.ts` 检查（ADR-0001）：功能之间互不 import；
+客户端只能 import type 契约，不能引用宿主代码；功能只能用客户端外壳的 `api.ts` 与 `tab-props.ts`；kit 只引用 kit。
 
 ---
 
-## 3. 写一个标签页（五步）
+## 3. 写一个标签页的功能
 
-> **动手写界面之前先读第 10 节「kit 使用说明」**：列表、工具栏、抽屉、
-> 标记、横幅、空状态、骨架屏都由 `src\kit\` 提供，标签页**只通过 kit 拼界面**，
-> 不要再自己写一遍这些样式（否则各个标签又会各长一套样子）。
+**分三层写**（ADR-0005）：
 
-**第 1 步：在**你自己标签页的目录**下写组件**（不要在 shell 里堆）：
+1. **规则**写成纯函数或「状态仓库」，不碰 React、不碰 DOM，用 node:test 直接测；
+   - 视图模型：给一个对象，算出界面要显示什么（例如 `skills/client/row.ts` 的 `skillRowView`：一行技能的标题、标记、调用权限文字、开关）；
+   - 状态仓库：持有状态、提供动作、经数据 adapter 访问宿主（例如 `mcp/client/runtime-store.ts`、`skills/client/remote/repo-view-store.ts`）。
+     adapter 是一个接口，正式运行由 `data.ts` 提供 HTTP 版，单测换成内存里的假实现；
+2. **数据**：`data.ts` 调 `api.get / api.post`，把接口返回补成安全形状，类型来自 `contract/`；
+3. **组件**（JSX）只订阅、渲染、把用户操作转给仓库：
 
-    src\skills\client\    ← 技能标签（入口 index.tsx 导出 SkillsTab，字典 strings.ts）
-    src\mcp\client\       ← MCP 服务器标签（入口 index.tsx 导出 McpTab）
-    src\mcp\client\running\   ← MCP 页底部的「运行中」区域（入口 index.tsx 导出 RunningSection，由 mcp/index.tsx 渲染；0.3.0 起不再是独立标签）
+        import * as React from "react";
+        import { ListGroup, ListRow, ListSurface, useStoreState } from "../../kit/index.ts";
+        import { createRuntimeStore } from "./runtime-store.ts";
+        import { runtimeApi } from "./data.ts";
 
-每个标签页**自带一份 strings.ts**（key 前缀用 skills.* / mcp.* / runtime.*，互不打扰），
-外壳的 src\platform\client\strings.ts 只放外壳自己的文案（页面标题、标签名、环境卡片）。
-组件里取字典就走自己目录那一份（例如 `import { t } from "./strings.ts"`）。
+        export function Servers(): React.ReactElement {
+          const store = React.useMemo(() => createRuntimeStore(runtimeApi), []);
+          const { status, error } = useStoreState(store.state);
+          React.useEffect(() => store.startPolling(), [store]);
+          if (error !== undefined) return <p>{error}</p>;
+          return (
+            <ListSurface>
+              <ListGroup>
+                {(status?.servers ?? []).map((server) => (
+                  <ListRow key={server.name} title={server.name} onOpen={() => void store.refresh(server.name)} />
+                ))}
+              </ListGroup>
+            </ListSurface>
+          );
+        }
 
-界面**只做中文**（D-A3）：标签页字典不需要 en 镜像，只写 zh 即可
-（外壳字典是历史形态，保持 zh+en 不动）。
+**硬性规则**
 
-组件长这样（占位版就是仓库里的现成样板）：
+- 界面用 JSX（ADR-0003）；排版交给 prettier（`npm run format`）；
+- 所有用户可见文案走自己目录的 `t("key")`，key 写在自己那份 strings.ts 里（只写中文，D-A3）；
+  字典里不留没用到的 key（单测双向检查）；
+- 组件里不要引入任何第三方库（客户端产物的 require 解析不到）；
+- 组件不得 throw：错误由仓库转成状态（`error` / `message`），渲染异常由各页的错误边界兜底；
+- 列表 / 工具栏 / 抽屉 / 标记等一律用 kit（见第 10 节）；可折叠分组用 kit 的 `useFold`（规则在 `kit/fold.ts`）。
 
-    import * as React from "react";
-    import { api } from "./api.ts";
-    import { t } from "./strings.ts";
-    import { styles } from "./styles.ts";
+### 3.1 标签页的 props 接口（TabProps）
 
-    export function SkillsTab(): React.ReactElement {
-      const [rows, setRows] = React.useState<unknown[] | undefined>(undefined);
-      const [error, setError] = React.useState<string | undefined>(undefined);
-      React.useEffect(() => {
-        void api.get("skills/list").then(
-          (data) => setRows((data as { items?: unknown[] }).items ?? []),
-          (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
-        );
-      }, []);
-      if (error !== undefined) return React.createElement("p", { className: styles.error }, t("env.failed", { message: error }));
-      if (rows === undefined) return React.createElement("p", { className: styles.muted }, t("env.loading"));
-      return React.createElement("ul", { className: styles.kv }, rows.map((row, index) => React.createElement("li", { key: index }, JSON.stringify(row))));
-    }
+定义在 `src\platform\client\tab-props.ts`，**形状已经冻结**（只能加可选字段）：
 
-### 2.5 标签页的 props 接口（TabProps）
-
-定义在 `src\platform\client\tab-props.ts`，**形状已经冻结**
-（只能加可选字段，不能改已有字段的语义）：
-
-    /** 标签 id（0.3.0 起只有两个）。 */
     export type PanelTab = "skills" | "mcp";
 
-    /** 标签页组件收到的 props（panel.tsx 传给它引入的每一个标签组件）。 */
     export interface TabProps {
       /** 当前会话的工作区绝对路径；取不到时 undefined。 */
       workspace: string | undefined;
       /** 当前会话 id；取不到时 undefined。 */
       sessionId?: string;
-      /** 切换到另一个标签页（标签之间互相跳转用）。 */
+      /** 切换到另一个标签页。 */
       openTab(tab: PanelTab): void;
       /** 0.3.4（可选）：报告这个标签有没有需要注意的错误，外壳在标签旁画红点。 */
       reportAttention?(tab: PanelTab, attention: boolean): void;
     }
 
-用法（组件可以只声明自己用得到的字段，多余的会被忽略）：
+- `workspace` 来自 slot 标准 prop `useSessions`（见第 4 节），技能页拿它找项目级技能目录；
+- `sessionId`：「运行中」区域的「只看当前会话」用它过滤实例；
+- `reportAttention`：MCP 页在「有错误」数从 0 变非 0（或反过来）时调用，外壳据此在「MCP」标签旁画红点。
 
-    import type { TabProps } from "../shell/tab-props.ts";
-    export function SkillsTab(props: TabProps): React.ReactElement { ... }
+panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab` 与 `mcp/client/index.tsx` 的 `McpTab`；
+两个标签同时挂载、切换只改 `hidden`（状态不丢）。新增路由先在宿主模块里实现，形状写进 `contract/`。
 
-- `workspace` 来自 slot 标准 prop `useSessions`（见第 4 节），技能页拿它找项目级技能根；
-- `sessionId` 来自同一份快照，「运行中」区域的「只看当前会话」用它过滤实例；
-- `openTab` 是外壳的切标签回调，稳定可调用；
-- `reportAttention` 由 MCP 页在「有错误」数从 0 变非 0（或反过来）时调用，外壳据此在「MCP」标签旁画红点。
-
-**硬性规则**
-
-- 只能用 React.createElement（构建走 esbuild 的 classic JSX transform，写 JSX 也可以，
-  但现有文件统一用 createElement，保持一致）；
-- 所有用户可见文案走自己目录的 t("key")，key 一律写在自己那份 strings.ts 里（只写中文）；
-- 只用 node: 之外没有的限制：组件里不要引入任何第三方库（运行时零依赖）；
-- 组件不得 throw：错误自己 catch 成 UI 状态。
-
-**第 2 步：什么都不用改**。panel.tsx 已经按固定入口引入三个组件：
-
-    import { SkillsTab } from "../skills/index.tsx";
-    import { McpTab } from "../mcp/index.tsx";
-    import { RuntimeTab } from "../runtime/index.tsx";
-    ...
-    tab === "skills" ? SkillsTab : tab === "mcp" ? McpTab : RuntimeTab
-
-所以你只要保证 `src\client\<你的目录>\index.tsx` **导出同名组件**即可，
-外壳会用 `TabProps`（见第 2.5 节）调用它。
-
-**第 3 步：如果你的标签要多条接口**，直接照 PLAN §3.1 的路由键在宿主侧加实现，
-客户端只用 api.get / api.post，路径不带前导斜杠（见第 5 节）。
-
-**第 4 步：构建**
+**构建与看效果**
 
     node build.mjs
-
-**第 5 步：看效果**
-
-    pwsh -NoProfile -File scripts\dev-profile.ps1 restart
-    node scripts\ui-shot.mjs --out <仓库根>\.dev\shots
-
-浏览器产物有 rev 校验（脚本按文件 mtime/size 算 rev），改完 build 后浏览器刷新即可拿到新产物；
-拿不到就 restart 一次。
+    pwsh -NoProfile -File scripts\dev-link.ps1 sync -Restart    # 测试 profile 跟随构建产物
+    node scripts\ui-shot-pages.mjs --suffix x --no-network      # 亮 / 暗全套截图 + 审计
 
 ---
 
 ## 4. 你能拿到什么（服务与标准 props）
 
-- **不要**指望客户端 ctx 上有「sessions」「workspace」这类服务：实测 ctx.get("sessions") 是
-  undefined（客户端诊断里永远报 sessions: 服务缺失）。
-- **要**从 slot 的标准 props 拿数据。我们在 page.tsx 注册的组件会收到 owner 注入的一组 props：
+- **不要**指望客户端 ctx 上有「sessions」「workspace」这类服务：实测 ctx.get("sessions") 是 undefined。
+- **要**从 slot 的标准 props 拿数据。page.tsx 注册的组件会收到 owner 注入的一组 props：
 
   | prop | 用途 |
   |---|---|
@@ -162,39 +134,40 @@
   | usePanelInfo | 当前面板信息 |
   | useResource | 资源读取 |
 
-  典型用法（panel.tsx 的 EnvCard 就是这么写的）：
-
       const workspace = useCurrentWorkspace(props.useSessions);
 
-- ctx.get("layout") 可以用来切换面板（page.tsx 的 openCapabilityHub 用它直达某个标签）；
-  拿不到时退化为「只切标签、不切面板」。
+- ctx.get("layout") 可以用来切换面板（page.tsx 的 openCapabilityHub 用它直达某个标签）；拿不到时退化为「只切标签」。
 - ctx.locale.register(NS, { zh, en }) 注册字典，ctx.locale.bind(NS) 拿运行期翻译。
 
 ---
 
 ## 5. API 客户端
 
-    import { api, ApiError } from "./api.ts";
-    const data = await api.get<{ items: Row[] }>("skills/list", { query: "x" });
-    await api.post("skills/remove", { name: "foo" });
-
-约定：
+    import { api, ApiError } from "../../platform/client/api.ts";
+    const data = await api.get<Partial<ListResult>>("skills/list", { workspace });
+    await api.post("skills/set-enabled", { id, enabled });
 
 - 路径**文档相对**（不带前导 /），前缀固定 api/dsh-capability-hub/；
 - 服务端统一信封 { ok: true, data } / { ok: false, error: { code, message, details } }，
-  api 客户端负责解信封并把 error 抛成 ApiError（带 code/details）；
-- 401 会被翻译成「未通过 DSH 的浏览器鉴权」；
-- 鉴权由 DSH 负责：接口挂在 /api 之下，继承签名 cookie（SameSite=Strict + HttpOnly），
-  同源 fetch 自动带上，你什么都不用做。
+  api 客户端解信封并把 error 抛成 ApiError（带 code/details）；VALIDATION 的 details 是 `FieldError[]`（`platform/contract/host.ts`）；
+- 错误转文字一律用 `src/shared/error-text.ts` 的 `errorText`；
+- 401 会被翻译成「未通过 DSH 的浏览器鉴权」；404 会提示「升级后需要重启 DSH」；
+- 鉴权由 DSH 负责：接口挂在 /api 之下，继承签名 cookie，同源 fetch 自动带上。
 
 ---
 
 ## 6. 字典与样式
 
-- 字典：strings.ts 的 zh 是 key 的权威来源，en 镜像；加 key 时两边都加。
-  运行期语言切换由 apply() 里 setRuntimeTranslate(locale.bind(NS)) 接上，纯 DOM 文案也会跟着变。
-- 样式：styles.ts 里集中写 class 名，用 injectStyles() 一次性插 <style>。
-  颜色/间距一律用主题 CSS 变量（var(--dsh-...)），不要写死颜色，否则暗色/亮色主题会崩。
+- 字典：每个页面一份 strings.ts，中文是唯一来源（外壳字典保持 zh+en）。
+- 样式写在 TS 里（ADR-0004）：kit 组件旁边是 `<组件>.styles.ts`，页面自己的样式在 `styles.ts`，
+  都用 `kit/css.ts` 的 `defineSheet(prefix, names, rules)` 声明、`injectStyleTag(id, css)` 注入：
+
+      const sheet = defineSheet("chsk_", ["root", "note"], [".chsk_root{…}", ".chsk_note{…}"]);
+      export const styles = sheet.classes;
+      export function injectSkillsStyles(): void { injectStyleTag("dsh-capability-hub/skills-styles", sheet.css); }
+
+  前缀：kit = chk_，外壳 = ch_，技能页 = chsk_，MCP 页 = chmcp_，「运行中」= chrt_。
+  颜色只用主题变量（kit 的 `--chk-*` token 或 `--dsw-*`），写死颜色会被单测拦下。
   页面根节点带 data-dsh-capability-hub-view 属性，方便写作用域选择器。
 
 ---
@@ -204,7 +177,7 @@
 | 位置 | 怎么做 | 备注 |
 |---|---|---|
 | 侧栏行 + 中央面板 | page.tsx 的 registerCapabilityHubPanel（sidebar.panellist + main） | main 是 keyed，key = capability-hub |
-| 插件管理页那一行的「配置」 | config-button.tsx 的 registerRowConfig（plugins.row.config） | key = 「dsh-capability-hub#capability-hub」，格式是 <包名>#<行 id> |
+| 插件管理页那一行的「配置」 | config-button.tsx 的 registerRowConfig（plugins.row.config） | key = 「dsh-capability-hub#capability-hub」 |
 | 别的 slot | 一律用 ctx.slots.inject(name, () => ctx.slots.register(...)) | owner 还没出现时 inject 会等，不要直接 register |
 
 注册一律返回 disposer，并挂进 ctx.effect 统一回收（applier.ts 已经这么做）。
@@ -245,9 +218,9 @@
       Toolbar, ListSurface, ListGroup, ListRow,
       Badge, Drawer, Section, KeyValue,
       Banner, EmptyState, SkeletonRows, MoreMenu, MenuItem,
-    } from "../shell/kit/index.ts";
+    } from "../../kit/index.ts";
 
-kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 `<style>`，
+kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles` 把各组件旁边的 `*.styles.ts` 合成一整张 `<style>`，
 类名前缀 `chk_`），标签页**什么都不用做**。
 
 ### 10.2 五分钟上手
@@ -255,64 +228,62 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 一个「搜 + 筛 + 列表 + 抽屉」的标签页长这样：
 
     import * as React from "react";
-    import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
-    import {
-      Badge, Drawer, KeyValue, ListGroup, ListRow, ListSurface, Section, Toolbar, kit,
-    } from "../shell/kit/index.ts";
-    import type { TabProps } from "../shell/tab-props.ts";
+    import { Button, Switch } from "@deepseek-ai/dsh-client-ui-primitives";
+    import { Badge, Drawer, KeyValue, ListGroup, ListRow, ListSurface, Section, Toolbar, kit } from "../../kit/index.ts";
+    import type { TabProps } from "../../platform/client/tab-props.ts";
 
     export function McpTab(props: TabProps): React.ReactElement {
       const [query, setQuery] = React.useState("");
       const [filter, setFilter] = React.useState("all");
       const [openId, setOpenId] = React.useState<string | undefined>(undefined);
-      const servers = useServers();                       // 你自己的数据
-      const counts = { all: servers.length, enabled: servers.filter((s) => s.enabled).length };
+      const servers = useServers(); // 你自己的数据（通常来自状态仓库）
 
-      return React.createElement(React.Fragment, null,
-        React.createElement(Toolbar, {
-          search: { value: query, onChange: setQuery, placeholder: "搜索服务器" },
-          filters: {
-            value: filter,
-            onChange: setFilter,
-            items: [
-              { id: "all", label: "全部", count: counts.all },
-              { id: "enabled", label: "已启用", count: counts.enabled },
-            ],
-          },
-          primary: { label: "添加服务器", menu: [{ id: "json", label: "粘贴 JSON", onClick: openJson }] },
-          more: [{ id: "settings", label: "全局设置", onClick: openSettings }],
-        }),
-        React.createElement(ListSurface, null,
-          React.createElement(ListGroup, { title: "服务器", meta: "~/.dsh/mcp.json", count: servers.length },
-            servers.map((server) => React.createElement(ListRow, {
-              key: server.id,
-              testId: "mcp-row-" + server.id,
-              title: server.name,
-              subtitle: server.command,
-              subtitleMono: true,
-              leading: server.failing ? "failed" : "idle",     // StatusTone
-              badges: server.failing ? [React.createElement(Badge, { tone: "danger", key: "e" }, "连接失败")] : [],
-              trailing: React.createElement(Switch, {
-                checked: server.enabled, label: server.name,
-                onChange: (next) => setEnabled(server.id, next),
-              }),
-              hoverActions: [{ label: "刷新缓存", onClick: () => refresh(server.id) }],
-              onOpen: () => setOpenId(server.id),
-            })))),
-        React.createElement(Drawer, {
-          open: openId !== undefined,
-          title: openId ?? "",
-          subtitle: "~/.dsh/mcp.json",
-          testId: "mcp-drawer",
-          onClose: () => setOpenId(undefined),
-          footer: React.createElement(React.Fragment, null,
-            React.createElement("button", { type: "button", className: kit.dangerButton, onClick: remove }, "删除")),
-        },
-        React.createElement(Section, { title: "概览" },
-          React.createElement(KeyValue, { items: [
-            { label: "transport", value: "stdio" },
-            { label: "命令", value: server.command, mono: true },
-          ] }))));
+      return (
+        <>
+          <Toolbar
+            search={{ value: query, onChange: setQuery, placeholder: "搜索服务器" }}
+            filters={{
+              value: filter,
+              onChange: setFilter,
+              items: [
+                { id: "all", label: "全部", count: servers.length },
+                { id: "enabled", label: "已启用", count: servers.filter((s) => s.enabled).length },
+              ],
+            }}
+            primary={{ label: "添加服务器", menu: [{ id: "json", label: "粘贴 JSON", onClick: openJson }] }}
+            more={[{ id: "settings", label: "全局设置", onClick: openSettings }]}
+          />
+          <ListSurface>
+            <ListGroup>
+              {servers.map((server) => (
+                <ListRow
+                  key={server.id}
+                  testId={"mcp-row-" + server.id}
+                  title={server.name}
+                  subtitle={server.command}
+                  subtitleMono
+                  leading={server.failing ? "failed" : "idle"}
+                  badges={server.failing ? [<Badge key="e" tone="danger">连接失败</Badge>] : []}
+                  trailing={<Switch checked={server.enabled} label={server.name} onChange={(next) => setEnabled(server.id, next)} />}
+                  hoverActions={[{ label: "刷新缓存", onClick: () => refresh(server.id) }]}
+                  onOpen={() => setOpenId(server.id)}
+                />
+              ))}
+            </ListGroup>
+          </ListSurface>
+          <Drawer
+            open={openId !== undefined}
+            title={openId ?? ""}
+            testId="mcp-drawer"
+            onClose={() => setOpenId(undefined)}
+            footer={<Button variant="ghost" className={kit.dangerButton} onClick={remove}>删除</Button>}
+          >
+            <Section title="概览">
+              <KeyValue items={[{ label: "传输方式", value: "stdio" }]} />
+            </Section>
+          </Drawer>
+        </>
+      );
     }
 
 ### 10.3 组件与 props（全量）
@@ -394,7 +365,7 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
   `<testId>-close` / `<testId>-mask` 两个子 testid；
 - 正文：自上而下排 `Section`（间距 16，可滚动）；
 - `footer`：底部固定操作区，**危险操作放最左**，用 `Button variant="ghost"` 配
-  `className={kit.dangerButton}`（弱化的红色文字按钮）；右侧用 `React.createElement("span", { className: kit.drawerFootSpacer })` 顶开；
+  `className={kit.dangerButton}`（弱化的红色文字按钮）；右侧用 `<span className={kit.drawerFootSpacer} />` 顶开；
   **footer 只在有真正的操作时才传**；不要再放「关闭」按钮（头部已有 ×，Esc 也能关）；
 - Esc / 点遮罩都能关，关闭后焦点回到打开它的那一行，Tab 在抽屉内部环绕。
 
@@ -443,7 +414,7 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 - **开关（Switch）**：kit 已经把能力中心作用域内的宿主 `Switch` 缩到约 80%（36×20 → 29×16），
   你**不需要**做任何事；也不要自己再包一层缩放，或在 kit 之外覆盖它。
 - **不写死颜色**：需要新颜色时用 `--dsw-*` 变量（见 docs\PRIMITIVES.md 第 4 节），
-  写死颜色会在另一个主题里崩。`test\client-kit\styles.test.ts` 会拦下来。
+  写死颜色会在另一个主题里崩。`test\kit\styles.test.ts` 会拦下来。
 - **不写常驻解释长句**：说明放 `title` 工具提示或抽屉里。
 
 ### 10.5 开发预览与自测
@@ -456,12 +427,8 @@ kit 的每一种形态都能一眼看全（截图审查用）：
 10 行各种标记与状态点、悬停操作、打开的抽屉、空状态、骨架屏、横幅）。
 加 `hubKitDrawer=1` 可让抽屉默认关闭。**正式使用时永远看不到它。**
 
-改完 UI 到新界面：
-
-    pwsh -NoProfile -File scripts\dev-sync-client.ps1     # build + 只复制 lib\client.js
-    # 刷新浏览器页面
-
-不需要重启 profile、不需要 pnpm（原理见 docs\DEV.md 的「客户端热同步」一节）。
+改完 UI 到新界面：`pwsh -NoProfile -File scripts\dev-link.ps1 watch` 跟随构建，刷新浏览器页面即可；
+改了宿主代码再 `scripts\dev-profile.ps1 restart`（见 docs\DEV.md）。
 
 ---
 
@@ -477,5 +444,6 @@ kit 的每一种形态都能一眼看全（截图审查用）：
    但**必须写完整包名**，写「dsh-client-ui-slots」这类简写会在运行期解析失败（已在 docs\PRIMITIVES.md 核实）。
 5. 改完不 build 就看页面 → 看到的还是旧产物。
 6. 组件里 throw → 会让面板整块消失；错误要转成 UI 状态。
-7. 把标签组件写进 src\platform\client → 会和外壳耦合；每个标签有自己的目录（见第 3 节）。
+7. 把标签组件写进 src\platform\client → 会和外壳耦合；每个功能有自己的 `src\<功能>\client\`（见第 2 节），越界的 import 会被架构单测拦下。
+9. 在组件里直接写业务规则 → 只能靠截图验证；规则放进视图模型或状态仓库（第 3 节），组件只渲染。
 8. 想知道有哪些现成的宿主组件可复用 → 读 docs\PRIMITIVES.md，不要自己猜 class 名。

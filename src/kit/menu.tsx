@@ -1,7 +1,7 @@
 /**
  * 菜单：宿主 primitives 的 Menu + MenuItemButton 的薄封装。
  *
- * 宿主 Menu 的用法（见 docs/PRIMITIVES.md P3 与 src/mcp/client/add-menu.tsx）：
+ * 宿主 Menu 的用法（见 docs/PRIMITIVES.md P3）：
  *   anchor 是就地渲染的触发元素，items 是数据行，children 是 MenuItemButton 组件行。
  *   我们没有数据行，一律用 children。
  */
