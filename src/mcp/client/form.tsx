@@ -4,41 +4,29 @@
  * UI-B 起这个表单渲染在**详情抽屉里**（新建时是同一个抽屉），所以它自己没有外壳，
  * 只有两节内容与一行操作：基础 / 高级设置（**默认折叠**）+ 保存。
  *
- * 数据流：
- *   草稿（ServerDraft）→ 本地校验（validateDraft，字段旁立刻出错误）
- *   → check-command（只查 PATH，不执行；找不到就警告，用户点「仍然保存」才继续）
- *   → mcp/validate（服务端裁决，details 按 server.<field> 映射回字段）
- *   → mcp/servers/upsert{ originalName, server } → onSaved()
- *
- * 遮罩（D-C5）：env / headers 的值来自视图，默认就是 ***hidden***；
- * 点「显示」调 reveal 拿明文，只写进本次编辑的组件状态，关闭表单即丢弃。
+ * 草稿、校验、检查命令、显示遮罩值与保存的流程都在 server-form-store.ts（可单测）；
+ * 这里只把它们渲染成字段。高级区**默认折叠**（UI-DESIGN §5）。
  */
 
 import * as React from "react";
 import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner, Section } from "../../kit/index.ts";
-import { checkCommand, revealServer, upsertServer, validateServer } from "./data.ts";
+import { serverFormApi } from "./data.ts";
+import { createServerFormStore } from "./server-form-store.ts";
 import { ArrayField, FieldShell, NumberField, RecordField, SelectField, SwitchField, TextField } from "./fields.tsx";
 import {
   draftHas,
   draftMeta,
-  draftToSubmit,
   draftValue,
   errorsFor as errorsOf,
-  fieldErrorsOf,
-  groupErrors,
   lifecycleLabel,
   numericText,
-  validateDraft,
-  withField,
-  withMetaField,
-  withoutField,
   type ServerDraft,
 } from "./model.ts";
+import { useStoreState } from "../../kit/index.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { FieldError, ServerView, Transport } from "../contract/config.ts";
-import { errorText } from "../../shared/error-text.ts";
+import type { ServerView, Transport } from "../contract/config.ts";
 import { LIFECYCLES } from "../rules/server.ts";
 import { isPlainObject } from "../rules/values.ts";
 
@@ -94,158 +82,31 @@ function metaHas(draft: ServerDraft, key: string): boolean {
 }
 
 export function ServerForm(props: ServerFormProps): React.ReactElement {
-  const [draft, setDraft] = React.useState<ServerDraft>(props.initial);
-  const [touched, setTouched] = React.useState<ReadonlySet<string>>(() => new Set<string>());
-  const [showAll, setShowAll] = React.useState<boolean>(false);
-  /** 高级区**默认折叠**（UI-DESIGN §5），要改就点开。 */
-  const [advanced, setAdvanced] = React.useState<boolean>(false);
-  const [busy, setBusy] = React.useState<boolean>(false);
-  const [checking, setChecking] = React.useState<boolean>(false);
-  const [commandCheck, setCommandCheck] = React.useState<
-    { command: string; found: boolean; resolvedPath?: string } | undefined
-  >(undefined);
-  const [commandWarning, setCommandWarning] = React.useState<string | undefined>(undefined);
-  const [serverErrors, setServerErrors] = React.useState<FieldError[]>([]);
-  const [formError, setFormError] = React.useState<string | undefined>(undefined);
-  const [revealBusy, setRevealBusy] = React.useState<boolean>(false);
-  const [revealError, setRevealError] = React.useState<string | undefined>(undefined);
-  const [revealed, setRevealed] = React.useState<ReadonlySet<string>>(() => new Set<string>());
-  const [syncToken, setSyncToken] = React.useState<number>(0);
-
-  const transport: Transport = draft.values.transport === "streamable-http" ? "streamable-http" : "stdio";
-
-  const localErrors = React.useMemo(
-    () => validateDraft(draft, { existingNames: props.existingNames, originalName: props.originalName }),
-    [draft, props.existingNames, props.originalName],
+  const namesRef = React.useRef(props.existingNames);
+  namesRef.current = props.existingNames;
+  const [store] = React.useState(() =>
+    createServerFormStore(serverFormApi, {
+      initial: props.initial,
+      ...(props.originalName === undefined ? {} : { originalName: props.originalName }),
+      existingNames: () => namesRef.current,
+    }),
   );
-  const groups = React.useMemo(() => {
-    const merged = groupErrors(localErrors);
-    for (const [field, messages] of Object.entries(groupErrors(serverErrors))) {
-      merged[field] = [...(merged[field] ?? []), ...messages];
-    }
-    return merged;
-  }, [localErrors, serverErrors]);
+  const s = useStoreState(store.state);
+  const { draft, touched, showAll, syncToken, revealed, revealBusy } = s;
+  const transport: Transport = draft.values.transport === "streamable-http" ? "streamable-http" : "stdio";
+  // errors() 读的是草稿、宿主错误与现有服务器名，这三样一变就重算
+  const groups = React.useMemo(() => store.errors(), [store, draft, s.serverErrors, props.existingNames]);
 
-  const touch = (field: string): void => {
-    setTouched((prev) => {
-      if (prev.has(field)) return prev;
-      const next = new Set(prev);
-      next.add(field);
-      return next;
+  const setFieldValue = (field: string, value: unknown): void => store.setField(field, value);
+  const doReveal = (field: "env" | "headers"): void => {
+    void store.reveal(field).then((ok) => {
+      if (ok) props.showToast(t("mcp.toast.revealed"));
     });
   };
-
-  const setFieldValue = (field: string, value: unknown): void => {
-    setDraft((prev) => withField(prev, field, value));
-    touch(field);
-  };
-
-  const resetField = (field: string): void => {
-    setDraft((prev) => withoutField(prev, field));
-    touch(field);
-    setSyncToken((token) => token + 1);
-    setServerErrors((prev) => prev.filter((error) => error.path !== "server." + field));
-  };
-
-  const resetMetaField = (key: string): void => {
-    setDraft((prev) => withMetaField(prev, key, undefined));
-    touch("meta." + key);
-    setSyncToken((token) => token + 1);
-  };
-
-  /** 切换传输方式只改这一个字段：与另一种传输相关的字段留在草稿里，切回来还在（提交时按当前传输裁剪）。 */
-  const changeTransport = (next: string): void => {
-    const value: Transport = next === "streamable-http" ? "streamable-http" : "stdio";
-    setDraft((prev) => ({ values: { ...prev.values, transport: value } }));
-    touch("transport");
-    setSyncToken((token) => token + 1);
-  };
-
-  const runCheck = async (): Promise<{ found: boolean; resolvedPath?: string } | undefined> => {
-    const command = textOf(draft.values.command).trim();
-    if (command === "") return undefined;
-    setChecking(true);
-    try {
-      const cwd = textOf(draft.values.cwd);
-      const result = await checkCommand(command, cwd === "" ? undefined : cwd);
-      setCommandCheck({
-        command,
-        found: result.found,
-        ...(result.resolvedPath === undefined ? {} : { resolvedPath: result.resolvedPath }),
-      });
-      return result;
-    } catch (error) {
-      setFormError(t("mcp.form.saveFailed", { message: errorText(error) }));
-      return undefined;
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const doReveal = (field: "env" | "headers"): void => {
-    const name = props.originalName;
-    if (name === undefined) return;
-    setRevealBusy(true);
-    setRevealError(undefined);
-    void revealServer(name)
-      .then(
-        (view) => {
-          const values = field === "env" ? view.env : view.headers;
-          setDraft((prev) => withField(prev, field, values));
-          setRevealed((prev) => {
-            const next = new Set(prev);
-            next.add(field);
-            return next;
-          });
-          setSyncToken((token) => token + 1);
-          props.showToast(t("mcp.toast.revealed"));
-        },
-        (error: unknown) => setRevealError(t("mcp.editor.revealFailed", { message: errorText(error) })),
-      )
-      .finally(() => setRevealBusy(false));
-  };
-
-  const save = (ackCommand: boolean): void => {
-    setShowAll(true);
-    setFormError(undefined);
-    const errors = validateDraft(draft, { existingNames: props.existingNames, originalName: props.originalName });
-    if (errors.length > 0) {
-      setServerErrors([]);
-      return;
-    }
-    setBusy(true);
-    void (async () => {
-      try {
-        const command = textOf(draft.values.command).trim();
-        if (transport === "stdio" && command !== "") {
-          const result = await runCheck();
-          if (result !== undefined && !result.found) {
-            if (!ackCommand) {
-              setCommandWarning(t("mcp.command.missing", { command }));
-              return;
-            }
-            setCommandWarning(t("mcp.command.missing", { command }));
-          } else {
-            setCommandWarning(undefined);
-          }
-        }
-        const payload = draftToSubmit(draft);
-        const validated = await validateServer(payload, props.originalName);
-        if (validated.errors.length > 0) {
-          setServerErrors(validated.errors);
-          return;
-        }
-        const result = await upsertServer(props.originalName, payload);
-        setServerErrors([]);
-        props.onSaved(result.server, result.warnings);
-      } catch (error) {
-        setFormError(t("mcp.form.saveFailed", { message: errorText(error) }));
-        const details = fieldErrorsOf(error);
-        if (details.length > 0) setServerErrors(details);
-      } finally {
-        setBusy(false);
-      }
-    })();
+  const save = (acknowledgeMissingCommand: boolean): void => {
+    void store.save(acknowledgeMissingCommand).then((result) => {
+      if (result !== undefined) props.onSaved(result.server, result.warnings);
+    });
   };
 
   /** 通用字段：外壳 + 编辑器。 */
@@ -265,7 +126,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
       {...(opts.required === true ? { required: true } : {})}
       errors={errorsOf(groups, id)}
       showErrors={showAll || touched.has(id)}
-      {...(opts.reset === false ? {} : { onReset: () => resetField(id) })}
+      {...(opts.reset === false ? {} : { onReset: () => store.resetField(id) })}
     >
       {control}
     </FieldShell>
@@ -280,7 +141,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
       set={metaHas(draft, key)}
       errors={errorsOf(groups, "meta." + key)}
       showErrors={showAll || touched.has("meta." + key)}
-      onReset={() => resetMetaField(key)}
+      onReset={() => store.resetMeta(key)}
     >
       {control}
     </FieldShell>
@@ -329,37 +190,32 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
           field="command"
           value={textOf(draftValue(draft, "command"))}
           placeholder="node"
-          onChange={(value: string) => {
-            setFieldValue("command", value);
-            setCommandWarning(undefined);
-          }}
+          onChange={(value: string) => setFieldValue("command", value)}
         />
       </div>
       <Button
         size="sm"
         variant="outline"
         data-testid="mcp-command-check"
-        {...(checking ? { disabled: true } : {})}
-        onClick={() => {
-          void runCheck();
-        }}
+        {...(s.checking ? { disabled: true } : {})}
+        onClick={() => void store.checkCommand()}
       >
-        {checking ? t("mcp.command.checking") : t("mcp.command.check")}
+        {s.checking ? t("mcp.command.checking") : t("mcp.command.check")}
       </Button>
     </div>
   );
 
   const commandResult = (
     <div className={styles.commandBox}>
-      {commandCheck === undefined ? (
+      {s.commandCheck === undefined ? (
         <p className={styles.hint}>{t("mcp.command.check")}</p>
-      ) : commandCheck.found ? (
+      ) : s.commandCheck.found ? (
         <p className={styles.commandOk} data-testid="mcp-command-result">
-          {t("mcp.command.found", { path: commandCheck.resolvedPath ?? commandCheck.command })}
+          {t("mcp.command.found", { path: s.commandCheck.resolvedPath ?? s.commandCheck.command })}
         </p>
       ) : (
         <p className={styles.commandWarn} data-testid="mcp-command-result">
-          {t("mcp.command.missing", { command: commandCheck.command })}
+          {t("mcp.command.missing", { command: s.commandCheck.command })}
         </p>
       )}
     </div>
@@ -398,7 +254,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
                 { value: "stdio", label: "stdio" },
                 { value: "streamable-http", label: "streamable-http" },
               ]}
-              onChange={changeTransport}
+              onChange={(next: string) => store.setTransport(next === "streamable-http" ? "streamable-http" : "stdio")}
             />,
             { required: true, reset: false },
           )}
@@ -439,9 +295,9 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
           {transport === "streamable-http"
             ? field("headers", t("mcp.field.headers"), t("mcp.hint.headers"), mapField("headers", true))
             : null}
-          {revealError === undefined ? null : (
+          {s.revealError === undefined ? null : (
             <p className={styles.fieldError} data-testid="mcp-reveal-error">
-              {revealError}
+              {s.revealError}
             </p>
           )}
         </div>
@@ -452,7 +308,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
         defaultCollapsed
         testId="mcp-form-advanced"
         end={
-          advancedSet && !advanced ? (
+          advancedSet ? (
             <span className={styles.small} data-testid="mcp-advanced-set">
               {t("mcp.form.set")}
             </span>
@@ -571,10 +427,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
             <TextField
               field="meta.description"
               value={textOf(draftMeta(draft).description)}
-              onChange={(value: string) => {
-                setDraft((prev) => withMetaField(prev, "description", value));
-                touch("meta.description");
-              }}
+              onChange={(value: string) => store.setMeta("description", value)}
             />,
           )}
           {metaField(
@@ -586,10 +439,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
               items={stringListOf(draftMeta(draft).tags)}
               placeholder="标签"
               syncToken={syncToken}
-              onChange={(items: string[]) => {
-                setDraft((prev) => withMetaField(prev, "tags", items));
-                touch("meta.tags");
-              }}
+              onChange={(items: string[]) => store.setMeta("tags", items)}
             />,
           )}
           {metaField(
@@ -600,24 +450,21 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
               field="meta.homepage"
               value={textOf(draftMeta(draft).homepage)}
               placeholder="https://example.com"
-              onChange={(value: string) => {
-                setDraft((prev) => withMetaField(prev, "homepage", value));
-                touch("meta.homepage");
-              }}
+              onChange={(value: string) => store.setMeta("homepage", value)}
             />,
           )}
         </div>
       </Section>
-      {formError === undefined ? null : (
+      {s.formError === undefined ? null : (
         <Banner tone="danger" testId="mcp-form-error">
-          {formError}
+          {s.formError}
         </Banner>
       )}
-      {serverErrors.length === 0 ? null : (
+      {s.serverErrors.length === 0 ? null : (
         <Banner tone="danger" testId="mcp-form-server-errors">
-          {t("mcp.form.serverErrors", { count: serverErrors.length }) + " " + t("mcp.form.unknownField")}
+          {t("mcp.form.serverErrors", { count: s.serverErrors.length }) + " " + t("mcp.form.unknownField")}
           <ul className={styles.serverErrors}>
-            {serverErrors.map((error, index) => (
+            {s.serverErrors.map((error, index) => (
               <li key={index} className={styles.serverErrorItem}>
                 {error.path + "：" + error.message}
               </li>
@@ -625,25 +472,25 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
           </ul>
         </Banner>
       )}
-      {commandWarning === undefined ? null : (
+      {s.commandWarning === undefined ? null : (
         <Banner tone="warn" testId="mcp-command-warning">
-          {commandWarning}
+          {s.commandWarning}
         </Banner>
       )}
       <div className={styles.actions}>
         <Button
           variant="primary"
           data-testid="mcp-form-save"
-          {...(busy ? { disabled: true } : {})}
+          {...(s.saving ? { disabled: true } : {})}
           onClick={() => save(false)}
         >
-          {busy ? t("mcp.saving") : t("mcp.form.save")}
+          {s.saving ? t("mcp.saving") : t("mcp.form.save")}
         </Button>
-        {commandWarning === undefined ? null : (
+        {s.commandWarning === undefined ? null : (
           <Button
             variant="outline"
             data-testid="mcp-form-save-anyway"
-            {...(busy ? { disabled: true } : {})}
+            {...(s.saving ? { disabled: true } : {})}
             onClick={() => save(true)}
           >
             {t("mcp.form.saveAnyway")}
@@ -651,7 +498,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
         )}
         <Button
           data-testid="mcp-form-to-json"
-          {...(busy ? { disabled: true } : {})}
+          {...(s.saving ? { disabled: true } : {})}
           onClick={() => props.onSwitchToJson(draft)}
         >
           {t("mcp.form.toJson")}

@@ -20,10 +20,11 @@ import type {
   RevealResult,
   ServerView,
   UpsertResult,
-  ValidateResult,
 } from "../contract/config.ts";
 import type { RuntimeDisconnectResult, RuntimeRefreshResult, RuntimeStatus } from "../contract/runtime.ts";
 import { normalizeRuntimeStatus, type RuntimeAdapter } from "./runtime-store.ts";
+import type { ServersAdapter } from "./servers-store.ts";
+import type { ServerFormAdapter } from "./server-form-store.ts";
 
 /** GET mcp/config → { settings, settingsSet, servers, warnings }。 */
 export async function fetchConfig(): Promise<ConfigPayload> {
@@ -35,6 +36,14 @@ export async function fetchConfig(): Promise<ConfigPayload> {
     warnings: Array.isArray(data?.warnings) ? data.warnings : [],
   };
 }
+
+/** 服务器列表的 HTTP adapter（给 servers-store.ts 用）。 */
+export const serversApi: ServersAdapter = {
+  load: fetchConfig,
+  toggle: (name, disabled) => toggleServer(name, disabled),
+  reorder: (names) => reorderServers(names),
+  remove: (name) => deleteServer(name),
+};
 
 /** 运行状态的 HTTP adapter（给 runtime-store.ts 用）：GET mcp/runtime、POST mcp/runtime/refresh · disconnect。 */
 export const runtimeApi: RuntimeAdapter = {
@@ -85,14 +94,6 @@ export async function reorderServers(names: readonly string[]): Promise<ServerVi
 export async function revealServer(name: string): Promise<ServerView> {
   const data = await api.post<RevealResult>("mcp/servers/reveal", { name });
   return data.server;
-}
-
-/** POST mcp/validate { server, originalName? } → { errors }。 */
-export async function validateServer(server: Record<string, unknown>, originalName?: string): Promise<ValidateResult> {
-  const body: Record<string, unknown> = { server };
-  if (originalName !== undefined) body.originalName = originalName;
-  const data = await api.post<ValidateResult>("mcp/validate", body);
-  return { errors: Array.isArray(data?.errors) ? data.errors : [], server: data?.server };
 }
 
 /** POST mcp/settings/update { settings } → { settings, settingsSet }。 */
@@ -146,3 +147,10 @@ export async function applyImport(sourceId: string, names: readonly string[]): P
     warnings: Array.isArray(data?.warnings) ? data.warnings : [],
   };
 }
+
+/** 服务器表单的 HTTP adapter（给 server-form-store.ts 用）。 */
+export const serverFormApi: ServerFormAdapter = {
+  checkCommand: (command, cwd) => checkCommand(command, cwd),
+  reveal: (name) => revealServer(name),
+  upsert: (originalName, server) => upsertServer(originalName, server),
+};

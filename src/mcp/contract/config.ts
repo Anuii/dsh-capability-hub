@@ -144,12 +144,6 @@ export interface UpsertResult {
   warnings: string[];
 }
 
-/** POST mcp/validate 的 data。 */
-export interface ValidateResult {
-  errors: FieldError[];
-  server?: unknown;
-}
-
 /** POST mcp/servers/reveal 的 data（env / headers 是明文）。 */
 export interface RevealResult {
   server: ServerView;

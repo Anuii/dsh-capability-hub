@@ -8,7 +8,6 @@
  *   - 新建服务器（没有 originalName，或 originalName 指向的服务器不存在）→ VALIDATION(422)，
  *     details 的 path 指向具体键（server.env.API_KEY）。
  *   - 编辑已有服务器：键名存在于原配置 → 行为不变（保留原值）；原配置里没有的新键 → 同样拒绝。
- *   - mcp/validate 给出同样的错误（它按设计返回 errors 数组，不抛错）。
  *   - import/apply 走服务端原值，不受影响。
  *
  * 全部落盘都在 os.tmpdir() 的临时目录（PLAN §4）。
@@ -170,66 +169,6 @@ describe("FIX-3 upsert：新建服务器提交占位符被拒（H1）", () => {
         server: { env: Record<string, string> };
       };
       assert.deepEqual(revealed.server.env, { K: value });
-    } finally {
-      await h.cleanup();
-    }
-  });
-});
-
-describe("FIX-3 validate：给出同样的错误（H1）", () => {
-  it("新建提交占位符 → errors 里逐键返回同样的 path 与文案，且不落盘", async () => {
-    const h = await harness();
-    try {
-      const data = (await h.call("POST mcp/validate", {
-        server: { serverName: "newbie", transport: "stdio", command: "node", env: { API_KEY: HIDDEN } },
-      })) as { errors: { path: string; message: string }[]; server: { env: Record<string, string> } };
-      assert.deepEqual(data.errors, [{ path: "server.env.API_KEY", message: MESSAGE }]);
-      // 回显照常遮罩（validate 不是 reveal）
-      assert.deepEqual(data.server.env, { API_KEY: HIDDEN });
-      assert.equal(await fileExists(h.configPath()), false, "validate 从不落盘");
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("合法值不误伤：errors 为空", async () => {
-    const h = await harness();
-    try {
-      const data = (await h.call("POST mcp/validate", {
-        server: {
-          serverName: "ok",
-          transport: "stdio",
-          command: "node",
-          env: { API_KEY: SECRET_ENV },
-          headers: { Authorization: SECRET_HEADER },
-        },
-      })) as { errors: unknown[] };
-      assert.deepEqual(data.errors, []);
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("编辑：原有键的占位符不报错，新键的占位符报错（H2）", async () => {
-    const h = await harness();
-    try {
-      await h.call("POST mcp/servers/upsert", {
-        server: { serverName: "demo", transport: "stdio", command: "node", env: { TOKEN: SECRET_ENV } },
-      });
-      const ok = (await h.call("POST mcp/validate", {
-        originalName: "demo",
-        server: { serverName: "demo", transport: "stdio", command: "node", env: { TOKEN: HIDDEN } },
-      })) as { errors: unknown[] };
-      assert.deepEqual(ok.errors, [], "原有键的占位符是合法的（保留原值）");
-
-      const bad = (await h.call("POST mcp/validate", {
-        originalName: "demo",
-        server: { serverName: "demo", transport: "stdio", command: "node", env: { TOKEN: HIDDEN, NEW: HIDDEN } },
-      })) as { errors: { path: string }[] };
-      assert.deepEqual(
-        bad.errors.map((e) => e.path),
-        ["server.env.NEW"],
-      );
     } finally {
       await h.cleanup();
     }

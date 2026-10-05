@@ -229,23 +229,6 @@ export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOpti
       return { settings: config.settings, settingsSet: Object.keys(store.getRaw().settings ?? {}) };
     },
 
-    "POST mcp/validate": async (req) => {
-      const body = asRecord(req.body);
-      if (body.server === undefined || body.server === null) throw badRequest("缺少必填参数 server。");
-      const originalName = optionalString(body.originalName, "originalName");
-      const submitted = asRecord(body.server);
-      const currentNames = store.get().servers.map((server) => server.serverName);
-      const parsed = parseServerInput(submitted, { existingNames: currentNames, originalName });
-      // FIX-3：与 upsert 同一条判据 —— 没有原值可回填的遮罩占位符在这里也逐键报出来，
-      // 界面因此会在「保存前预览」阶段就拦住它（validate 从不落盘）。
-      const placeholders = findHiddenPlaceholders(
-        submitted,
-        originalName === undefined ? undefined : rawStoredOf(originalName),
-      );
-      // 回显的归一化结果同样遮罩：validate 不是 reveal，不得把提交的敏感值再吐回去。
-      return { errors: [...placeholders, ...parsed.errors], server: maskRawServer(parsed.server) };
-    },
-
     "POST mcp/parse-json": async (req) => {
       const body = asRecord(req.body);
       if (typeof body.text !== "string") throw badRequest("参数 text 必须是字符串。");

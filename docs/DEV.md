@@ -367,6 +367,7 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
     node scripts\ui-shot.mjs --out <仓库根>\.dev\shots
     node scripts\ui-shot-kit.mjs --out <仓库根>\.dev\shots\ui0
     node scripts\ui-shot-pages.mjs [--suffix v2]               # 真实页面的亮色 / 暗色验收截图（UI-DESIGN 第 5 节）
+    node scripts\ui-walk-mcp.mjs                               # MCP 页操作走查：添加、校验、保存与探测、启停、JSON、删除
 
 脚本自己从启动日志里取令牌，用 Edge headless + CDP 打开页面：关掉「预览版说明」模态框 →
 点开侧栏「能力中心」→ 依次切两个标签（每步一张 PNG）→ 读取 DOM 事实写成 `facts.json`。
@@ -375,6 +376,9 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 MCP 页（含「运行中」区域的真实空状态，以及 `?hubPreviewRunning=1` 的示例实例）与服务器抽屉，
 亮色暗色各一张，并在 `pages-facts.json` 里统计每行未悬停时可见的控件数与彩色元素。
 测试 profile 里没有活跃实例（走查不新建会话），所以「运行中」有数据的样子只能看预览数据。
+
+`ui-walk-mcp.mjs` 用真实点击走一遍 MCP 页（期望末行 `UI-WALK-MCP-RESULT pass=N fail=0`），只改夹具数据，结束时删掉走查用的服务器。
+无头浏览器的启动、登录、点击、给受控输入框写值在 `scripts/lib/hub-browser.mjs`，新的走查脚本复用它。
 
 两个坑：
 

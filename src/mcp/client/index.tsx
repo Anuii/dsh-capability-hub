@@ -9,9 +9,11 @@
  *   - 三种添加方式（粘贴 JSON / 预设模板 / 导入）仍在外壳的模态框里，沿用 T4b-2 的逻辑。
  *
  * 职责划分：
- *   - 本文件：配置加载、运行状态仓库（runtime-store.ts，轮询与重读都在里面）、列表与抽屉的路由、删除确认、Toast、错误边界；
- *   - list.tsx / detail.tsx / form.tsx / json.tsx / settings.tsx / dialogs.tsx / intake/*：纯展示；
- *   - model.ts：纯逻辑（可单测）；data.ts：接口封装；strings.ts：全部文案。
+ *   - servers-store.ts：配置的读取与写操作、保存后的跟进、页面提示（可单测）；
+ *   - runtime-store.ts：运行状态（轮询与重读都在里面）；
+ *   - 本文件：把两个仓库接到界面上——列表与抽屉的路由、确认对话框的开合、错误边界；
+ *   - list.tsx / detail.tsx / form.tsx / json.tsx / settings.tsx / dialogs.tsx / intake/*：视图；
+ *   - model.ts：纯逻辑；data.ts：接口封装；strings.ts：全部文案。
  *
  * 决策落点：D-C1（只存改过的字段）、D-C2（四种添加入口）、D-C3（高级区覆盖全部字段 + JSON 模式，
  * 未知字段被服务端拒绝）、D-C4（保存时只查 PATH）、D-C5（每个服务器单独启停；env/headers 默认遮罩，
@@ -37,8 +39,9 @@ import { DisconnectDialog, type DisconnectTarget } from "./running/dialogs.tsx";
 import { ImportView } from "./intake/import.tsx";
 import { JsonPasteView } from "./intake/json-paste.tsx";
 import { PresetView } from "./intake/presets.tsx";
-import { deleteServer, fetchConfig, reorderServers, runtimeApi, toggleServer } from "./data.ts";
+import { runtimeApi, serversApi } from "./data.ts";
 import { createRuntimeStore, previewAdapter } from "./runtime-store.ts";
+import { createServersStore } from "./servers-store.ts";
 import { runningPreviewStatus } from "./running/region.ts";
 import { ServerDetailBody } from "./detail.tsx";
 import { DeleteServerDialog } from "./dialogs.tsx";
@@ -54,7 +57,6 @@ import {
   draftToJsonText,
   emptyServerDraft,
   filterLabel,
-  reorderNames,
   runtimeIndex,
   serverFilterCounts,
   viewSummaryText,
@@ -65,8 +67,7 @@ import {
 import { SettingsPanel } from "./settings.tsx";
 import { injectMcpStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { ConfigPayload, ServerView } from "../contract/config.ts";
-import { errorText } from "../../shared/error-text.ts";
+import type { ServerView } from "../contract/config.ts";
 
 /* 样式只注入一次（模块加载时；无 document 时自动跳过）。 */
 injectMcpStyles();
@@ -79,12 +80,6 @@ type Panel =
   | { kind: "detail"; name: string }
   | { kind: "form"; originalName?: string; draft: ServerDraft }
   | { kind: "json"; originalName?: string; text: string };
-
-interface ToastState {
-  seq: number;
-  text: string;
-  tone?: "success";
-}
 
 /** 开发预览：URL 带 ?hubPreviewRunning=1 时「运行中」区域用示例数据（见 runtime/region.ts）。 */
 function previewRunningFlag(): boolean {
@@ -121,57 +116,29 @@ class TabErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 }
 
 function McpTabInner(props: TabProps): React.ReactElement {
-  const [config, setConfig] = React.useState<ConfigPayload | undefined>(undefined);
-  const [configError, setConfigError] = React.useState<string | undefined>(undefined);
-  const [loading, setLoading] = React.useState<boolean>(true);
   const [panel, setPanel] = React.useState<Panel | undefined>(undefined);
   const [intake, setIntake] = React.useState<IntakeView | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = React.useState<boolean>(false);
   const [pendingDelete, setPendingDelete] = React.useState<ServerView | undefined>(undefined);
-  const [deleting, setDeleting] = React.useState<boolean>(false);
-  const [busy, setBusy] = React.useState<ReadonlySet<string>>(() => new Set<string>());
-  const [refreshing, setRefreshing] = React.useState<string | undefined>(undefined);
+  /** 抽屉里「断开全部实例」的确认目标。 */
+  const [pendingDisconnect, setPendingDisconnect] = React.useState<DisconnectTarget | undefined>(undefined);
   const [query, setQuery] = React.useState<string>("");
   const [filter, setFilter] = React.useState<ServerFilterId>("all");
   const [now, setNow] = React.useState<number>(() => Date.now());
-  const [toast, setToast] = React.useState<ToastState | undefined>(undefined);
-  /** 抽屉里「断开全部实例」的确认目标与进行中标记。 */
-  const [pendingDisconnect, setPendingDisconnect] = React.useState<DisconnectTarget | undefined>(undefined);
-  const [disconnecting, setDisconnecting] = React.useState<boolean>(false);
   const previewRunning = React.useMemo(previewRunningFlag, []);
   /** 运行状态只有这一份：服务器行、详情抽屉、「运行中」、标签红点都读它（runtime-store.ts）。 */
   const runtimeStore = React.useMemo(
     () => createRuntimeStore(previewRunning ? previewAdapter(runtimeApi, runningPreviewStatus) : runtimeApi),
     [previewRunning],
   );
+  const store = React.useMemo(() => createServersStore(serversApi, runtimeStore), [runtimeStore]);
   const runtime = useStoreState(runtimeStore.state).status;
+  const { config, loadError, loading, busy, deleting, refreshing, disconnecting, notice } = useStoreState(store.state);
   React.useEffect(() => runtimeStore.startPolling(), [runtimeStore]);
-  const seq = React.useRef<number>(0);
-
-  const showToast = React.useCallback((text: string, tone?: "success"): void => {
-    seq.current += 1;
-    setToast({ seq: seq.current, text, ...(tone === undefined ? {} : { tone }) });
-  }, []);
-
-  const load = React.useCallback((): void => {
-    setLoading(true);
-    setConfigError(undefined);
-    void fetchConfig().then(
-      (payload) => {
-        setConfig(payload);
-        setLoading(false);
-      },
-      (error: unknown) => {
-        setConfigError(errorText(error));
-        setLoading(false);
-      },
-    );
-    void runtimeStore.reload(false);
-  }, [runtimeStore]);
-
-  React.useEffect(() => load(), [load]);
+  React.useEffect(() => void store.reload(), [store]);
 
   const servers = config?.servers ?? [];
+  const names = servers.map((server) => server.serverName);
   const rows = React.useMemo(() => runtimeIndex(runtime), [runtime]);
   const visible = React.useMemo(() => visibleServers(servers, rows, query, filter), [servers, rows, query, filter]);
   const counts = React.useMemo(() => serverFilterCounts(servers, rows), [servers, rows]);
@@ -187,158 +154,24 @@ function McpTabInner(props: TabProps): React.ReactElement {
     return () => clearInterval(timer);
   }, [cooling, panel]);
 
-  const markBusy = (name: string, value: boolean): void => {
-    setBusy((prev) => {
-      const next = new Set(prev);
-      if (value) next.add(name);
-      else next.delete(name);
-      return next;
-    });
+  const notify = (text: string, tone?: "success"): void => store.notify(text, tone);
+  const onSaved = (server: ServerView, warnings: readonly string[]): void => {
+    setPanel(undefined);
+    store.serverSaved(server, warnings);
   };
-
-  /** 保存成功后：等后台探测把工具数写进缓存（D-C6），拿到就提示；silent 时只更新列表。 */
-  const probeTools = React.useCallback(
-    (name: string, silent = false): void => {
-      void runtimeStore.waitForTools(name).then((count) => {
-        if (silent) return;
-        if (count === undefined) showToast(t("mcp.form.probeTimeout", { name }));
-        else showToast(t("mcp.form.savedWithTools", { name, count }), "success");
-      });
-    },
-    [runtimeStore, showToast],
-  );
-
-  /**
-   * 批量保存（粘贴 JSON / 导入）之后的统一收尾：刷新列表 + 后台探测工具数（D-C6）。
-   * 多个服务器时探测静默进行，只出一条汇总提示——避免多条 Toast 互相遮挡。
-   */
-  const onIntakeSaved = React.useCallback(
-    (saved: readonly string[]): void => {
-      if (saved.length === 0) return;
-      load();
-      for (const name of saved) probeTools(name, true);
-      showToast(t("mcp.paste.savedMany", { count: saved.length }), "success");
-    },
-    [load, probeTools, showToast],
-  );
-
-  /** 导入成功后的收尾：刷新 + 静默探测（成功/跳过的提示由导入视图自己出）。 */
-  const onIntakeImported = React.useCallback(
-    (saved: readonly string[]): void => {
-      load();
-      for (const name of saved) probeTools(name, true);
-    },
-    [load, probeTools],
-  );
-
-  const onSaved = React.useCallback(
-    (server: ServerView, warnings: readonly string[]): void => {
-      setPanel(undefined);
-      load();
-      showToast(
-        warnings.length > 0 ? warnings.join("；") : t("mcp.form.saved", { name: server.serverName }),
-        "success",
-      );
-      probeTools(server.serverName);
-    },
-    [load, probeTools, showToast],
-  );
-
-  const onToggle = (view: ServerView, disabled: boolean): void => {
-    markBusy(view.serverName, true);
-    void toggleServer(view.serverName, disabled)
-      .then(
-        (server) => {
-          setConfig((prev) =>
-            prev === undefined
-              ? prev
-              : {
-                  ...prev,
-                  servers: prev.servers.map((item) => (item.serverName === server.serverName ? server : item)),
-                },
-          );
-          showToast(
-            disabled
-              ? t("mcp.toast.toggleOff", { name: server.serverName })
-              : t("mcp.toast.toggleOn", { name: server.serverName }),
-            "success",
-          );
-        },
-        (error: unknown) => showToast(t("mcp.toast.failed", { message: errorText(error) })),
-      )
-      .finally(() => markBusy(view.serverName, false));
-  };
-
-  const reorder = (names: string[]): void => {
-    void reorderServers(names).then(
-      (next) => {
-        setConfig((prev) => (prev === undefined ? prev : { ...prev, servers: next }));
-        showToast(t("mcp.toast.reordered"), "success");
-      },
-      (error: unknown) => showToast(t("mcp.toast.failed", { message: errorText(error) })),
-    );
-  };
-
-  const onReorder = (from: number, to: number): void => {
-    reorder(
-      reorderNames(
-        servers.map((server) => server.serverName),
-        from,
-        to,
-      ),
-    );
-  };
-
-  const refreshCache = (view: ServerView): void => {
-    setRefreshing(view.serverName);
-    void runtimeStore
-      .refresh(view.serverName)
-      .then(
-        (result) => showToast(t("mcp.detail.refreshOk", { name: view.serverName, count: result.toolCount }), "success"),
-        (error: unknown) =>
-          showToast(t("mcp.detail.refreshFailed", { name: view.serverName, message: errorText(error) })),
-      )
-      .finally(() => setRefreshing(undefined));
-  };
-
-  /** 抽屉里的「断开全部实例」：该服务器在全部会话里的实例（D-E1，0.3.0 从运行态移入）。 */
-  const confirmDisconnectAll = (target: DisconnectTarget): void => {
-    setDisconnecting(true);
-    void runtimeStore
-      .disconnect(target.name)
-      .then(
-        (result) => {
-          setPendingDisconnect(undefined);
-          if (result.closed === 0) showToast(t("mcp.detail.disconnectNone", { name: target.name }));
-          else showToast(t("mcp.detail.disconnectOk", { name: target.name, count: result.closed }), "success");
-        },
-        (error: unknown) => {
-          setPendingDisconnect(undefined);
-          showToast(t("mcp.detail.disconnectFailed", { name: target.name, message: errorText(error) }));
-        },
-      )
-      .finally(() => setDisconnecting(false));
-  };
-
   const confirmDelete = (): void => {
     const server = pendingDelete;
     if (server === undefined) return;
-    setDeleting(true);
-    void deleteServer(server.serverName)
-      .then(
-        () => {
-          setPendingDelete(undefined);
-          setPanel((current) =>
-            current !== undefined && current.kind === "detail" && current.name === server.serverName
-              ? undefined
-              : current,
-          );
-          load();
-          showToast(t("mcp.delete.done", { name: server.serverName }), "success");
-        },
-        (error: unknown) => showToast(t("mcp.toast.failed", { message: errorText(error) })),
-      )
-      .finally(() => setDeleting(false));
+    void store.remove(server.serverName).then((removed) => {
+      if (!removed) return;
+      setPendingDelete(undefined);
+      setPanel((current) =>
+        current !== undefined && current.kind === "detail" && current.name === server.serverName ? undefined : current,
+      );
+    });
+  };
+  const confirmDisconnectAll = (target: DisconnectTarget): void => {
+    void store.disconnectAll(target.name).then(() => setPendingDisconnect(undefined));
   };
 
   const openNewForm = (): void => setPanel({ kind: "form", draft: emptyServerDraft("stdio") });
@@ -386,9 +219,9 @@ function McpTabInner(props: TabProps): React.ReactElement {
   const intakeNode =
     intake === undefined ? null : intake === "json" ? (
       <JsonPasteView
-        existingNames={servers.map((server) => server.serverName)}
-        onSaved={onIntakeSaved}
-        showToast={(text: string, tone?: "success") => showToast(text, tone)}
+        existingNames={names}
+        onSaved={(saved: readonly string[]) => store.batchSaved(saved, true)}
+        showToast={notify}
       />
     ) : intake === "presets" ? (
       <PresetView
@@ -399,22 +232,22 @@ function McpTabInner(props: TabProps): React.ReactElement {
       />
     ) : (
       <ImportView
-        existingNames={servers.map((server) => server.serverName)}
-        onImported={onIntakeImported}
-        showToast={(text: string, tone?: "success") => showToast(text, tone)}
+        existingNames={names}
+        onImported={(saved: readonly string[]) => store.batchSaved(saved, false)}
+        showToast={notify}
       />
     );
 
   /** 列表区：加载中骨架屏 / 读取失败横幅 / 空状态 / 真的列表。 */
   const body = ((): React.ReactElement => {
-    if (configError !== undefined) {
+    if (loadError !== undefined) {
       return (
         <Banner
           tone="danger"
           testId="mcp-load-error"
-          action={{ label: t("mcp.retry"), onClick: load, testId: "mcp-retry" }}
+          action={{ label: t("mcp.retry"), onClick: () => void store.reload(), testId: "mcp-retry" }}
         >
-          {t("mcp.loadFailed", { message: configError })}
+          {t("mcp.loadFailed", { message: loadError })}
         </Banner>
       );
     }
@@ -444,9 +277,9 @@ function McpTabInner(props: TabProps): React.ReactElement {
         runtime={runtime}
         busy={busy}
         now={now}
-        onToggle={onToggle}
+        onToggle={(view: ServerView, disabled: boolean) => void store.toggle(view, disabled)}
         onOpen={(view: ServerView) => setPanel({ kind: "detail", name: view.serverName })}
-        onReorder={onReorder}
+        onReorder={(from: number, to: number) => void store.move(from, to)}
       />
     );
   })();
@@ -501,7 +334,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
                   checked={!detailView.disabled}
                   disabled={busy.has(detailView.serverName)}
                   label={t("mcp.row.toggleLabel", { name: detailView.serverName })}
-                  onChange={(next: boolean) => onToggle(detailView, !next)}
+                  onChange={(next: boolean) => void store.toggle(detailView, !next)}
                 />
               ),
               footer: (
@@ -545,16 +378,16 @@ function McpTabInner(props: TabProps): React.ReactElement {
             row={rows.get(detailView.serverName)}
             now={now}
             refreshing={refreshing === detailView.serverName}
-            onRefresh={() => refreshCache(detailView)}
+            onRefresh={() => void store.refreshCache(detailView.serverName)}
             instances={activeInstanceCount(runtime, detailView.serverName)}
             onDisconnectAll={() => setPendingDisconnect({ name: detailView.serverName })}
-            showToast={(text: string, tone?: "success") => showToast(text, tone)}
+            showToast={notify}
           />
         ) : panel !== undefined && panel.kind === "form" ? (
           <ServerForm
             {...(panel.originalName === undefined ? {} : { originalName: panel.originalName })}
             initial={panel.draft}
-            existingNames={servers.map((server) => server.serverName)}
+            existingNames={names}
             onSaved={onSaved}
             onCancel={() => setPanel(undefined)}
             onSwitchToJson={(draft: ServerDraft) =>
@@ -564,7 +397,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
                 text: draftToJsonText(draft),
               })
             }
-            showToast={(text: string) => showToast(text)}
+            showToast={(text: string) => notify(text)}
           />
         ) : panel !== undefined && panel.kind === "json" ? (
           <JsonEditor
@@ -593,10 +426,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
           <SettingsPanel
             settings={config.settings}
             settingsSet={config.settingsSet}
-            onSaved={(settings, settingsSet) => {
-              setConfig((prev) => (prev === undefined ? prev : { ...prev, settings, settingsSet: [...settingsSet] }));
-              showToast(t("mcp.settings.saved"), "success");
-            }}
+            onSaved={(settings, settingsSet) => store.settingsSaved(settings, settingsSet)}
           />
         )}
       </Drawer>
@@ -628,15 +458,13 @@ function McpTabInner(props: TabProps): React.ReactElement {
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(undefined)}
       />
-      {toast === undefined ? null : (
+      {notice === undefined ? null : (
         <Toast
-          key={toast.seq}
-          text={toast.text}
-          {...(toast.tone === undefined ? {} : { tone: toast.tone })}
+          key={notice.seq}
+          text={notice.text}
+          {...(notice.tone === undefined ? {} : { tone: notice.tone })}
           holdMs={5000}
-          onDone={() =>
-            setToast((current) => (current !== undefined && current.seq === toast.seq ? undefined : current))
-          }
+          onDone={() => store.dismiss(notice.seq)}
         />
       )}
     </section>

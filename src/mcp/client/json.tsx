@@ -3,13 +3,15 @@
  *
  * 与表单共用同一份「落盘形态」：只列显式设置过的字段（默认值不落盘），
  * 敏感值是遮罩后的 ***hidden***，原样提交即由服务端保留原值。
- * 未知字段因此在文本里可见，保存时先 `mcp/validate`，服务端逐条返回 path + message。
+ * 未知字段因此在文本里可见。保存前先用与宿主同一份规则校验（ADR-0008，不发请求）；
+ * 宿主再把关一次（例如名字刚被别人占用），VALIDATION 的逐条错误同样列出来。
  */
 
 import * as React from "react";
 import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../kit/index.ts";
-import { upsertServer, validateServer } from "./data.ts";
+import { upsertServer } from "./data.ts";
+import { parseServerInput } from "../rules/server.ts";
 import { fieldErrorsOf, parseJsonServer } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
@@ -30,14 +32,12 @@ export function JsonEditor(props: JsonEditorProps): React.ReactElement {
   const [errors, setErrors] = React.useState<FieldError[]>([]);
   const [parseError, setParseError] = React.useState<string | undefined>(undefined);
   const [formError, setFormError] = React.useState<string | undefined>(undefined);
-  const [okText, setOkText] = React.useState<string | undefined>(undefined);
   const [busy, setBusy] = React.useState<boolean>(false);
 
   const parsed = React.useMemo(() => parseJsonServer(text), [text]);
 
   const save = (): void => {
     setFormError(undefined);
-    setOkText(undefined);
     const result = parseJsonServer(text);
     if (result.values === undefined) {
       setParseError(result.error ?? t("mcp.json.parseError", { message: "" }));
@@ -48,13 +48,14 @@ export function JsonEditor(props: JsonEditorProps): React.ReactElement {
     setBusy(true);
     void (async () => {
       try {
-        const validated = await validateServer(result.values as Record<string, unknown>, props.originalName);
-        if (validated.errors.length > 0) {
-          setErrors(validated.errors);
+        const local = parseServerInput(result.values, {
+          ...(props.originalName === undefined ? {} : { originalName: props.originalName }),
+        }).errors;
+        if (local.length > 0) {
+          setErrors(local);
           return;
         }
         setErrors([]);
-        setOkText(t("mcp.json.ok"));
         const saved = await upsertServer(props.originalName, result.values as Record<string, unknown>);
         props.onSaved(saved.server, saved.warnings);
       } catch (error) {
@@ -106,11 +107,6 @@ export function JsonEditor(props: JsonEditorProps): React.ReactElement {
               ))}
             </ul>
           </Banner>
-        )}
-        {okText === undefined ? null : (
-          <p className={styles.commandOk} data-testid="mcp-json-ok">
-            {okText}
-          </p>
         )}
         {formError === undefined ? null : (
           <Banner tone="danger" testId="mcp-json-form-error">

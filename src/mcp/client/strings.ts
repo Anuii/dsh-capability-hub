@@ -206,7 +206,6 @@ export const zh = {
   "mcp.json.parseError": "JSON 解析失败：{message}",
   "mcp.json.needObject": '顶层必须是一个 JSON 对象（形如 { "serverName": "…", "transport": "stdio" }）。',
   "mcp.json.errors": "服务端返回 {count} 条错误",
-  "mcp.json.ok": "校验通过。",
   "mcp.json.format": "格式化",
   "mcp.json.save": "校验并保存",
   "mcp.json.toForm": "切换到表单编辑",

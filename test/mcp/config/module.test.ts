@@ -72,7 +72,6 @@ describe("module: 路由表", () => {
         "POST mcp/servers/toggle",
         "POST mcp/servers/upsert",
         "POST mcp/settings/update",
-        "POST mcp/validate",
       ]);
       assert.equal(typeof h.module.source.get, "function");
       assert.equal(typeof h.module.source.onChange, "function");
@@ -492,30 +491,6 @@ describe("module: 设置 / 校验 / 解析 / 预设 / 检查", () => {
     }
   });
 
-  it("validate 只校验不落盘", async () => {
-    const h = await harness();
-    try {
-      await h.call("POST mcp/servers/upsert", { server: stdioServer });
-      const dup = (await h.call("POST mcp/validate", { server: stdioServer })) as { errors: { path: string }[] };
-      assert.deepEqual(
-        dup.errors.map((e) => e.path),
-        ["server.serverName"],
-      );
-      const ok = (await h.call("POST mcp/validate", {
-        server: { serverName: "other", transport: "stdio", command: "node" },
-      })) as {
-        errors: unknown[];
-        server: { serverName: string };
-      };
-      assert.deepEqual(ok.errors, []);
-      assert.equal(ok.server.serverName, "other");
-      const onDisk = (await readJson(join(h.hubHome, "mcp", "config.json"))) as { servers: unknown[] };
-      assert.equal(onDisk.servers.length, 1);
-    } finally {
-      await h.cleanup();
-    }
-  });
-
   it("parse-json 识别并返回服务器", async () => {
     const h = await harness({ commandCheck: { pathEnv: "", pathExt: ".CMD", platform: "win32" } });
     try {
@@ -704,7 +679,6 @@ describe("module: 敏感值不泄漏", () => {
       responses.push(await h.call("POST mcp/servers/toggle", { name: "demo", disabled: true }));
       responses.push(await h.call("POST mcp/servers/reorder", { names: ["demo"] }));
       responses.push(await h.call("POST mcp/settings/update", { settings: { idleTimeout: 1 } }));
-      responses.push(await h.call("POST mcp/validate", { server: { ...stdioServer, env: { TOKEN: SECRET_ENV } } }));
       // parse-json 只回显「本次请求提交的文本」，不读取已存储的配置：
       // 这里故意粘贴一段无关 JSON，验证已存储的敏感值不会从这条路由漏出去。
       responses.push(
