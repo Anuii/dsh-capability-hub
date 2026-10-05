@@ -3,9 +3,6 @@
  * 只放常量，不 import 任何东西。
  */
 
-/** 代理工具名（D-D1：全局只注册这一个工具）。 */
-export const PROXY_TOOL_NAME = "mcp";
-
 /** search 默认/最大条数（F3-Q1 SEARCH_DEFAULT_LIMIT / SEARCH_MAX_LIMIT）。 */
 export const SEARCH_DEFAULT_LIMIT = 12;
 export const SEARCH_MAX_LIMIT = 40;
@@ -92,4 +89,3 @@ export function describeEnabledServers(names: string[]): string {
 /** 缓存目录相对 hubHome 的位置。 */
 export const MCP_DIR_NAME = "mcp";
 export const CACHE_FILE_NAME = "cache.json";
-export const SPILL_DIR_NAME = "spill";

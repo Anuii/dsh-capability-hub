@@ -77,6 +77,12 @@ export interface DiscoveredSkill extends DiscoverySkill {
   installedId?: string;
 }
 
+/** POST skills/repos/add · update · remove 的 data：新的仓库列表与发现视图（宿主已补扫）。 */
+export interface RepoChange {
+  repos: RepoRecord[];
+  discovery: DiscoveryView;
+}
+
 /** GET skills/discovery 与 POST skills/discovery/refresh 的 data。 */
 export interface DiscoveryView {
   /** false = 从未扫描过任何仓库（客户端据此自动扫一次） */

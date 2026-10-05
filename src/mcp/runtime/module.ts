@@ -16,7 +16,7 @@
  */
 import { createMcpRuntime } from "./runtime.ts";
 import type { McpRuntimeInternal } from "./runtime.ts";
-import { BAD_REQUEST, NOT_FOUND } from "./atoms/errors.ts";
+import { badRequest, notFound } from "../../shared/errors.ts";
 import type { McpConfigSource } from "../contract/config.ts";
 import type { McpSdk } from "../contract/runtime.ts";
 import type { HubContext, HubModule, RouteRequest } from "../../platform/contract/host.ts";
@@ -35,13 +35,13 @@ export interface McpRuntimeModule extends HubModule {
 function readBody(req: RouteRequest): Record<string, unknown> {
   const body = req.body;
   if (body === undefined || body === null) return {};
-  if (typeof body !== "object" || Array.isArray(body)) throw BAD_REQUEST("请求体必须是一个 JSON 对象");
+  if (typeof body !== "object" || Array.isArray(body)) throw badRequest("请求体必须是一个 JSON 对象");
   return body as Record<string, unknown>;
 }
 
 function requireName(body: Record<string, unknown>): string {
   const name = body.name;
-  if (typeof name !== "string" || name.trim().length === 0) throw BAD_REQUEST("缺少必填字段 name（MCP 服务器名）");
+  if (typeof name !== "string" || name.trim().length === 0) throw badRequest("缺少必填字段 name（MCP 服务器名）");
   return name;
 }
 
@@ -58,8 +58,8 @@ export function createMcpRuntimeModule(ctx: HubContext, deps: McpRuntimeModuleDe
         return await runtime.refresh(name);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (message.includes("没有名为")) throw NOT_FOUND(message);
-        throw BAD_REQUEST(message);
+        if (message.includes("没有名为")) throw notFound(message);
+        throw badRequest(message);
       }
     },
 
@@ -68,14 +68,14 @@ export function createMcpRuntimeModule(ctx: HubContext, deps: McpRuntimeModuleDe
       const name = requireName(body);
       const sessionIdRaw = body.sessionId;
       if (sessionIdRaw !== undefined && typeof sessionIdRaw !== "string") {
-        throw BAD_REQUEST("sessionId 必须是字符串（省略 = 断开所有会话）");
+        throw badRequest("sessionId 必须是字符串（省略 = 断开所有会话）");
       }
       try {
         return await runtime.disconnect(name, sessionIdRaw as string | undefined);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (message.includes("没有名为")) throw NOT_FOUND(message);
-        throw BAD_REQUEST(message);
+        if (message.includes("没有名为")) throw notFound(message);
+        throw badRequest(message);
       }
     },
   };

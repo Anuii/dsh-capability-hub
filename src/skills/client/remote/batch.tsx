@@ -32,11 +32,12 @@ import {
   summarizeChecks,
   updatableIds,
 } from "./model.ts";
-import { errorMessage, fieldErrors } from "../format.ts";
+import { fieldErrors } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
 import type { AuthMode, DiscoverCandidate } from "../../contract/remote.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 export interface RemoteMenuProps {
   /** 列表里的全部技能（不受搜索/筛选影响） */
@@ -99,8 +100,8 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
         setChecking(false);
       },
       (failure: unknown) => {
-        setError(errorMessage(failure));
-        notify(t("skills.toast.failed", { message: errorMessage(failure) }));
+        setError(errorText(failure));
+        notify(t("skills.toast.failed", { message: errorText(failure) }));
         setChecking(false);
       },
     );
@@ -127,8 +128,8 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
         onChanged?.();
       },
       (failure: unknown) => {
-        setError(errorMessage(failure));
-        notify(t("skills.toast.failed", { message: errorMessage(failure) }));
+        setError(errorText(failure));
+        notify(t("skills.toast.failed", { message: errorText(failure) }));
         setApplying(false);
       },
     );
@@ -149,7 +150,7 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
       (failure: unknown) => {
         setCandidates([]);
         setErrors(fieldErrors(failure));
-        setError(errorMessage(failure));
+        setError(errorText(failure));
         setDiscovering(false);
       },
     );

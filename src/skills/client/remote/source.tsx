@@ -30,11 +30,12 @@ import {
   sourceTitle,
   storeLabel,
 } from "./model.ts";
-import { errorMessage, fieldErrors, formatDateTime } from "../format.ts";
+import { fieldErrors, formatDateTime } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
 import type { DiscoverCandidate } from "../../contract/remote.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 type Step = "view" | "discover" | "manual" | "unregister";
 
@@ -100,7 +101,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
       (failure: unknown) => {
         setCandidates([]);
         setErrors(fieldErrors(failure));
-        setError(errorMessage(failure));
+        setError(errorText(failure));
         setBusy(false);
       },
     );
@@ -122,7 +123,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
       },
       (failure: unknown) => {
         setErrors(fieldErrors(failure));
-        setError(errorMessage(failure));
+        setError(errorText(failure));
         setBusy(false);
       },
     );
@@ -158,7 +159,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
       },
       (failure: unknown) => {
         setErrors(fieldErrors(failure));
-        setError(errorMessage(failure));
+        setError(errorText(failure));
         setBusy(false);
       },
     );

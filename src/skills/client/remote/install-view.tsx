@@ -52,12 +52,6 @@ import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { DiscoveryRepoView } from "../../contract/remote.ts";
 
-/** 仓库行的悬停提示：仓库@分支（+ 预置）。 */
-export function repoChipTitle(record: { repo: string; ref?: string; preset: boolean }): string {
-  const head = record.ref === undefined || record.ref === "" ? record.repo : record.repo + "@" + record.ref;
-  return record.preset ? head + " · " + t("skills.install.repoPreset") : head;
-}
-
 export interface AddSkillDrawerProps {
   open: boolean;
   /** 当前会话工作区（安装到项目级根时要用；取不到为 undefined） */

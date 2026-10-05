@@ -24,14 +24,6 @@ export async function isDirectory(p: string): Promise<boolean> {
   }
 }
 
-export async function lstatOrUndefined(p: string): Promise<import("node:fs").Stats | undefined> {
-  try {
-    return await fs.lstat(p);
-  } catch {
-    return undefined;
-  }
-}
-
 export async function statOrUndefined(p: string): Promise<import("node:fs").Stats | undefined> {
   try {
     return await fs.stat(p);
@@ -128,10 +120,6 @@ export async function movePath(src: string, dest: string): Promise<{ copied: boo
     await removePath(src);
     return { copied: true };
   }
-}
-
-export function toPosix(p: string): string {
-  return p.split(path.sep).join("/");
 }
 
 export interface WalkEntry {

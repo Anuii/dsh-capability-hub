@@ -13,7 +13,7 @@ import * as React from "react";
 import { Button, Checkbox, Input } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../../kit/index.ts";
 import { parseJsonText, upsertServer } from "../data.ts";
-import { errorMessage, fieldErrorsOf } from "../model.ts";
+import { fieldErrorsOf } from "../model.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import {
@@ -26,6 +26,7 @@ import {
   toggleSelection,
   type PasteRow,
 } from "./pure.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 export interface JsonPasteViewProps {
   /** 当前配置里的服务器名（同名冲突判定用）。 */
@@ -80,7 +81,7 @@ export function JsonPasteView(props: JsonPasteViewProps): React.ReactElement {
       (error: unknown) => {
         setParsing(false);
         setRows(undefined);
-        setParseError(errorMessage(error));
+        setParseError(errorText(error));
       },
     );
   };
@@ -117,7 +118,7 @@ export function JsonPasteView(props: JsonPasteViewProps): React.ReactElement {
             details.length > 0 ? "（" + details.map((item) => item.path + " " + item.message).join("；") + "）" : "";
           collected[row.index] = {
             ok: false,
-            text: t("mcp.paste.resultFailed", { message: errorMessage(error) }) + detailText,
+            text: t("mcp.paste.resultFailed", { message: errorText(error) }) + detailText,
           };
         }
         setResults({ ...collected });

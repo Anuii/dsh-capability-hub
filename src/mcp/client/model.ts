@@ -80,21 +80,6 @@ export const SETTINGS_DEFAULTS = {
   failureBackoffMs: 60000,
 } as const;
 
-/** 服务器字段默认值提示（ServerView.defaults 兜底，缺省时用这份）。 */
-export const SERVER_DEFAULTS_FALLBACK = {
-  args: [] as string[],
-  env: {} as Record<string, string>,
-  envFrom: {} as Record<string, string>,
-  allowEmpty: [] as string[],
-  envFromTimeoutMs: 10000,
-  headers: {} as Record<string, string>,
-  toolCallTimeoutMs: 60000,
-  lifecycle: "lazy" as Lifecycle,
-  searchKeywords: {} as Record<string, string[]>,
-  disabled: false,
-  debug: false,
-} as const;
-
 /* ---------------- 小工具 ---------------- */
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -188,11 +173,6 @@ export function draftValue(draft: ServerDraft, field: string): unknown {
   return draft.values[field];
 }
 
-/** 草稿里显式设置的字段（保持 SERVER_FIELD_ORDER 顺序）。 */
-export function draftSetFields(draft: ServerDraft): string[] {
-  return SERVER_FIELD_ORDER.filter((field) => draftHas(draft, field));
-}
-
 /** 写入一个字段；空值（空串 / 空数组 / 空对象 / false 布尔）等于「回到默认值」，直接删键。 */
 export function withField(draft: ServerDraft, field: string, value: unknown): ServerDraft {
   const values = { ...draft.values };
@@ -209,18 +189,6 @@ export function withField(draft: ServerDraft, field: string, value: unknown): Se
 export function withoutField(draft: ServerDraft, field: string): ServerDraft {
   const values = { ...draft.values };
   delete values[field];
-  return { values };
-}
-
-/** 切换传输方式时裁掉无关字段（避免把 http 的 url 留在 stdio 配置里）。 */
-export function pruneForTransport(draft: ServerDraft, transport: Transport): ServerDraft {
-  const allowed = new Set<string>([...SHARED_FIELDS, ...TRANSPORT_FIELDS[transport]]);
-  const values: Record<string, unknown> = {};
-  for (const [field, value] of Object.entries(draft.values)) {
-    if (allowed.has(field)) values[field] = value;
-  }
-  values.serverName = typeof draft.values.serverName === "string" ? draft.values.serverName : "";
-  values.transport = transport;
   return { values };
 }
 
@@ -597,10 +565,6 @@ export interface SettingsDraft {
   values: Record<string, unknown>;
 }
 
-export function emptySettingsDraft(): SettingsDraft {
-  return { values: {} };
-}
-
 export function settingsDraftFrom(settings: McpSettings, settingsSet: readonly string[]): SettingsDraft {
   const set = new Set(settingsSet);
   const values: Record<string, unknown> = {};
@@ -858,13 +822,6 @@ export function cachedToolNames(row: RuntimeRow): string[] {
   const tools = row?.cache?.tools;
   if (!Array.isArray(tools)) return [];
   return tools.map((tool) => (typeof tool?.name === "string" ? tool.name : "")).filter((name) => name !== "");
-}
-
-/* ---------------- 错误对象 ---------------- */
-
-export function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }
 
 export function errorDetails(error: unknown): unknown {

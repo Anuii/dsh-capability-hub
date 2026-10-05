@@ -13,7 +13,6 @@ import {
   cacheLineText,
   cachedToolNames,
   cooldownRemainingMs,
-  errorMessage,
   formatTimestamp,
   formatDuration,
   lifecycleLabel,
@@ -26,6 +25,7 @@ import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { KeyValue, Section } from "../../kit/index.ts";
 import type { RuntimeServerView } from "../contract/runtime.ts";
 import type { ServerView } from "../contract/config.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 export interface ServerDetailBodyProps {
   view: ServerView;
@@ -125,7 +125,7 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
           setPlain((current) => ({ ...current, [field]: field === "env" ? full.env : full.headers }));
           props.showToast(t("mcp.toast.revealed"));
         },
-        (failure: unknown) => setRevealError(t("mcp.detail.revealFailed", { message: errorMessage(failure) })),
+        (failure: unknown) => setRevealError(t("mcp.detail.revealFailed", { message: errorText(failure) })),
       )
       .finally(() => setRevealing(undefined));
   };

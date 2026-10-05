@@ -42,12 +42,6 @@ export interface SnapshotSource {
   subscribe(listener: () => void): () => void;
 }
 
-/** 标准 prop 形状（只列用到的；组件可以直接用 props.useSessions）。 */
-export interface SlotStandardProps {
-  useSessions?: (selector: (state: SessionsSnapshot) => unknown) => unknown;
-  [key: string]: unknown;
-}
-
 const EMPTY: SessionsSnapshot = { ids: [], byId: {} };
 
 let resolveSource: (() => SnapshotSource | undefined) | undefined;
@@ -168,13 +162,6 @@ export function useCurrentSession(useSessions?: SessionsHook): { workspace?: str
  */
 export function useCurrentWorkspace(useSessions?: SessionsHook): string | undefined {
   return useCurrentSession(useSessions).workspace;
-}
-
-/** 当前会话 id（诊断用）。 */
-export function useCurrentSessionId(): string | undefined {
-  const snapshot = useSessionsSnapshot();
-  const id = pickCurrentSession(snapshot)?.id;
-  return typeof id === "string" && id !== "" ? id : undefined;
 }
 
 /** useCallback 兼容导出（部分标签页需要稳定回调）。 */

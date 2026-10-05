@@ -30,13 +30,6 @@ export const zh = {
   "runtime.onlyCurrentOff": "当前没有会话 id，无法过滤。",
 
   /* ---- 服务器分组 ---- */
-  "runtime.row.cache": "缓存 {count} 个工具 · 更新于 {time}",
-  "runtime.row.noCache": "还没有工具缓存",
-  "runtime.row.stale": "缓存已过期",
-  "runtime.row.instances": "{count} 个活跃实例",
-  "runtime.row.instancesNone": "没有活跃实例",
-  "runtime.row.cooldownBadge": "冷却 {seconds}s",
-  "runtime.row.cooldown": "冷却中，剩余 {remaining}",
 
   /* ---- 会话分组 ---- */
   "runtime.sessions.empty": "模型调用 mcp 工具后，这里会显示会话与实例",
@@ -59,8 +52,6 @@ export const zh = {
   "runtime.state.unknown": "未知（{state}）",
 
   /* ---- 服务器抽屉 ---- */
-  "runtime.drawer.cache": "缓存 {count} 个工具 · 更新于 {time}",
-  "runtime.drawer.failure": "{message}（{time}）",
 
   /* ---- 断开确认 ---- */
   "runtime.dialog.title": "断开 MCP 实例",

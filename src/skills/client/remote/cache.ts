@@ -5,9 +5,9 @@
  * 换工作区或写操作后调 force=true 重新拉。
  */
 
-import { errorMessage } from "../format.ts";
 import { fetchGithubAuth, listSources } from "./data.ts";
 import { remoteStore } from "./store.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 let currentKey: string | undefined;
 let loadingKey: string | undefined;
@@ -33,7 +33,7 @@ export async function ensureSources(workspace: string | undefined, force = false
     remoteStore.setSources(entries);
   } catch (error) {
     if (generationAtStart !== generation) return;
-    remoteStore.state.patch({ sourcesLoading: false, sourcesError: errorMessage(error) });
+    remoteStore.state.patch({ sourcesLoading: false, sourcesError: errorText(error) });
   } finally {
     if (loadingKey === key) loadingKey = undefined;
   }
@@ -42,11 +42,6 @@ export async function ensureSources(workspace: string | undefined, force = false
 /** 写操作后强制重拉。 */
 export function reloadSources(workspace: string | undefined): Promise<void> {
   return ensureSources(workspace, true);
-}
-
-/** 工作区变了（或测试需要）时忘掉缓存。 */
-export function invalidateSources(): void {
-  currentKey = undefined;
 }
 
 /** 读一次 GitHub 凭据模式（只返回模式与剩余配额，绝不含令牌）。 */

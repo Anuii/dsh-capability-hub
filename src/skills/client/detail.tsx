@@ -16,7 +16,6 @@ import {
   abbreviateHomePath,
   displayName,
   eolLabel,
-  errorMessage,
   fileDepth,
   fileName,
   formatBytes,
@@ -31,6 +30,7 @@ import { SkillSwitch } from "./switch.tsx";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { RootInfo, SkillSummary, SkillView } from "../contract/local.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 export interface SkillDetailProps {
   /** 列表里那一行（抽屉头部的名称与开关立刻可用） */
@@ -64,7 +64,7 @@ export function SkillDetailDrawer(props: SkillDetailProps): React.ReactElement {
         if (alive) setView(payload);
       },
       (failure: unknown) => {
-        if (alive) setError(errorMessage(failure));
+        if (alive) setError(errorText(failure));
       },
     );
     return () => {

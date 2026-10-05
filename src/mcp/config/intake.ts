@@ -526,9 +526,4 @@ export async function listImportSources(ctx: ImportContext): Promise<ImportSourc
   return views;
 }
 
-/** 默认 homeDir（仅在真实运行时使用；测试一律注入临时目录）。 */
-export function defaultHomeDir(): string {
-  return homedir();
-}
-
 export { HIDDEN };

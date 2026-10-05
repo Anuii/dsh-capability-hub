@@ -30,9 +30,7 @@ export const zh = {
   /* ---- 分组与标记 ---- */
   "skills.root.project": "项目级",
   "skills.root.user": "用户级",
-  "skills.root.custom": "自定义根",
   "skills.root.dshBuiltin": "DSH 内置",
-  "skills.root.bundled": "内置技能",
   "skills.root.writable": "可写",
   "skills.root.readonly": "只读",
   "skills.root.count": "{count} 个",
@@ -289,7 +287,6 @@ export const zh = {
   "skills.remote.menu.auth": "GitHub：{mode} · 剩余配额 {remaining}",
   "skills.remote.menu.authUnknown": "GitHub：{mode} · 剩余配额 未知",
   "skills.remote.menu.workspaceNone": "没有当前会话工作区，不显示项目级技能",
-  "skills.remote.quotaUnknownShort": "未知",
 
   "skills.remote.bar.checkSummary": "检查完成：有更新 {available} · 最新 {upToDate} · 无来源 {noSource} · 出错 {error}",
   "skills.remote.bar.updateSummary": "更新完成：成功 {ok} · 失败 {failed}",

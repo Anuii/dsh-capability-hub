@@ -20,6 +20,7 @@ import type { SkillMetaReader } from "./skill-meta.ts";
 import type { DiscoveryCacheEntry, DiscoveryCacheFile, SkillsLocalPort } from "./types.ts";
 import type { DiscoveredSkill, DiscoveryRepoView, DiscoveryView, RepoRecord } from "../contract/remote.ts";
 import type { HubContext } from "../../platform/contract/host.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 const DISCOVERY_VERSION = 1;
 /** 同时扫描的仓库数上限（每个仓库要下载一次 tarball） */
@@ -142,11 +143,6 @@ export async function readDiscovery(
     loadInstalledIndex(deps.skills, options.workspace),
   ]);
   return composeDiscoveryView(records, cache, (skill) => installedIdOf(skill, index));
-}
-
-function errorText(error: unknown): string {
-  if (error instanceof Error && error.message !== "") return error.message;
-  return String(error);
 }
 
 /** 扫一个仓库，成功失败都变成一条缓存条目（不抛错，取消除外） */

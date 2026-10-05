@@ -10,10 +10,11 @@ import * as React from "react";
 import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../kit/index.ts";
 import { upsertServer, validateServer } from "./data.ts";
-import { errorMessage, fieldErrorsOf, isPlainObject, parseJsonServer } from "./model.ts";
+import { fieldErrorsOf, isPlainObject, parseJsonServer } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { FieldError, ServerView } from "../contract/config.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 export interface JsonEditorProps {
   originalName?: string;
@@ -56,7 +57,7 @@ export function JsonEditor(props: JsonEditorProps): React.ReactElement {
         const saved = await upsertServer(props.originalName, result.values as Record<string, unknown>);
         props.onSaved(saved.server, saved.warnings);
       } catch (error) {
-        setFormError(t("mcp.json.saveFailed", { message: errorMessage(error) }));
+        setFormError(t("mcp.json.saveFailed", { message: errorText(error) }));
         const details = fieldErrorsOf(error);
         if (details.length > 0) setErrors(details);
       } finally {

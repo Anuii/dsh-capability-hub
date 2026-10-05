@@ -25,7 +25,6 @@ import {
   draftMeta,
   draftToSubmit,
   draftValue,
-  errorMessage,
   errorsFor as errorsOf,
   fieldErrorsOf,
   groupErrors,
@@ -41,6 +40,7 @@ import {
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { FieldError, ServerView, Transport } from "../contract/config.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 export interface ServerFormProps {
   /** 被编辑服务器的原名；新建时省略。 */
@@ -175,7 +175,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
       });
       return result;
     } catch (error) {
-      setFormError(t("mcp.form.saveFailed", { message: errorMessage(error) }));
+      setFormError(t("mcp.form.saveFailed", { message: errorText(error) }));
       return undefined;
     } finally {
       setChecking(false);
@@ -200,7 +200,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
           setSyncToken((token) => token + 1);
           props.showToast(t("mcp.toast.revealed"));
         },
-        (error: unknown) => setRevealError(t("mcp.editor.revealFailed", { message: errorMessage(error) })),
+        (error: unknown) => setRevealError(t("mcp.editor.revealFailed", { message: errorText(error) })),
       )
       .finally(() => setRevealBusy(false));
   };
@@ -239,7 +239,7 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
         setServerErrors([]);
         props.onSaved(result.server, result.warnings);
       } catch (error) {
-        setFormError(t("mcp.form.saveFailed", { message: errorMessage(error) }));
+        setFormError(t("mcp.form.saveFailed", { message: errorText(error) }));
         const details = fieldErrorsOf(error);
         if (details.length > 0) setServerErrors(details);
       } finally {

@@ -13,11 +13,12 @@ import * as React from "react";
 import { Button, Checkbox } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, Banner, SkeletonRows } from "../../../kit/index.ts";
 import { applyImport, fetchImportSources } from "../data.ts";
-import { errorMessage } from "../model.ts";
+
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { ImportApplyResponse, ImportSourceView, ParsedServer } from "../../contract/config.ts";
 import { hiddenKeys, importableNames, rawSummary, secretSummary } from "./pure.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 export interface ImportViewProps {
   /** 当前配置里的服务器名（默认勾选时排除同名）。 */
@@ -67,7 +68,7 @@ export function ImportView(props: ImportViewProps): React.ReactElement {
         setSelected(next);
       },
       (failure: unknown) => {
-        setError(errorMessage(failure));
+        setError(errorText(failure));
         setLoading(false);
       },
     );
@@ -104,7 +105,7 @@ export function ImportView(props: ImportViewProps): React.ReactElement {
       },
       (failure: unknown) => {
         setBusy(undefined);
-        props.showToast(t("mcp.import.failed", { message: errorMessage(failure) }));
+        props.showToast(t("mcp.import.failed", { message: errorText(failure) }));
       },
     );
   };

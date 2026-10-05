@@ -7,6 +7,7 @@
  */
 
 import { badRequest } from "../../shared/errors.ts";
+import { asRecord, optionalString, requireString, requireBoolean, optionalBoolean } from "../../shared/request.ts";
 import { createSkillsLocalImpl, type SkillsLocalDeps, type SkillsLocalImpl } from "./api.ts";
 import type { HubContext, HubModule, RouteHandler } from "../../platform/contract/host.ts";
 import type { LockStash, SkillsLocalApi } from "../contract/local.ts";
@@ -14,36 +15,6 @@ import type { LockStash, SkillsLocalApi } from "../contract/local.ts";
 export interface SkillsLocalModule extends HubModule {
   api: SkillsLocalApi;
   bindLockStash(stash: LockStash): void;
-}
-
-function asRecord(body: unknown): Record<string, unknown> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw badRequest("请求体必须是一个 JSON 对象。");
-  }
-  return body as Record<string, unknown>;
-}
-
-function optionalString(value: unknown, name: string): string | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw badRequest("参数 " + name + " 必须是字符串。");
-  return value;
-}
-
-function requireString(value: unknown, name: string): string {
-  const out = optionalString(value, name);
-  if (out === undefined) throw badRequest("缺少必填参数 " + name + "。");
-  return out;
-}
-
-function requireBoolean(value: unknown, name: string): boolean {
-  if (typeof value !== "boolean") throw badRequest("参数 " + name + " 必须是布尔值（true/false）。");
-  return value;
-}
-
-function optionalBoolean(value: unknown, name: string): boolean | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "boolean") throw badRequest("参数 " + name + " 必须是布尔值（true/false）。");
-  return value;
 }
 
 export function createSkillsLocalModule(ctx: HubContext, deps: SkillsLocalDeps): SkillsLocalModule {

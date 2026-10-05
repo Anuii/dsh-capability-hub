@@ -17,6 +17,7 @@ import type {
   GithubAuth,
   InstallItemResult,
   InstallTarget,
+  RepoChange,
   RepoRecord,
   SearchResultItem,
   SourceEntry,
@@ -99,12 +100,6 @@ export async function applyUpdates(ids: readonly string[], workspace: string | u
 
 /* ---------------- 仓库列表 ---------------- */
 
-/** GET skills/repos → { repos } */
-export async function listRepos(): Promise<RepoRecord[]> {
-  const data = await api.get<{ repos?: RepoRecord[] }>("skills/repos");
-  return Array.isArray(data?.repos) ? data.repos : [];
-}
-
 /** 把接口返回的发现视图补成安全形状。 */
 export function normalizeDiscovery(data: Partial<DiscoveryView> | undefined): DiscoveryView {
   return {
@@ -121,11 +116,6 @@ export function normalizeDiscovery(data: Partial<DiscoveryView> | undefined): Di
         )
       : [],
   };
-}
-
-export interface RepoChange {
-  repos: RepoRecord[];
-  discovery: DiscoveryView;
 }
 
 /** POST skills/repos/add { repo, ref?, subPath?, workspace? } → { repo, repos, discovery }（宿主已补扫这个仓库） */

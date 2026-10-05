@@ -5,7 +5,7 @@
 import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { dirname } from "node:path";
-import { errorText } from "./errors.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 /** 是否为 Windows（大小写不敏感路径语义）。 */
 export const IS_WINDOWS = process.platform === "win32";
@@ -14,10 +14,6 @@ export const IS_WINDOWS = process.platform === "win32";
 export function pathKey(p: string): string {
   const normalized = p.replace(/[\\/]+/g, "/").replace(/\/+$/, "");
   return IS_WINDOWS ? normalized.toLowerCase() : normalized;
-}
-
-export function samePath(a: string, b: string): boolean {
-  return pathKey(a) === pathKey(b);
 }
 
 export async function ensureDir(dir: string): Promise<void> {
@@ -56,26 +52,12 @@ export async function atomicWriteFile(filePath: string, text: string, mode = 0o6
   }
 }
 
-export async function statMtimeMs(p: string): Promise<number | undefined> {
-  try {
-    const info = await stat(p);
-    return info.mtimeMs;
-  } catch {
-    return undefined;
-  }
-}
-
 export async function readTextFile(filePath: string): Promise<string | undefined> {
   try {
     return await readFile(filePath, "utf8");
   } catch {
     return undefined;
   }
-}
-
-export async function writeTextFile(filePath: string, text: string): Promise<void> {
-  await ensureDir(dirname(filePath));
-  await writeFile(filePath, text, { encoding: "utf8" });
 }
 
 export async function removeFile(path: string): Promise<void> {

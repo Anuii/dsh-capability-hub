@@ -40,6 +40,7 @@ import { createDemoModule } from "./demo.ts";
 import { HUB_VERSION } from "../../version.ts";
 import { createRejectingModule, createThrowingModule } from "./demo-failing.ts";
 import type { McpRuntime } from "../../mcp/contract/runtime.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 /** 接线摘要（health 里的 wiring 字段）。 */
 export interface WiringSnapshot {
@@ -86,11 +87,6 @@ export interface Shell {
   dispose(): Promise<void>;
 }
 
-/** 安全读错误消息。 */
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 const startedAt = new Date().toISOString();
 
 /** 平台层关心的服务名（启动报告里逐项探测，便于定位「服务不可见」类问题）。 */
@@ -127,7 +123,7 @@ function readConnection(hostCtx: unknown, logger: PlatformContext["logger"]): Co
     const viaProp = (hostCtx as { connection?: ConnectionFace }).connection;
     if (viaProp !== undefined) return viaProp;
   } catch (error) {
-    logger.debug("ctx.connection 属性访问抛错：" + messageOf(error));
+    logger.debug("ctx.connection 属性访问抛错：" + errorText(error));
   }
   return undefined;
 }
@@ -328,7 +324,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
       registrationError = undefined;
       logger.info(`已注册 ${registration.paths.length} 条已鉴权路由：${registration.paths.join(", ")}`);
     } catch (error) {
-      registrationError = messageOf(error);
+      registrationError = errorText(error);
       logger.error(`注册 HTTP 路由失败（已降级，等待 connection 服务）：${registrationError}`);
     }
     void writeBootReport();
@@ -387,7 +383,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
       );
       logger.debug(`启动报告已写入 ${bootPath}`);
     } catch (error) {
-      logger.warn(`启动报告写入失败（不影响运行）：${messageOf(error)}`);
+      logger.warn(`启动报告写入失败（不影响运行）：${errorText(error)}`);
     }
   };
 
@@ -401,7 +397,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
           attemptRegister(connectionCtx);
         });
       } catch (error) {
-        logger.error(`ctx.inject(["connection"]) 失败：${messageOf(error)}`);
+        logger.error(`ctx.inject(["connection"]) 失败：${errorText(error)}`);
       }
     } else {
       logger.error("ctx.inject 不可用，无法等待 connection 服务");

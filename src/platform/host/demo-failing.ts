@@ -19,12 +19,3 @@ export function createThrowingModule(): HubModule {
 export function createRejectingModule(): HubModule | Promise<HubModule> {
   return Promise.reject(new Error("故意失败演示（异步）：这个模块返回 rejected Promise，用于验证降级不影响 DSH"));
 }
-
-/** 先注册一条路由，再在注册中途冲突失败（用于验证回滚）。 */
-export function createPartialModule(existingKey: string): HubModule {
-  return {
-    routes: {
-      [existingKey]: async () => ({ never: true }),
-    },
-  };
-}

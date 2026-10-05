@@ -59,11 +59,6 @@ function timestamp(date: Date): string {
   );
 }
 
-/** 缺省 logger（模块可独立测试）。 */
-export function silentLogger(): HubLogger {
-  return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
-}
-
 export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStoreOptions = {}): McpStore {
   const dir = join(hubHome, "mcp");
   const filePath = join(dir, "config.json");

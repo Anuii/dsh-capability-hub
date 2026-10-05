@@ -19,7 +19,7 @@ import type {
   InstallTarget,
   SearchResultItem,
 } from "../../contract/remote.ts";
-import { errorMessage, fieldErrors } from "../format.ts";
+import { fieldErrors } from "../format.ts";
 import { t } from "../strings.ts";
 import {
   DISCOVERY_PAGE,
@@ -32,6 +32,7 @@ import {
   type InstalledFilter,
 } from "./discovery-model.ts";
 import { installSummaryText } from "./model.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 /** 访问宿主的 seam。 */
 export interface RepoViewAdapter {
@@ -196,7 +197,7 @@ export function createRepoViewStore(adapter: RepoViewAdapter): RepoViewStore {
       const discovery = await adapter.scan(workspace, repos);
       if (round === generation) patch({ discovery, scanning: false });
     } catch (failure) {
-      if (round === generation) patch({ discoveryError: errorMessage(failure), scanning: false });
+      if (round === generation) patch({ discoveryError: errorText(failure), scanning: false });
     }
   };
 
@@ -230,7 +231,7 @@ export function createRepoViewStore(adapter: RepoViewAdapter): RepoViewStore {
       patch({
         browse: undefined,
         browseFieldErrors: fieldErrors(failure),
-        browseError: errorMessage(failure),
+        browseError: errorText(failure),
         browsing: false,
       });
     }
@@ -244,7 +245,7 @@ export function createRepoViewStore(adapter: RepoViewAdapter): RepoViewStore {
       patch({ discovery, repoBusy: false });
       after?.(discovery);
     } catch (failure) {
-      patch({ repoError: errorMessage(failure), repoBusy: false });
+      patch({ repoError: errorText(failure), repoBusy: false });
     }
   };
 
@@ -271,7 +272,7 @@ export function createRepoViewStore(adapter: RepoViewAdapter): RepoViewStore {
         patch({ discovery });
         if (shouldAutoScan(discovery)) await scan();
       } catch (failure) {
-        if (round === generation) patch({ discoveryError: errorMessage(failure) });
+        if (round === generation) patch({ discoveryError: errorText(failure) });
       }
     },
     setEntry: (entry) => patch({ entry }),
@@ -290,7 +291,7 @@ export function createRepoViewStore(adapter: RepoViewAdapter): RepoViewStore {
         const searchResults = await adapter.search(query);
         patch({ searchResults, searchOpen: true, searching: false });
       } catch (failure) {
-        patch({ searchResults: undefined, searchError: errorMessage(failure), searching: false });
+        patch({ searchResults: undefined, searchError: errorText(failure), searching: false });
       }
     },
     toggleSearchOpen: () => patch({ searchOpen: !get().searchOpen }),
@@ -387,7 +388,7 @@ export function createRepoViewStore(adapter: RepoViewAdapter): RepoViewStore {
           );
           for (const item of list) results.push({ ...item, repo: group.repo });
         } catch (failure) {
-          failures.push(group.repo + "：" + errorMessage(failure));
+          failures.push(group.repo + "：" + errorText(failure));
         }
       }
       const ok = results.filter((item) => item.ok).length;

@@ -8,16 +8,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   abbreviateHomePath,
-  diagnosticCounts,
   displayName,
   homeDirFromRoots,
   isDshInstallPath,
   normalizePath,
-  orderRoots,
-  rootGroupTitle,
   eolLabel,
   errorCode,
-  errorMessage,
   fieldErrors,
   fileDepth,
   fileName,
@@ -26,24 +22,16 @@ import {
   FILTERS,
   formatBytes,
   formatDateTime,
-  groupByRoot,
-  hasProblems,
   isConflict,
-  isProjectRoot,
   levelLabel,
   levelTone,
   matches,
   matchesFilter,
   matchesQuery,
   needsAttention,
-  relativeToWorkspace,
   removeSkill,
   replaceSkill,
-  rootMetaPath,
-  rootPathTitle,
-  rootRank,
   rootScope,
-  rootScopeLabel,
   sortFiles,
   sortSkills,
   sortTrash,
@@ -53,35 +41,7 @@ import {
 } from "../../../src/skills/client/format.ts";
 import { workspaceQuery } from "../../../src/skills/client/data.ts";
 import { makeList, makeSkill, makeTrashItem, diag, root } from "./fixtures.ts";
-
-test("根的范围与标题（UI-DESIGN §4：标题只有范围，路径单独一行）", () => {
-  assert.equal(rootScope("project-dsh"), "project");
-  assert.equal(rootScope("project-agents"), "project");
-  assert.equal(rootScope("user-dsh"), "user");
-  assert.equal(rootScope("user-agents"), "user");
-  assert.equal(rootScope("custom-0"), "custom");
-  assert.equal(rootScope("bundled"), "bundled");
-  assert.equal(rootScopeLabel("custom-2"), "自定义根");
-  assert.equal(rootScopeLabel("bundled"), "内置技能");
-  assert.equal(rootScopeLabel("user-agents"), "用户级");
-  assert.equal(isProjectRoot("project-dsh"), true);
-  assert.equal(isProjectRoot("user-agents"), false);
-});
-
-test("分组 meta：项目级显示工作区下的相对路径，其余显示绝对路径", () => {
-  assert.equal(relativeToWorkspace("C:\\work\\demo", "C:\\work\\demo\\.agents\\skills"), ".agents/skills");
-  assert.equal(relativeToWorkspace("C:\\work\\demo", "C:\\work\\Demo\\.dsh"), ".dsh", "Windows 盘符/目录大小写不敏感");
-  assert.equal(relativeToWorkspace("C:\\work\\demo\\", "C:\\work\\demo"), ".");
-  assert.equal(relativeToWorkspace("C:\\work\\demo", "C:\\other\\x"), undefined);
-  assert.equal(relativeToWorkspace(undefined, "C:\\other\\x"), undefined);
-  assert.equal(relativeToWorkspace("   ", "C:\\other\\x"), undefined);
-
-  const project = root("project-agents", { path: "C:\\work\\demo\\.agents\\skills" });
-  assert.equal(rootMetaPath(project, "C:\\work\\demo"), ".agents/skills");
-  assert.equal(rootMetaPath(project, undefined), "C:\\work\\demo\\.agents\\skills");
-  const user = root("user-agents", { path: "C:\\home\\.agents\\skills" });
-  assert.equal(rootMetaPath(user, "C:\\work\\demo"), "C:\\home\\.agents\\skills");
-});
+import { errorText } from "../../../src/shared/error-text.ts";
 
 /* ---------------- UI-C：路径缩写与分组顺序 ---------------- */
 
@@ -149,47 +109,6 @@ test("abbreviateHomePath：家目录下缩写为 ~\\…，其余原样", () => {
   assert.equal(abbreviateHomePath("C:\\other\\x", undefined), "C:\\other\\x", "推不出家目录时原样返回");
   assert.equal(abbreviateHomePath("", HOME), "");
 });
-
-test("分组标题：DSH 安装目录里的自定义根叫「DSH 内置」，其余照旧", () => {
-  assert.equal(rootGroupTitle(root("custom-0", { path: ASAR })), "DSH 内置");
-  assert.equal(rootGroupTitle(root("custom-1", { path: "D:\\my\\skills" })), "自定义根");
-  assert.equal(rootGroupTitle(root("bundled", { path: ASAR })), "内置技能");
-  assert.equal(rootGroupTitle(root("user-agents", { path: HOME + "\\.agents\\skills" })), "用户级");
-});
-
-test("分组 meta：家目录下缩写成 ~\\…，DSH 内置根不显示路径（完整路径走 title）", () => {
-  const user = root("user-agents", { path: HOME + "\\.agents\\skills" });
-  assert.equal(rootMetaPath(user, undefined, HOME), "~\\.agents\\skills");
-  assert.equal(rootMetaPath(user, undefined), HOME + "\\.agents\\skills", "没有家目录时退回绝对路径");
-  assert.equal(rootPathTitle(user), HOME + "\\.agents\\skills");
-  const builtin = root("custom-0", { path: ASAR });
-  assert.equal(rootMetaPath(builtin, undefined, HOME), undefined);
-  assert.equal(rootPathTitle(builtin), ASAR, "完整路径仍然通过 title 提示给出去");
-  const project = root("project-agents", { path: "C:\\work\\demo\\.agents\\skills" });
-  assert.equal(rootMetaPath(project, "C:\\work\\demo", HOME), ".agents/skills");
-});
-
-test("分组顺序：项目级 → 用户级 → 只读根；同档保持接口给的顺序", () => {
-  const roots = [
-    root("custom-0", { path: ASAR, precedence: 300 }),
-    root("user-dsh", { path: HOME + "\\.dsh\\skills", precedence: 400 }),
-    root("user-agents", { path: HOME + "\\.agents\\skills", precedence: 500 }),
-    root("bundled", { path: ASAR, precedence: 600 }),
-    root("project-dsh", { path: "C:\\work\\demo\\.dsh\\skills", precedence: 100 }),
-    root("project-agents", { path: "C:\\work\\demo\\.agents\\skills", precedence: 200 }),
-  ];
-  assert.deepEqual(
-    orderRoots(roots).map((item) => item.rootId),
-    ["project-dsh", "project-agents", "user-dsh", "user-agents", "custom-0", "bundled"],
-  );
-  assert.equal(rootRank("project-dsh"), 0);
-  assert.equal(rootRank("user-agents"), 1);
-  assert.equal(rootRank("custom-0"), 2);
-  assert.equal(rootRank("bundled"), 2);
-  assert.equal(rootRank("ghost-root"), 2);
-  // 不修改入参
-  assert.equal(roots[0]!.rootId, "custom-0");
-});
 test("workspace 为空时不下发 workspace 参数（宿主因此不解析项目级根，D-B2）", () => {
   assert.equal(workspaceQuery(undefined), undefined);
   assert.equal(workspaceQuery(""), undefined);
@@ -204,30 +123,6 @@ test("显示名：没有 frontmatter name 时用目录名并标注", () => {
   assert.deepEqual(displayName(unnamed), { text: "legacy-dir", fromDir: true, dirName: "legacy-dir" });
   const empty = makeSkill({ id: "user-agents:x", name: "", dirName: "x" });
   assert.equal(displayName(empty).fromDir, true);
-});
-
-test("排序与分组：组内按名称、根顺序不变、未知根兜底", () => {
-  const roots = [root("user-dsh", { precedence: 400 }), root("user-agents", { precedence: 500, exists: false })];
-  const skills = [
-    makeSkill({ id: "user-agents:zeta", name: "zeta", rootId: "user-agents" }),
-    makeSkill({ id: "user-dsh:beta", name: "beta", rootId: "user-dsh" }),
-    makeSkill({ id: "user-dsh:alpha", name: "alpha", rootId: "user-dsh" }),
-    makeSkill({ id: "ghost-root:only", name: "only", rootId: "ghost-root" }),
-  ];
-  const sorted = sortSkills(skills).map((skill) => displayName(skill).text);
-  assert.deepEqual(sorted, ["alpha", "beta", "only", "zeta"]);
-
-  const groups = groupByRoot(roots, skills);
-  assert.deepEqual(
-    groups.map((group) => group.root.rootId),
-    ["user-dsh", "user-agents", "ghost-root"],
-  );
-  assert.deepEqual(
-    groups[0]!.skills.map((skill) => skill.name),
-    ["alpha", "beta"],
-  );
-  assert.equal(groups[1]!.missing, true);
-  assert.equal(groups[2]!.missing, false);
 });
 
 test("搜索：命中名称 / 目录名 / id / 描述，空串不过滤", () => {
@@ -286,27 +181,6 @@ test("分段计数", () => {
     disabled: 1,
     attention: 2,
   });
-});
-
-test("诊断计数、级别文案与色调", () => {
-  const skill = makeSkill({
-    id: "a:x",
-    diagnostics: [
-      diag("error", "BOM_PRESENT"),
-      diag("warning", "MIXED_EOL"),
-      diag("info", "EXTRA_KEY"),
-      diag("info", "YAML_L1_FEATURE"),
-    ],
-  });
-  assert.deepEqual(diagnosticCounts(skill), { error: 1, warning: 1, info: 2, total: 4 });
-  assert.equal(hasProblems(skill), true, "error/warning 算有问题");
-  assert.equal(hasProblems(makeSkill({ id: "a:info", diagnostics: [diag("info", "EXTRA_KEY")] })), false);
-  assert.equal(levelTone("error"), "danger");
-  assert.equal(levelTone("warning"), "warn");
-  assert.equal(levelTone("info"), "neutral");
-  assert.equal(levelLabel("error"), "错误");
-  assert.equal(levelLabel("warning"), "警告");
-  assert.equal(levelLabel("info"), "提示");
 });
 
 test("格式化：字节 / 时间 / 行尾 / 回收站原因", () => {
@@ -393,7 +267,7 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
     }
   }
   const plain = new Error("普通错误");
-  assert.equal(errorMessage(plain), "普通错误");
+  assert.equal(errorText(plain), "普通错误");
   assert.equal(errorCode(plain), undefined);
   assert.deepEqual(fieldErrors(plain), []);
   assert.equal(isConflict(plain), false);
@@ -405,7 +279,7 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
     "不是对象",
   ]);
   assert.equal(errorCode(validation), "VALIDATION");
-  assert.equal(errorMessage(validation), "参数不合法");
+  assert.equal(errorText(validation), "参数不合法");
   assert.deepEqual(fieldErrors(validation), [
     { path: "id", message: "id 不能为空" },
     { path: "enabled", message: "enabled 必须是布尔值" },
@@ -414,4 +288,35 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
   const conflict = new FakeApiError("CONFLICT", "原路径已存在同名的目录/文件");
   assert.equal(isConflict(conflict), true);
   assert.equal(isConflict(new Error("读取失败：原路径已存在同名的目录/文件")), true, "没有 code 时按文案兜底");
+});
+
+test("技能目录的范围", () => {
+  assert.equal(rootScope("project-dsh"), "project");
+  assert.equal(rootScope("project-agents"), "project");
+  assert.equal(rootScope("user-dsh"), "user");
+  assert.equal(rootScope("user-agents"), "user");
+  assert.equal(rootScope("custom-0"), "custom");
+  assert.equal(rootScope("bundled"), "bundled");
+});
+
+test("排序：按显示名，没有 name 时用目录名", () => {
+  const skills = [
+    makeSkill({ id: "user-agents:zeta", name: "zeta", rootId: "user-agents" }),
+    makeSkill({ id: "user-dsh:beta", name: "beta", rootId: "user-dsh" }),
+    makeSkill({ id: "user-dsh:alpha", name: "alpha", rootId: "user-dsh" }),
+    makeSkill({ id: "ghost-root:only", dirName: "only", rootId: "ghost-root" }),
+  ];
+  assert.deepEqual(
+    sortSkills(skills).map((skill) => displayName(skill).text),
+    ["alpha", "beta", "only", "zeta"],
+  );
+});
+
+test("诊断级别的文案与色调", () => {
+  assert.equal(levelTone("error"), "danger");
+  assert.equal(levelTone("warning"), "warn");
+  assert.equal(levelTone("info"), "neutral");
+  assert.equal(levelLabel("error"), "错误");
+  assert.equal(levelLabel("warning"), "警告");
+  assert.equal(levelLabel("info"), "提示");
 });

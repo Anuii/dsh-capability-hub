@@ -9,7 +9,6 @@ import { Banner } from "../../kit/index.ts";
 import { updateSettings } from "./data.ts";
 import {
   SETTINGS_DEFAULTS,
-  errorMessage,
   fieldErrorsOf,
   groupErrors,
   numericText,
@@ -24,6 +23,7 @@ import {
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { McpSettings } from "../contract/config.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 export interface SettingsPanelProps {
   settings: McpSettings;
@@ -68,7 +68,7 @@ export function SettingsPanel(props: SettingsPanelProps): React.ReactElement {
           setErrors(
             details.length > 0
               ? details.map((item) => item.message)
-              : [t("mcp.settings.saveFailed", { message: errorMessage(error) })],
+              : [t("mcp.settings.saveFailed", { message: errorText(error) })],
           );
         },
       )

@@ -34,11 +34,6 @@ export interface CacheEntry {
   updatedAt: number;
 }
 
-export interface MetadataCacheFile {
-  version: number;
-  servers: Record<string, CacheEntry>;
-}
-
 /** 稳定的字符串化（键排序），保证同样的配置永远得到同样的哈希。 */
 function canonical(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";

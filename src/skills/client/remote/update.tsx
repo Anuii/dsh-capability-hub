@@ -21,10 +21,11 @@ import {
   updateStatusLabel,
   updateStatusTitle,
 } from "./model.ts";
-import { errorMessage } from "../format.ts";
+
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 export interface SkillUpdateSectionProps {
   skill: SkillSummary;
@@ -65,7 +66,7 @@ export function SkillUpdateSection(props: SkillUpdateSectionProps): React.ReactE
         setChecking(false);
       },
       (failure: unknown) => {
-        setError(errorMessage(failure));
+        setError(errorText(failure));
         setChecking(false);
       },
     );
@@ -93,7 +94,7 @@ export function SkillUpdateSection(props: SkillUpdateSectionProps): React.ReactE
         props.onChanged?.();
       },
       (failure: unknown) => {
-        setError(errorMessage(failure));
+        setError(errorText(failure));
         setUpdating(false);
       },
     );

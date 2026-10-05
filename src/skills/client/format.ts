@@ -17,6 +17,7 @@ import type {
 import { t } from "./strings.ts";
 import type { BadgeTone } from "../../kit/index.ts";
 import type { FieldError } from "../../platform/contract/host.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 /* ---------------- 技能根 ---------------- */
 
@@ -28,25 +29,6 @@ export function rootScope(rootId: string): RootScope {
   if (rootId === "user-dsh" || rootId === "user-agents") return "user";
   if (rootId.startsWith("custom-")) return "custom";
   return "bundled";
-}
-
-/** 根的范围文案（分组标题用）。 */
-export function rootScopeLabel(rootId: string): string {
-  switch (rootScope(rootId)) {
-    case "project":
-      return t("skills.root.project");
-    case "user":
-      return t("skills.root.user");
-    case "custom":
-      return t("skills.root.custom");
-    case "bundled":
-      return t("skills.root.bundled");
-  }
-}
-
-/** 项目级根（workspace 为空时接口不会返回它们）。 */
-export function isProjectRoot(rootId: string): boolean {
-  return rootScope(rootId) === "project";
 }
 
 /* ---------------- 路径显示（UI-C） ---------------- */
@@ -121,82 +103,9 @@ export function abbreviateHomePath(path: string, homeDir: string | undefined): s
   return "~" + full.slice(home.length);
 }
 
-/**
- * 分组标题：DSH 安装目录（asar）里的自定义根统一叫「DSH 内置」——
- * 标题上挂一串 …\\app.asar\\… 既长又没有任何决策价值。
- */
-export function rootGroupTitle(root: RootInfo): string {
-  if (rootScope(root.rootId) === "custom" && isDshInstallPath(root.path)) return t("skills.root.dshBuiltin");
-  return rootScopeLabel(root.rootId);
-}
-
-/** DSH 内置根（标题上不显示路径，完整路径走 title 提示）。 */
-export function isDshBuiltinRoot(root: RootInfo): boolean {
-  return rootScope(root.rootId) === "custom" && isDshInstallPath(root.path);
-}
-
-/**
- * 分组标题右下那条等宽小字：项目级显示相对工作区的路径，家目录下的缩写成 ~\\…，
- * DSH 内置根**不显示**路径（完整路径只出现在悬停提示里）。
- */
-export function rootMetaPath(root: RootInfo, workspace: string | undefined, homeDir?: string): string | undefined {
-  if (isDshBuiltinRoot(root)) return undefined;
-  if (!isProjectRoot(root.rootId)) return abbreviateHomePath(root.path, homeDir);
-  return relativeToWorkspace(workspace, root.path) ?? abbreviateHomePath(root.path, homeDir);
-}
-
-/** 分组标题（以及 meta）的悬停提示：永远是完整路径。 */
-export function rootPathTitle(root: RootInfo): string {
-  return root.path;
-}
-
 /* ---------------- 分组顺序（UI-C） ---------------- */
 
-/**
- * 分组的显示顺序（UI-DESIGN §4 + UI-C）：项目级 → 用户级 → 只读根（custom / bundled / DSH 内置）。
- *
- * 为什么不再直接用接口顺序（= 优先级顺序）：优先级是「谁遮蔽谁」的实现细节，
- * 界面上按「跟我最近的排最前」才符合直觉；遮蔽关系由行上的 shadowedBy 标记表达，
- * 与分组顺序无关。同档内保持接口给的顺序（precedence）。
- */
-export function rootRank(rootId: string): number {
-  const scope = rootScope(rootId);
-  if (scope === "project") return 0;
-  if (scope === "user") return 1;
-  return 2;
-}
-
-export function orderRoots(roots: readonly RootInfo[]): RootInfo[] {
-  return roots
-    .map((root, index) => ({ root, index }))
-    .sort((left, right) => rootRank(left.root.rootId) - rootRank(right.root.rootId) || left.index - right.index)
-    .map((entry) => entry.root);
-}
-
-/**
- * path 相对 workspace 的路径（Windows 盘符大小写不敏感）。
- * 不是 workspace 的子路径时返回 undefined（调用方退回绝对路径）。
- */
-export function relativeToWorkspace(workspace: string | undefined, path: string): string | undefined {
-  if (typeof workspace !== "string" || workspace.trim() === "") return undefined;
-  const normalize = (value: string): string => value.replaceAll("\\", "/").replace(/\/+$/, "");
-  const base = normalize(workspace.trim());
-  const full = normalize(path);
-  const lowerBase = base.toLowerCase();
-  const lowerFull = full.toLowerCase();
-  if (lowerFull === lowerBase) return ".";
-  if (!lowerFull.startsWith(lowerBase + "/")) return undefined;
-  return full.slice(base.length + 1);
-}
-
 /* ---------------- 排序与分组 ---------------- */
-
-export interface RootGroup {
-  root: RootInfo;
-  skills: SkillSummary[];
-  /** 根目录不存在（界面上只在用户展开空根时才看得到） */
-  missing: boolean;
-}
 
 /** 技能显示名（没有 frontmatter name 时用目录名）。 */
 export interface DisplayName {
@@ -218,33 +127,6 @@ export function sortSkills(skills: readonly SkillSummary[]): SkillSummary[] {
     const byName = displayName(left).text.localeCompare(displayName(right).text);
     return byName !== 0 ? byName : left.id.localeCompare(right.id);
   });
-}
-
-/**
- * 按根分组：根的顺序就是接口给的顺序（= 优先级顺序），组内按名称排序。
- * 未知 rootId（契约外的根）兜底成合成根，绝不丢技能。
- */
-export function groupByRoot(roots: readonly RootInfo[], skills: readonly SkillSummary[]): RootGroup[] {
-  const groups: RootGroup[] = orderRoots(roots).map((root) => ({
-    root,
-    skills: sortSkills(skills.filter((skill) => skill.rootId === root.rootId)),
-    missing: !root.exists,
-  }));
-  const known = new Set(roots.map((root) => root.rootId));
-  for (const skill of sortSkills(skills.filter((item) => !known.has(item.rootId)))) {
-    const existing = groups.find((group) => group.root.rootId === skill.rootId);
-    if (existing !== undefined) {
-      existing.skills.push(skill);
-      existing.skills = sortSkills(existing.skills);
-      continue;
-    }
-    groups.push({
-      root: { rootId: skill.rootId, path: skill.path, exists: true, writable: skill.writable, precedence: 9999 },
-      skills: [skill],
-      missing: false,
-    });
-  }
-  return groups;
 }
 
 /**
@@ -279,30 +161,6 @@ export function filterLabel(id: FilterId): string {
 /** 判定筛选时需要的**外部事实**：哪些技能当前标着「可更新」（来自远程 store）。 */
 export interface MatchContext {
   updatable?: ReadonlySet<string>;
-}
-
-/** 诊断计数。 */
-export interface DiagnosticCounts {
-  error: number;
-  warning: number;
-  info: number;
-  total: number;
-}
-
-export function diagnosticCounts(skill: SkillSummary): DiagnosticCounts {
-  const counts: DiagnosticCounts = { error: 0, warning: 0, info: 0, total: 0 };
-  for (const diagnostic of skill.diagnostics) {
-    const level: DiagnosticLevel = diagnostic.level;
-    counts[level] += 1;
-    counts.total += 1;
-  }
-  return counts;
-}
-
-/** 「有问题」＝ 有 error 或 warning（info 只是提示，不算问题）。 */
-export function hasProblems(skill: SkillSummary): boolean {
-  const counts = diagnosticCounts(skill);
-  return counts.error > 0 || counts.warning > 0;
 }
 
 /** 「需关注」＝ 不可加载 + 被遮蔽 + 可更新（UI-DESIGN §4）。 */
@@ -455,11 +313,6 @@ export function sortTrash(items: readonly TrashItem[]): TrashItem[] {
 
 /* ---------------- 错误映射 ---------------- */
 
-export function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
 export function errorCode(error: unknown): string | undefined {
   if (error === null || typeof error !== "object") return undefined;
   const code = (error as { code?: unknown }).code;
@@ -492,5 +345,5 @@ export function fieldErrors(error: unknown): FieldError[] {
 export function isConflict(error: unknown): boolean {
   const code = errorCode(error);
   if (code === "CONFLICT") return true;
-  return errorMessage(error).includes("已存在");
+  return errorText(error).includes("已存在");
 }

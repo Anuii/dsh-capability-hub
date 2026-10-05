@@ -24,7 +24,6 @@ import {
   draftFromValues,
   draftFromView,
   draftHas,
-  draftSetFields,
   draftToJsonText,
   draftToSubmit,
   emptyServerDraft,
@@ -34,7 +33,6 @@ import {
   isHttpUrl,
   lifecycleLabel,
   parseJsonServer,
-  pruneForTransport,
   reorderNames,
   serverFilterCounts,
   serverStatusTone,
@@ -52,20 +50,6 @@ import {
   withoutField,
 } from "../../../src/mcp/client/model.ts";
 import { makeServerView } from "./fixtures.ts";
-
-/* ---------------- 草稿与默认值（D-C1） ---------------- */
-
-test("draftFromView 只搬显式设置过的字段", () => {
-  const view = makeServerView({
-    setFields: ["serverName", "transport", "command", "args", "env"],
-    args: ["-y", "pkg"],
-    env: { TOKEN: HIDDEN_VALUE },
-  });
-  const draft = draftFromView(view);
-  assert.deepEqual(draftSetFields(draft), ["serverName", "transport", "command", "args", "env"]);
-  assert.equal(draftHas(draft, "cwd"), false);
-  assert.equal(draftHas(draft, "lifecycle"), false);
-});
 
 test("draftFromView 用 idleTimeoutMin 还原被设置的 idleTimeout", () => {
   const view = makeServerView({ setFields: ["serverName", "transport", "command", "idleTimeout"], idleTimeoutMin: 3 });
@@ -126,17 +110,6 @@ test("遮罩值原样往返（D-C5）", () => {
   assert.deepEqual(submit.env, { TOKEN: HIDDEN_VALUE });
 });
 
-test("pruneForTransport 裁掉与传输方式无关的字段", () => {
-  const stdio = withField(withField(emptyServerDraft("stdio"), "command", "node"), "url", "https://x/y");
-  const http = pruneForTransport(stdio, "streamable-http");
-  assert.equal(draftHas(http, "command"), false);
-  assert.equal(http.values.url, "https://x/y");
-  const back = pruneForTransport(http, "stdio");
-  assert.equal(draftHas(back, "url"), false);
-  assert.equal(back.values.serverName, "");
-  assert.equal(back.values.transport, "stdio");
-});
-
 test("withMetaField 写子字段，空值把 meta 整个删掉", () => {
   let draft = withMetaField(emptyServerDraft(), "description", "示例");
   draft = withMetaField(draft, "tags", ["a", "b"]);
@@ -172,19 +145,6 @@ test("parseJsonServer：非法 JSON 与非对象都给出中文错误", () => {
   assert.deepEqual(ok.values, { transport: "stdio", serverName: "a", command: "node", unknownField: 1 });
   // 未知字段不会进草稿（白名单），但会留在 values 里交给服务端裁决
   assert.equal(draftHas(ok.draft!, "unknownField"), false);
-});
-
-test("draftFromValues 把数值字段转成文本，保留全部白名单字段", () => {
-  const draft = draftFromValues({
-    serverName: "a",
-    transport: "stdio",
-    command: "node",
-    idleTimeout: 7,
-    meta: { description: "d" },
-  });
-  assert.equal(draft.values.idleTimeout, "7");
-  assert.deepEqual(draft.values.meta, { description: "d" });
-  assert.deepEqual(draftSetFields(draft), ["serverName", "transport", "command", "idleTimeout", "meta"]);
 });
 
 /* ---------------- 校验 ---------------- */
@@ -437,6 +397,14 @@ test("cooldownText / formatDuration：倒计时文案随 now 变化，冷却结�
   assert.equal(cooldownText(failure, NOW + 47_000), undefined);
   assert.equal(cooldownText(undefined, NOW), undefined);
   assert.equal(formatDuration(65_000), "1 分 05 秒");
+  assert.equal(formatDuration(999), "0 秒");
+  assert.equal(formatDuration(3_900_000), "1 小时 05 分");
+  assert.equal(
+    cooldownRemainingMs({ message: "x", at: NOW, cooldownUntil: NOW + 1000 }, NOW + 60_000),
+    0,
+    "时钟回拨 / 已过期一律夹到 0",
+  );
+  assert.equal(cooldownRemainingMs({ message: "x", at: NOW }, NOW), 0, "cooldownUntil 缺失 = 冷却已结束");
 });
 
 test("rowSubtitleText：命令 / 地址 + 「· N 个工具」（没有缓存时省略）", () => {
@@ -530,4 +498,34 @@ test("列表行的紧凑命令：路径只留文件名，可执行文件去掉�
   assert.equal(isPathLike("@scope/pkg"), false);
   assert.equal(isPathLike("~/bin/tool"), true);
   assert.equal(shortPart("C:\\tools\\server.CMD", true), "server");
+});
+
+/* ---------------- 草稿与默认值（D-C1） ---------------- */
+
+test("draftFromView 只搬显式设置过的字段", () => {
+  const view = makeServerView({
+    setFields: ["serverName", "transport", "command", "args", "env"],
+    args: ["-y", "pkg"],
+    env: { TOKEN: HIDDEN_VALUE },
+  });
+  const draft = draftFromView(view);
+  for (const field of ["serverName", "transport", "command", "args", "env"])
+    assert.equal(draftHas(draft, field), true, field);
+  assert.equal(draftHas(draft, "cwd"), false);
+  assert.equal(draftHas(draft, "lifecycle"), false);
+});
+
+test("draftFromValues 把数值字段转成文本，保留全部白名单字段", () => {
+  const draft = draftFromValues({
+    serverName: "a",
+    transport: "stdio",
+    command: "node",
+    idleTimeout: 7,
+    meta: { description: "d" },
+  });
+  assert.equal(draft.values.idleTimeout, "7");
+  assert.deepEqual(draft.values.meta, { description: "d" });
+  assert.equal(draftHas(draft, "idleTimeout"), true);
+  assert.equal(draftHas(draft, "cwd"), false);
+  assert.equal(withField(emptyServerDraft("stdio"), "command", "node").values.command, "node");
 });

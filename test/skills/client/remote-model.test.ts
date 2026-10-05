@@ -16,7 +16,6 @@ import {
   installSummaryText,
   installTargetOptions,
   isFlatSkill,
-  quotaValue,
   skillsNeedingSource,
   sourceRepoRef,
   sourceTitle,
@@ -71,15 +70,6 @@ test("更新状态：文案、色板与悬停说明", () => {
   assert.equal(updateStatusTitle(undefined), undefined);
   assert.equal(updateStatusTitle({ skillId: "a", status: "error", message: "上游 502" }), "上游 502");
   assert.equal(updateStatusTitle({ skillId: "a", status: "no-source" }), t("skills.remote.update.noSourceHint"));
-});
-
-test("凭据模式与配额：只说模式，绝不出现令牌", () => {
-  assert.equal(authModeLabel("gh"), t("skills.remote.auth.gh"));
-  assert.equal(authModeLabel("env"), t("skills.remote.auth.env"));
-  assert.equal(authModeLabel("anonymous"), t("skills.remote.auth.anonymous"));
-  assert.equal(authModeLabel(undefined), t("skills.remote.auth.unknown"));
-  assert.equal(quotaValue(4999), "4999");
-  assert.equal(quotaValue(undefined), t("skills.remote.quotaUnknownShort"));
 });
 
 test("检查/更新结果汇总", () => {
@@ -204,4 +194,11 @@ test("「全部更新」只挑有更新且非平铺的技能", () => {
     "user-agents:flat.md": { status: "update-available" as const },
   };
   assert.deepEqual(updatableIds(skills, checks), ["user-agents:a"]);
+});
+
+test("凭据模式：只说模式，绝不出现令牌", () => {
+  assert.equal(authModeLabel("gh"), t("skills.remote.auth.gh"));
+  assert.equal(authModeLabel("env"), t("skills.remote.auth.env"));
+  assert.equal(authModeLabel("anonymous"), t("skills.remote.auth.anonymous"));
+  assert.equal(authModeLabel(undefined), t("skills.remote.auth.unknown"));
 });

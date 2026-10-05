@@ -20,7 +20,6 @@ import { Badge, Banner, ListGroup, ListRow, RefreshIcon, SkeletonRows, useStoreS
 import type { RuntimeStore } from "../runtime-store.ts";
 import { DisconnectDialog, type DisconnectTarget } from "./dialogs.tsx";
 import {
-  errorMessage,
   filterSessions,
   instanceSubtitleText,
   instanceTone,
@@ -40,6 +39,7 @@ import {
 import { injectRuntimeStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { RuntimeInstanceView, RuntimeSessionView } from "../../contract/runtime.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 /* 样式只注入一次（模块加载时；无 document 时自动跳过）。 */
 injectRuntimeStyles();
@@ -67,7 +67,7 @@ class SectionErrorBoundary extends React.Component<{ children: React.ReactNode }
   }
 
   static getDerivedStateFromError(error: unknown): { error: string } {
-    return { error: errorMessage(error) };
+    return { error: errorText(error) };
   }
 
   render(): React.ReactNode {
@@ -124,7 +124,7 @@ function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
         },
         (failure: unknown) => {
           setPending(undefined);
-          showToast(t("runtime.instance.disconnectFailed", { message: errorMessage(failure) }));
+          showToast(t("runtime.instance.disconnectFailed", { message: errorText(failure) }));
         },
       )
       .finally(() => setBusy(false));

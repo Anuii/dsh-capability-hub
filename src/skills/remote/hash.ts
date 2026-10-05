@@ -44,14 +44,6 @@ export function toCrlf(data: Buffer): Buffer {
   return Buffer.from(normalized, "binary");
 }
 
-/** CRLF / 裸 CR → LF */
-export function toLf(data: Buffer): Buffer {
-  const text = data.toString("binary");
-  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  if (normalized === text) return data;
-  return Buffer.from(normalized, "binary");
-}
-
 export interface HashFile {
   /** 相对技能目录的路径，/ 分隔 */
   rel: string;

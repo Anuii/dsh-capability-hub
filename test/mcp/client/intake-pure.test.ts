@@ -11,14 +11,12 @@ import {
   defaultSelection,
   hiddenKeys,
   importableNames,
-  importCounts,
   planPasteRows,
   placeholderNames,
   rawSummary,
   rawToSubmit,
   renameRow,
   secretSummary,
-  selectedNames,
   suggestAvailableName,
   toggleSelection,
 } from "../../../src/mcp/client/intake/pure.ts";
@@ -107,14 +105,6 @@ test("toggleSelection：加/减并保持升序", () => {
   assert.deepEqual(toggleSelection([0, 2], 0), [2]);
 });
 
-test("selectedNames / rawToSubmit：只带认识的字段，名字用改名后的", () => {
-  const rows = renameRow(planPasteRows([stdio("alpha")], ["alpha"]), 0, "alpha-2", ["alpha"]);
-  assert.deepEqual(selectedNames(rows, [0]), ["alpha-2"]);
-  const submit = rawToSubmit({ ...rows[0].server, serverName: rows[0].name });
-  assert.deepEqual(Object.keys(submit).sort(), ["args", "command", "serverName", "transport"]);
-  assert.equal(submit.serverName, "alpha-2");
-});
-
 test("rawToSubmit：不把 undefined 写进去（默认值不落盘）", () => {
   const submit = rawToSubmit({ serverName: "a", transport: "stdio", command: "node", args: undefined, cwd: undefined });
   assert.deepEqual(submit, { serverName: "a", transport: "stdio", command: "node" });
@@ -142,6 +132,9 @@ test("importableNames：默认只勾选当前配置里没有的服务器", () =>
   assert.deepEqual(importableNames(servers, []), ["a", "b"]);
 });
 
-test("importCounts：数出 imported 与 skipped", () => {
-  assert.deepEqual(importCounts(["a", "b"], [{ name: "c", reason: "同名" }]), { imported: 2, skipped: 1 });
+test("rawToSubmit：只带认识的字段，名字用改名后的", () => {
+  const rows = renameRow(planPasteRows([stdio("alpha")], ["alpha"]), 0, "alpha-2", ["alpha"]);
+  const submit = rawToSubmit({ ...rows[0]!.server, serverName: rows[0]!.name });
+  assert.deepEqual(Object.keys(submit).sort(), ["args", "command", "serverName", "transport"]);
+  assert.equal(submit.serverName, "alpha-2");
 });

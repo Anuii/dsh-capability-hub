@@ -16,12 +16,13 @@ import { getDefaultEnvironment } from "./sdk-transport.ts";
 import { buildChildEnv } from "./sandbox-env.ts";
 import { resolveEnvFrom } from "./env-from.ts";
 import { StderrTail } from "./stderr-tail.ts";
-import { errorText } from "./errors.ts";
+
 import { CLOSE_TIMEOUT_MS, CONNECT_TIMEOUT_MS } from "../constants.ts";
 import type { EffectiveServer } from "../../contract/config.ts";
 import type { McpSdk } from "../../contract/runtime.ts";
 import type { Clock } from "./clock.ts";
 import type { ProcessSupervisor } from "./supervisor.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 export type InstanceState = "connecting" | "ready" | "failed" | "closing" | "closed";
 
@@ -37,12 +38,6 @@ export interface InstanceOptions {
   sessionId: string;
   parentSessionId?: string;
   title?: string;
-}
-
-export interface CallOutcome {
-  result: unknown;
-  /** 本次调用尝试连接的毫秒数（用于「距上次刷新」判断）。 */
-  connectMs: number;
 }
 
 export class McpInstance {

@@ -10,11 +10,12 @@ import * as React from "react";
 import { Button, CodeBlock } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner, SkeletonRows } from "../../../kit/index.ts";
 import { fetchPresets } from "../data.ts";
-import { draftFromValues, errorMessage, type ServerDraft } from "../model.ts";
+import { draftFromValues, type ServerDraft } from "../model.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { PresetView } from "../../contract/config.ts";
 import { rawSummary, rawToSubmit } from "./pure.ts";
+import { errorText } from "../../../shared/error-text.ts";
 
 export interface PresetViewProps {
   /** 选中模板后把草稿交给外壳（切到表单视图）。 */
@@ -45,7 +46,7 @@ export function PresetView(props: PresetViewProps): React.ReactElement {
         setLoading(false);
       },
       (failure: unknown) => {
-        setError(errorMessage(failure));
+        setError(errorText(failure));
         setLoading(false);
       },
     );

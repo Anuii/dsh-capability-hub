@@ -160,11 +160,6 @@ export function blockedRows(rows: readonly PasteRow[], selected: readonly number
   return rows.filter((row) => selected.includes(row.index) && row.status !== "new");
 }
 
-/** 提交用的名字列表（按预览顺序）。 */
-export function selectedNames(rows: readonly PasteRow[], selected: readonly number[]): string[] {
-  return rows.filter((row) => selected.includes(row.index)).map((row) => row.name);
-}
-
 /** 落盘形态 → upsert 的 server 体（只带本插件认识的字段）。 */
 export function rawToSubmit(server: ParsedServer): Record<string, unknown> {
   const out: Record<string, unknown> = { serverName: server.serverName };
@@ -196,12 +191,4 @@ export function placeholderNames(servers: readonly ParsedServer[]): string[] {
 /** 导入候选：来源里找到、且当前配置里没有同名的服务器（同名由服务端跳过，这里只做默认勾选）。 */
 export function importableNames(servers: readonly ParsedServer[], existingNames: readonly string[]): string[] {
   return servers.filter((server) => !existingNames.includes(server.serverName)).map((server) => server.serverName);
-}
-
-/** 导入结果的一句话摘要（imported / skipped 的计数）。 */
-export function importCounts(
-  imported: readonly string[],
-  skipped: readonly SkippedServer[],
-): { imported: number; skipped: number } {
-  return { imported: imported.length, skipped: skipped.length };
 }

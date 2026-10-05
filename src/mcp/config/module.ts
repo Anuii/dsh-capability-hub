@@ -7,6 +7,7 @@
  */
 
 import { badRequest, conflict, notFound, validation } from "../../shared/errors.ts";
+import { asRecord, optionalString, requireString, requireBoolean, requireStringArray } from "../../shared/request.ts";
 import { checkCommand, type CheckCommandOptions } from "./check-command.ts";
 import {
   listImportSources,
@@ -31,37 +32,6 @@ export interface McpConfigModuleOptions {
 }
 
 // —— 请求体小工具 ——
-
-function asRecord(body: unknown): Record<string, unknown> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw badRequest("请求体必须是一个 JSON 对象。");
-  }
-  return body as Record<string, unknown>;
-}
-
-function optionalString(value: unknown, name: string): string | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw badRequest("参数 " + name + " 必须是字符串。");
-  return value;
-}
-
-function requireString(value: unknown, name: string): string {
-  const out = optionalString(value, name);
-  if (out === undefined) throw badRequest("缺少必填参数 " + name + "。");
-  return out;
-}
-
-function requireBoolean(value: unknown, name: string): boolean {
-  if (typeof value !== "boolean") throw badRequest("参数 " + name + " 必须是布尔值（true/false）。");
-  return value;
-}
-
-function requireStringArray(value: unknown, name: string): string[] {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw badRequest("参数 " + name + " 必须是字符串数组。");
-  }
-  return value as string[];
-}
 
 /** 返回值是契约的超集：额外暴露 store 与 ready()，方便宿主/测试等待首次加载。 */
 export interface McpConfigModuleExports extends McpConfigModule {

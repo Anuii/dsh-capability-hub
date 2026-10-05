@@ -42,16 +42,3 @@ export const readOnly = (message: string): HubError => hubError("READ_ONLY", mes
 export const upstream = (message: string, details?: unknown): HubError => hubError("UPSTREAM", message, details);
 export const rateLimited = (message: string, details?: unknown): HubError => hubError("RATE_LIMITED", message, details);
 export const internal = (message: string): HubError => hubError("INTERNAL", message);
-
-export function isHubError(error: unknown): error is HubError {
-  return (
-    error instanceof Error &&
-    typeof (error as HubError).status === "number" &&
-    typeof (error as HubError).code === "string"
-  );
-}
-
-/** 任意抛出物 → 文本（调用方要确保 message 本身不含令牌）。 */
-export function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}

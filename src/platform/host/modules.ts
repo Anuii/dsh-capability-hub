@@ -20,6 +20,7 @@ import { createMcpConfigModule } from "../../mcp/config/module.ts";
 import { createSkillsLocalModule } from "../../skills/local/module.ts";
 import { createSkillsRemoteModule } from "../../skills/remote/module.ts";
 import { createMcpRuntimeModule } from "../../mcp/runtime/module.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 /** 一个模块条目的定义。 */
 export interface ModuleEntry {
@@ -42,11 +43,6 @@ export interface ModuleStatus {
   at?: string;
   /** 加载耗时（毫秒）。 */
   loadMs?: number;
-}
-
-/** 安全读错误消息。 */
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** 模块注册表。 */
@@ -135,7 +131,7 @@ export class ModuleRegistry {
       name,
       status: "degraded",
       routes: [],
-      message: messageOf(error),
+      message: errorText(error),
       at: new Date().toISOString(),
       ...(loadMs === undefined ? {} : { loadMs }),
     };
@@ -150,7 +146,7 @@ export class ModuleRegistry {
       try {
         await module.dispose?.();
       } catch (error) {
-        this.#ctx.logger.warn(`模块 ${name} 卸载失败：${messageOf(error)}`);
+        this.#ctx.logger.warn(`模块 ${name} 卸载失败：${errorText(error)}`);
       }
       const previous = this.#statuses.get(name);
       if (previous !== undefined) this.#statuses.set(name, { ...previous, status: "disposed" });
@@ -180,11 +176,6 @@ export interface FeatureState {
 
 export function makeFeatureState(): FeatureState {
   return { lockStashBound: false, runtimeStarted: false, notes: [] };
-}
-
-/** 安全读错误消息。 */
-function errorTextOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -255,7 +246,7 @@ export function createFeatureModuleEntries(options: {
           state.lockStashBound = true;
         } catch (error) {
           state.lockStashBound = false;
-          const message = "LockStash 绑定失败：" + errorTextOf(error);
+          const message = "LockStash 绑定失败：" + errorText(error);
           state.notes.push(message);
           log.warn(message + "（技能删除时 lock 条目将留在原处，其余功能不受影响）");
         }
@@ -286,7 +277,7 @@ export function createFeatureModuleEntries(options: {
           },
           (error: unknown) => {
             state.runtimeStarted = false;
-            state.runtimeStartError = errorTextOf(error);
+            state.runtimeStartError = errorText(error);
             state.notes.push("mcp-runtime.start() 失败：" + state.runtimeStartError);
             log.warn(
               "mcp-runtime.start() 失败（自动探测与空闲回收不可用，其余功能不受影响）：" + state.runtimeStartError,

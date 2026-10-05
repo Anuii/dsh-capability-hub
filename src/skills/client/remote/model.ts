@@ -111,11 +111,6 @@ export function authModeLabel(mode: AuthMode | undefined): string {
   }
 }
 
-/** 剩余配额的值（标签由调用方给：详情里是 KeyValue 的一行，菜单里拼在一句话里）。 */
-export function quotaValue(remaining: number | undefined): string {
-  return typeof remaining === "number" ? String(remaining) : t("skills.remote.quotaUnknownShort");
-}
-
 /** 「检查更新」的结果统计（工具栏用）。 */
 export interface CheckSummary {
   available: number;

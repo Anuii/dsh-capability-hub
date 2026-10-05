@@ -13,8 +13,9 @@
 import { createStore, type Store } from "../../kit/store.ts";
 import type { FieldError } from "../../platform/contract/host.ts";
 import type { ListResult, SkillSummary, TrashItem } from "../contract/local.ts";
-import { displayName, errorMessage, fieldErrors, isConflict, removeSkill, replaceSkill } from "./format.ts";
+import { displayName, fieldErrors, isConflict, removeSkill, replaceSkill } from "./format.ts";
 import { t } from "./strings.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 export interface SkillsAdapter {
   list(workspace: string | undefined): Promise<ListResult>;
@@ -68,7 +69,7 @@ export interface SkillsStore {
 const ok = (message: string): ActionResult => ({ ok: true, message, fieldErrors: [] });
 const failed = (failure: unknown): ActionResult => ({
   ok: false,
-  message: t("skills.toast.failed", { message: errorMessage(failure) }),
+  message: t("skills.toast.failed", { message: errorText(failure) }),
   fieldErrors: fieldErrors(failure),
 });
 
@@ -106,7 +107,7 @@ export function createSkillsStore(adapter: SkillsAdapter): SkillsStore {
       const list = await adapter.list(workspace);
       if (mine === round) state.patch({ list, loading: false });
     } catch (failure) {
-      if (mine === round) state.patch({ listError: errorMessage(failure), loading: false });
+      if (mine === round) state.patch({ listError: errorText(failure), loading: false });
     }
   };
 
@@ -115,7 +116,7 @@ export function createSkillsStore(adapter: SkillsAdapter): SkillsStore {
     try {
       state.patch({ trash: await adapter.trash(), trashLoading: false });
     } catch (failure) {
-      state.patch({ trashError: errorMessage(failure), trashLoading: false });
+      state.patch({ trashError: errorText(failure), trashLoading: false });
     }
   };
 

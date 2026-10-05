@@ -13,12 +13,7 @@
 
 import { readDiscovery, refreshDiscovery, forgetDiscovery, type DiscoveryDeps } from "./repo-discovery.ts";
 import type { RepoPatch } from "./repos.ts";
-import type { DiscoveryView, RepoRecord } from "../contract/remote.ts";
-
-export interface RepoChange {
-  repos: RepoRecord[];
-  discovery: DiscoveryView;
-}
+import type { DiscoveryView, RepoChange, RepoRecord } from "../contract/remote.ts";
 
 export interface RepoCatalog {
   list(): Promise<RepoRecord[]>;

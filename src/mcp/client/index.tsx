@@ -53,7 +53,6 @@ import {
   draftFromView,
   draftToJsonText,
   emptyServerDraft,
-  errorMessage,
   filterLabel,
   reorderNames,
   runtimeIndex,
@@ -67,6 +66,7 @@ import { SettingsPanel } from "./settings.tsx";
 import { injectMcpStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { ConfigPayload, ServerView } from "../contract/config.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 /* 样式只注入一次（模块加载时；无 document 时自动跳过）。 */
 injectMcpStyles();
@@ -162,7 +162,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
         setLoading(false);
       },
       (error: unknown) => {
-        setConfigError(errorMessage(error));
+        setConfigError(errorText(error));
         setLoading(false);
       },
     );
@@ -264,7 +264,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
             "success",
           );
         },
-        (error: unknown) => showToast(t("mcp.toast.failed", { message: errorMessage(error) })),
+        (error: unknown) => showToast(t("mcp.toast.failed", { message: errorText(error) })),
       )
       .finally(() => markBusy(view.serverName, false));
   };
@@ -275,7 +275,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
         setConfig((prev) => (prev === undefined ? prev : { ...prev, servers: next }));
         showToast(t("mcp.toast.reordered"), "success");
       },
-      (error: unknown) => showToast(t("mcp.toast.failed", { message: errorMessage(error) })),
+      (error: unknown) => showToast(t("mcp.toast.failed", { message: errorText(error) })),
     );
   };
 
@@ -296,7 +296,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
       .then(
         (result) => showToast(t("mcp.detail.refreshOk", { name: view.serverName, count: result.toolCount }), "success"),
         (error: unknown) =>
-          showToast(t("mcp.detail.refreshFailed", { name: view.serverName, message: errorMessage(error) })),
+          showToast(t("mcp.detail.refreshFailed", { name: view.serverName, message: errorText(error) })),
       )
       .finally(() => setRefreshing(undefined));
   };
@@ -314,7 +314,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
         },
         (error: unknown) => {
           setPendingDisconnect(undefined);
-          showToast(t("mcp.detail.disconnectFailed", { name: target.name, message: errorMessage(error) }));
+          showToast(t("mcp.detail.disconnectFailed", { name: target.name, message: errorText(error) }));
         },
       )
       .finally(() => setDisconnecting(false));
@@ -336,7 +336,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
           load();
           showToast(t("mcp.delete.done", { name: server.serverName }), "success");
         },
-        (error: unknown) => showToast(t("mcp.toast.failed", { message: errorMessage(error) })),
+        (error: unknown) => showToast(t("mcp.toast.failed", { message: errorText(error) })),
       )
       .finally(() => setDeleting(false));
   };

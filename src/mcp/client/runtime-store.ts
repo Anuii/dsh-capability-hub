@@ -14,6 +14,7 @@
 
 import { createStore, type Store } from "../../kit/store.ts";
 import type { RuntimeDisconnectResult, RuntimeRefreshResult, RuntimeStatus } from "../contract/runtime.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 /** 访问宿主运行时的 seam。 */
 export interface RuntimeAdapter {
@@ -57,10 +58,6 @@ export interface RuntimeStore {
   waitForTools(name: string): Promise<number | undefined>;
   /** 开始轮询；返回停止函数。多处同时调用只共用一个计时器。 */
   startPolling(): () => void;
-}
-
-export function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 const realTimers: RuntimeTimers = {

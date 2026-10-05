@@ -69,21 +69,6 @@ export const DEFAULT_OUTPUT_GUARD: OutputGuard = { enabled: true, maxBytes: 5120
 export const DEFAULT_ENV_FROM_TIMEOUT_MS = 10000;
 export const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60000;
 
-/** 服务器字段默认值（不落盘的那一套）。 */
-export const SERVER_DEFAULTS = {
-  args: [] as string[],
-  env: {} as Record<string, string>,
-  envFrom: {} as Record<string, string>,
-  allowEmpty: [] as string[],
-  envFromTimeoutMs: DEFAULT_ENV_FROM_TIMEOUT_MS,
-  headers: {} as Record<string, string>,
-  toolCallTimeoutMs: DEFAULT_TOOL_CALL_TIMEOUT_MS,
-  lifecycle: "lazy" as Lifecycle,
-  searchKeywords: {} as Record<string, string[]>,
-  disabled: false,
-  debug: false,
-} as const;
-
 /**
  * 官方客户端插件的字段：明确告知用户「不支持」，而不是只说「未知字段」。
  *
@@ -649,14 +634,6 @@ export function serverView(effective: EffectiveServer, raw: RawMcpServer | undef
 /** 空配置。 */
 export function emptyRawConfig(): RawMcpConfigFile {
   return { version: 1, settings: {}, servers: [] };
-}
-
-/** 归一化任意外部输入为落盘结构（丢弃无法识别的形状）。 */
-export function coerceRawConfig(value: unknown): RawMcpConfigFile {
-  if (!isPlainObject(value)) return emptyRawConfig();
-  const servers = Array.isArray(value.servers) ? (value.servers.filter((s) => isPlainObject(s)) as RawMcpServer[]) : [];
-  const settings = isPlainObject(value.settings) ? (value.settings as RawMcpSettings) : {};
-  return { version: 1, settings, servers };
 }
 
 export { fullWidth };
