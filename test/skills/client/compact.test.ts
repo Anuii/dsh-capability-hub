@@ -22,28 +22,48 @@ test("正常数据下一行没有任何标记（「只在需要时出现」）",
 
 test("一行只用三种标记 + 无名称兜底，顺序即优先级", () => {
   const flatNamed = makeSkill({ id: "user-agents:a", name: "a" });
-  assert.deepEqual(rowBadges(flatNamed, { updatable: new Set(["user-agents:a"]) }).map((badge) => [badge.key, badge.tone]), [
-    ["updatable", "accent"],
-  ]);
+  assert.deepEqual(
+    rowBadges(flatNamed, { updatable: new Set(["user-agents:a"]) }).map((badge) => [badge.key, badge.tone]),
+    [["updatable", "accent"]],
+  );
 
-  const broken = makeSkill({ id: "user-agents:b", name: "b", loadable: false, modelVisible: false, diagnostics: [diag("error", "BOM_PRESENT")] });
-  assert.deepEqual(rowBadges(broken).map((badge) => [badge.key, badge.label, badge.tone]), [
-    ["notLoadable", "不可加载", "danger"],
-  ]);
+  const broken = makeSkill({
+    id: "user-agents:b",
+    name: "b",
+    loadable: false,
+    modelVisible: false,
+    diagnostics: [diag("error", "BOM_PRESENT")],
+  });
+  assert.deepEqual(
+    rowBadges(broken).map((badge) => [badge.key, badge.label, badge.tone]),
+    [["notLoadable", "不可加载", "danger"]],
+  );
 
   const shadowed = makeSkill({ id: "user-agents:c", name: "c", modelVisible: false, shadowedBy: "user-dsh:c" });
   const shadowedBadges = rowBadges(shadowed);
-  assert.deepEqual(shadowedBadges.map((badge) => [badge.key, badge.label, badge.tone]), [["shadowed", "被遮蔽", "neutral"]]);
+  assert.deepEqual(
+    shadowedBadges.map((badge) => [badge.key, badge.label, badge.tone]),
+    [["shadowed", "被遮蔽", "neutral"]],
+  );
   assert.equal(shadowedBadges[0]!.title, "被更高优先级的 user-dsh:c 遮蔽");
 
   const unnamed = makeSkill({ id: "user-agents:d", dirName: "d-dir" });
-  assert.deepEqual(rowBadges(unnamed).map((badge) => badge.key), ["noName"]);
+  assert.deepEqual(
+    rowBadges(unnamed).map((badge) => badge.key),
+    ["noName"],
+  );
 
   // 同时命中四个时：前两个胜出（kit 的 clampBadges 负责截断）
   const everything = makeSkill({ id: "user-agents:e", dirName: "e-dir", loadable: false, shadowedBy: "x:e" });
   const all = rowBadges(everything, { updatable: new Set(["user-agents:e"]) });
-  assert.deepEqual(all.map((badge) => badge.key), ["notLoadable", "updatable", "shadowed", "noName"]);
-  assert.deepEqual(clampBadges(all).map((badge) => badge.key), ["notLoadable", "updatable"]);
+  assert.deepEqual(
+    all.map((badge) => badge.key),
+    ["notLoadable", "updatable", "shadowed", "noName"],
+  );
+  assert.deepEqual(
+    clampBadges(all).map((badge) => badge.key),
+    ["notLoadable", "updatable"],
+  );
   assert.equal(MAX_ROW_BADGES, 2);
 });
 

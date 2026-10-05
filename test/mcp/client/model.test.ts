@@ -56,7 +56,11 @@ import { makeServerView } from "./fixtures.ts";
 /* ---------------- 草稿与默认值（D-C1） ---------------- */
 
 test("draftFromView 只搬显式设置过的字段", () => {
-  const view = makeServerView({ setFields: ["serverName", "transport", "command", "args", "env"], args: ["-y", "pkg"], env: { TOKEN: HIDDEN_VALUE } });
+  const view = makeServerView({
+    setFields: ["serverName", "transport", "command", "args", "env"],
+    args: ["-y", "pkg"],
+    env: { TOKEN: HIDDEN_VALUE },
+  });
   const draft = draftFromView(view);
   assert.deepEqual(draftSetFields(draft), ["serverName", "transport", "command", "args", "env"]);
   assert.equal(draftHas(draft, "cwd"), false);
@@ -74,7 +78,10 @@ test("withField：空值 / false / 空数组 / 空对象都等于恢复默认（
   assert.equal(Object.prototype.hasOwnProperty.call(withField(base, "env", {}).values, "env"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(withField(base, "disabled", false).values, "disabled"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(withField(base, "debug", true).values, "debug"), true);
-  assert.equal(Object.prototype.hasOwnProperty.call(withoutField(withField(base, "debug", true), "debug").values, "debug"), false);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(withoutField(withField(base, "debug", true), "debug").values, "debug"),
+    false,
+  );
   assert.equal(Object.prototype.hasOwnProperty.call(withField(base, "cwd", "  ").values, "cwd"), false);
 });
 
@@ -85,7 +92,13 @@ test("draftToSubmit：数值字段转数字、serverName 去空白、只带显�
   draft = withField(draft, "idleTimeout", "5");
   draft = withField(draft, "toolCallTimeoutMs", "0");
   const submit = draftToSubmit(draft);
-  assert.deepEqual(submit, { serverName: "demo", transport: "stdio", command: "node", idleTimeout: 5, toolCallTimeoutMs: 0 });
+  assert.deepEqual(submit, {
+    serverName: "demo",
+    transport: "stdio",
+    command: "node",
+    idleTimeout: 5,
+    toolCallTimeoutMs: 0,
+  });
   assert.equal(Object.keys(submit).includes("lifecycle"), false);
 });
 
@@ -96,12 +109,19 @@ test("draftToSubmit 按传输方式裁剪，但草稿本身保留（切换传输
   draft = withField(draft, "url", "https://example.com/mcp");
   assert.deepEqual(draftToSubmit(draft), { serverName: "a", transport: "stdio", command: "node" });
   const http = withField(draft, "transport", "streamable-http");
-  assert.deepEqual(draftToSubmit(http), { serverName: "a", transport: "streamable-http", url: "https://example.com/mcp" });
+  assert.deepEqual(draftToSubmit(http), {
+    serverName: "a",
+    transport: "streamable-http",
+    url: "https://example.com/mcp",
+  });
   assert.equal(draftHas(http, "command"), true, "草稿里仍然留着 command，切回 stdio 还在");
 });
 
 test("遮罩值原样往返（D-C5）", () => {
-  const view = makeServerView({ setFields: ["serverName", "transport", "command", "env"], env: { TOKEN: HIDDEN_VALUE } });
+  const view = makeServerView({
+    setFields: ["serverName", "transport", "command", "env"],
+    env: { TOKEN: HIDDEN_VALUE },
+  });
   const submit = draftToSubmit(draftFromView(view));
   assert.deepEqual(submit.env, { TOKEN: HIDDEN_VALUE });
 });
@@ -155,7 +175,13 @@ test("parseJsonServer：非法 JSON 与非对象都给出中文错误", () => {
 });
 
 test("draftFromValues 把数值字段转成文本，保留全部白名单字段", () => {
-  const draft = draftFromValues({ serverName: "a", transport: "stdio", command: "node", idleTimeout: 7, meta: { description: "d" } });
+  const draft = draftFromValues({
+    serverName: "a",
+    transport: "stdio",
+    command: "node",
+    idleTimeout: 7,
+    meta: { description: "d" },
+  });
   assert.equal(draft.values.idleTimeout, "7");
   assert.deepEqual(draft.values.meta, { description: "d" });
   assert.deepEqual(draftSetFields(draft), ["serverName", "transport", "command", "idleTimeout", "meta"]);
@@ -166,17 +192,28 @@ test("draftFromValues 把数值字段转成文本，保留全部白名单字段"
 test("validateDraft：serverName 非法 / 重名", () => {
   const bad = withField(emptyServerDraft(), "serverName", "has space");
   const errors = validateDraft(bad, { existingNames: [] });
-  assert.deepEqual(errors.map((e) => e.path), ["server.serverName", "server.command"]);
-  const dup = validateDraft(withField(withField(emptyServerDraft(), "serverName", "demo"), "command", "node"), { existingNames: ["demo"] });
+  assert.deepEqual(
+    errors.map((e) => e.path),
+    ["server.serverName", "server.command"],
+  );
+  const dup = validateDraft(withField(withField(emptyServerDraft(), "serverName", "demo"), "command", "node"), {
+    existingNames: ["demo"],
+  });
   assert.equal(dup[0].path, "server.serverName");
-  const renamed = validateDraft(withField(withField(emptyServerDraft(), "serverName", "demo"), "command", "node"), { existingNames: ["demo"], originalName: "demo" });
+  const renamed = validateDraft(withField(withField(emptyServerDraft(), "serverName", "demo"), "command", "node"), {
+    existingNames: ["demo"],
+    originalName: "demo",
+  });
   assert.deepEqual(renamed, []);
 });
 
 test("validateDraft：http 传输的 url 必须是 http/https", () => {
   const http = withField(emptyServerDraft("streamable-http"), "serverName", "web");
   const missing = validateDraft(withField(http, "url", ""), {});
-  assert.deepEqual(missing.map((e) => e.path), ["server.url"]);
+  assert.deepEqual(
+    missing.map((e) => e.path),
+    ["server.url"],
+  );
   const bad = validateDraft(withField(http, "url", "ftp://x"), {});
   assert.equal(bad[0].path, "server.url");
   const bad2 = validateDraft(withField(http, "url", "例子.com"), {});
@@ -198,22 +235,42 @@ test("validateDraft：数值字段必须是非负整数", () => {
 test("validateDraft：envFrom / allowEmpty / env 冲突 / 非 stdio", () => {
   const base = withField(withField(emptyServerDraft(), "serverName", "a"), "command", "node");
   const overlap = withField(withField(base, "env", { TOKEN: "x" }), "envFrom", { TOKEN: "echo 1" });
-  assert.equal(validateDraft(overlap, {}).some((e) => e.path === "server.envFrom.TOKEN"), true);
+  assert.equal(
+    validateDraft(overlap, {}).some((e) => e.path === "server.envFrom.TOKEN"),
+    true,
+  );
   const badName = withField(base, "envFrom", { "1BAD": "echo 1" });
-  assert.equal(validateDraft(badName, {}).some((e) => e.path.startsWith("server.envFrom")), true);
+  assert.equal(
+    validateDraft(badName, {}).some((e) => e.path.startsWith("server.envFrom")),
+    true,
+  );
   const allowEmpty = withField(base, "allowEmpty", ["NOPE"]);
-  assert.equal(validateDraft(allowEmpty, {}).some((e) => e.path.startsWith("server.allowEmpty")), true);
+  assert.equal(
+    validateDraft(allowEmpty, {}).some((e) => e.path.startsWith("server.allowEmpty")),
+    true,
+  );
   const withEnvFrom = withField(allowEmpty, "envFrom", { NOPE: "echo 1" });
   assert.deepEqual(validateDraft(withEnvFrom, {}), []);
   const http = withField(withField(emptyServerDraft("streamable-http"), "serverName", "w"), "envFrom", { A: "echo" });
-  assert.equal(validateDraft(withField(http, "url", "https://x"), {}).some((e) => e.path === "server.envFrom"), true);
+  assert.equal(
+    validateDraft(withField(http, "url", "https://x"), {}).some((e) => e.path === "server.envFrom"),
+    true,
+  );
 });
 
 test("validateDraft：searchKeywords / meta.tags 形状", () => {
   const base = withField(withField(emptyServerDraft(), "serverName", "a"), "command", "node");
   assert.equal(validateDraft(withField(base, "searchKeywords", { echo: ["回显"] }), {}).length, 0);
-  assert.equal(validateDraft(withField(base, "searchKeywords", { echo: "not-a-list" }), {}).some((e) => e.path.startsWith("server.searchKeywords")), true);
-  assert.equal(validateDraft(withField(base, "meta", { tags: ["ok", ""] }), {}).some((e) => e.path === "server.meta.tags"), true);
+  assert.equal(
+    validateDraft(withField(base, "searchKeywords", { echo: "not-a-list" }), {}).some((e) =>
+      e.path.startsWith("server.searchKeywords"),
+    ),
+    true,
+  );
+  assert.equal(
+    validateDraft(withField(base, "meta", { tags: ["ok", ""] }), {}).some((e) => e.path === "server.meta.tags"),
+    true,
+  );
 });
 
 /* ---------------- 错误路径映射 ---------------- */
@@ -274,8 +331,19 @@ test("settingsDraftFrom / settingsToSubmit：只带设置过的项", () => {
   );
   assert.equal(settingsHas(draft, "idleTimeout"), true);
   assert.equal(settingsHas(draft, "failureBackoffMs"), false);
-  assert.deepEqual(settingsToSubmit(draft), { idleTimeout: 3, outputGuard: { enabled: false, maxBytes: 1024, maxLines: 10 } });
-  assert.deepEqual(settingsToSubmit(settingsDraftFrom({ idleTimeoutMin: 10, outputGuard: { enabled: true, maxBytes: 1, maxLines: 1 }, failureBackoffMs: 0 }, [])), {});
+  assert.deepEqual(settingsToSubmit(draft), {
+    idleTimeout: 3,
+    outputGuard: { enabled: false, maxBytes: 1024, maxLines: 10 },
+  });
+  assert.deepEqual(
+    settingsToSubmit(
+      settingsDraftFrom(
+        { idleTimeoutMin: 10, outputGuard: { enabled: true, maxBytes: 1, maxLines: 1 }, failureBackoffMs: 0 },
+        [],
+      ),
+    ),
+    {},
+  );
 });
 
 test("validateSettingsDraft 拒绝非法数值", () => {
@@ -306,7 +374,11 @@ test("matchesFilter：全部 / 已启用 / 已停用 / 有错误", () => {
 });
 
 test("matchesQuery：名称 / 命令 / 描述 / 标签，大小写不敏感", () => {
-  const view = makeServerView({ serverName: "Demo", args: ["-y", "pkg"], meta: { description: "本地回显", tags: ["走查"] } });
+  const view = makeServerView({
+    serverName: "Demo",
+    args: ["-y", "pkg"],
+    meta: { description: "本地回显", tags: ["走查"] },
+  });
   assert.equal(matchesQuery(view, ""), true);
   assert.equal(matchesQuery(view, "demo"), true);
   assert.equal(matchesQuery(view, "node"), true);
@@ -323,17 +395,33 @@ test("serverFilterCounts / visibleServers：计数与搜索筛选一致", () => 
   ];
   const rows = new Map([["c", { name: "c", disabled: false, lastFailure: { message: "启动失败", at: NOW } }]]);
   assert.deepEqual(serverFilterCounts(servers, rows), { all: 3, enabled: 2, disabled: 1, failing: 1 });
-  assert.deepEqual(visibleServers(servers, rows, "", "disabled").map((view) => view.serverName), ["b"]);
-  assert.deepEqual(visibleServers(servers, rows, "c", "all").map((view) => view.serverName), ["c"]);
-  assert.deepEqual(visibleServers(servers, rows, "c", "failing").map((view) => view.serverName), ["c"]);
+  assert.deepEqual(
+    visibleServers(servers, rows, "", "disabled").map((view) => view.serverName),
+    ["b"],
+  );
+  assert.deepEqual(
+    visibleServers(servers, rows, "c", "all").map((view) => view.serverName),
+    ["c"],
+  );
+  assert.deepEqual(
+    visibleServers(servers, rows, "c", "failing").map((view) => view.serverName),
+    ["c"],
+  );
   assert.deepEqual(visibleServers(servers, rows, "c", "disabled"), []);
 });
 
 test("serverStatusTone：冷却 > 失败 > 有活跃实例 > 空闲", () => {
-  const cooling = { name: "x", disabled: false, lastFailure: { message: "启动失败", at: NOW, cooldownUntil: NOW + 30_000 } };
+  const cooling = {
+    name: "x",
+    disabled: false,
+    lastFailure: { message: "启动失败", at: NOW, cooldownUntil: NOW + 30_000 },
+  };
   assert.equal(serverStatusTone(cooling, 2, NOW), "cooling");
   assert.equal(serverStatusTone(cooling, 2, NOW + 30_000), "failed");
-  assert.equal(serverStatusTone({ name: "x", disabled: false, lastFailure: { message: "启动失败", at: NOW } }, 0, NOW), "failed");
+  assert.equal(
+    serverStatusTone({ name: "x", disabled: false, lastFailure: { message: "启动失败", at: NOW } }, 0, NOW),
+    "failed",
+  );
   assert.equal(serverStatusTone(undefined, 1, NOW), "active");
   assert.equal(serverStatusTone(undefined, 0, NOW), "idle");
   assert.equal(statusTitle("idle"), undefined);
@@ -354,25 +442,49 @@ test("cooldownText / formatDuration：倒计时文案随 now 变化，冷却结�
 test("rowSubtitleText：命令 / 地址 + 「· N 个工具」（没有缓存时省略）", () => {
   const view = makeServerView({ args: ["-y", "pkg"] });
   assert.equal(rowSubtitleText(view, undefined), "node -y pkg");
-  assert.equal(rowSubtitleText(view, { name: "demo", disabled: false, cache: { toolCount: 4, updatedAt: NOW, stale: false, tools: [] } }), "node -y pkg · 4 个工具");
-  assert.equal(rowSubtitleText(makeServerView({ transport: "streamable-http", url: "https://x/y" }), undefined), "https://x/y");
+  assert.equal(
+    rowSubtitleText(view, {
+      name: "demo",
+      disabled: false,
+      cache: { toolCount: 4, updatedAt: NOW, stale: false, tools: [] },
+    }),
+    "node -y pkg · 4 个工具",
+  );
+  assert.equal(
+    rowSubtitleText(makeServerView({ transport: "streamable-http", url: "https://x/y" }), undefined),
+    "https://x/y",
+  );
 });
 
 test("cacheLineText / cachedToolNames：抽屉「工具」小节", () => {
   assert.equal(cacheLineText(undefined), "还没有工具缓存（保存或刷新后会自动探测一次）");
-  const row = { name: "demo", disabled: false, cache: { toolCount: 2, updatedAt: NOW, stale: true, tools: [{ name: "echo" }, { name: "slow" }] } };
+  const row = {
+    name: "demo",
+    disabled: false,
+    cache: { toolCount: 2, updatedAt: NOW, stale: true, tools: [{ name: "echo" }, { name: "slow" }] },
+  };
   assert.equal(cacheLineText(row).includes("缓存 2 个工具"), true);
   assert.equal(cacheLineText(row).includes("缓存已过期"), true);
   assert.deepEqual(cachedToolNames(row), ["echo", "slow"]);
   assert.deepEqual(cachedToolNames(undefined), []);
-  assert.deepEqual(cachedToolNames({ name: "demo", disabled: false, cache: { toolCount: 1, updatedAt: NOW, stale: false, tools: [] } }), []);
+  assert.deepEqual(
+    cachedToolNames({
+      name: "demo",
+      disabled: false,
+      cache: { toolCount: 1, updatedAt: NOW, stale: false, tools: [] },
+    }),
+    [],
+  );
 });
 
 test("activeInstanceCount / runtimeIndex：从运行态会话里数实例", () => {
   const inst = (server: string) => ({ server, state: "ready", startedAt: NOW, lastUsedAt: NOW });
   const runtime = {
     servers: [{ name: "demo", disabled: false }],
-    sessions: [{ sessionId: "s1", instances: [inst("demo"), inst("other")] }, { sessionId: "s2", instances: [inst("demo")] }],
+    sessions: [
+      { sessionId: "s1", instances: [inst("demo"), inst("other")] },
+      { sessionId: "s2", instances: [inst("demo")] },
+    ],
   };
   assert.equal(activeInstanceCount(runtime, "demo"), 2);
   assert.equal(activeInstanceCount(runtime, "nope"), 0);
@@ -387,11 +499,34 @@ test("formatClock：本地 HH:mm", () => {
 });
 
 test("列表行的紧凑命令：路径只留文件名，可执行文件去掉扩展名，包名与地址原样", () => {
-  assert.equal(compactSummaryText({ transport: "stdio", command: "D:\\Program Files\\nodejs\\node.exe", args: ["C:\\x\\y\\fake-mcp-server.mjs"] }), "node fake-mcp-server.mjs");
-  assert.equal(compactSummaryText({ transport: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-fetch"] }), "npx -y @modelcontextprotocol/server-fetch");
-  assert.equal(compactSummaryText({ transport: "stdio", command: "uvx", args: ["mcp-server-time", "--local-timezone=Asia/Shanghai"] }), "uvx mcp-server-time --local-timezone=Asia/Shanghai");
-  assert.equal(compactSummaryText({ transport: "stdio", command: "/usr/local/bin/python3", args: ["./server.py"] }), "python3 server.py");
-  assert.equal(compactSummaryText({ transport: "streamable-http", url: "https://example.com/mcp" }), "https://example.com/mcp");
+  assert.equal(
+    compactSummaryText({
+      transport: "stdio",
+      command: "D:\\Program Files\\nodejs\\node.exe",
+      args: ["C:\\x\\y\\fake-mcp-server.mjs"],
+    }),
+    "node fake-mcp-server.mjs",
+  );
+  assert.equal(
+    compactSummaryText({ transport: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-fetch"] }),
+    "npx -y @modelcontextprotocol/server-fetch",
+  );
+  assert.equal(
+    compactSummaryText({
+      transport: "stdio",
+      command: "uvx",
+      args: ["mcp-server-time", "--local-timezone=Asia/Shanghai"],
+    }),
+    "uvx mcp-server-time --local-timezone=Asia/Shanghai",
+  );
+  assert.equal(
+    compactSummaryText({ transport: "stdio", command: "/usr/local/bin/python3", args: ["./server.py"] }),
+    "python3 server.py",
+  );
+  assert.equal(
+    compactSummaryText({ transport: "streamable-http", url: "https://example.com/mcp" }),
+    "https://example.com/mcp",
+  );
   assert.equal(isPathLike("@scope/pkg"), false);
   assert.equal(isPathLike("~/bin/tool"), true);
   assert.equal(shortPart("C:\\tools\\server.CMD", true), "server");

@@ -14,7 +14,15 @@
 
 import { findSourceFor } from "./remote/model.ts";
 import type { SourceEntry } from "../contract/remote.ts";
-import { isDshInstallPath, matches, normalizePath, rootScope, sortSkills, type FilterId, type MatchContext } from "./format.ts";
+import {
+  isDshInstallPath,
+  matches,
+  normalizePath,
+  rootScope,
+  sortSkills,
+  type FilterId,
+  type MatchContext,
+} from "./format.ts";
 import { t } from "./strings.ts";
 import type { ListResult, RootInfo, SkillSummary } from "../contract/local.ts";
 
@@ -44,7 +52,9 @@ export function levelLabel(level: SkillLevel): string {
 
 /** 技能目录的短名：最后一个 skills 段之前的那一段；没有就取最后一段。 */
 export function dirTagText(path: string): string {
-  const segments = normalizePath(path).split("\\").filter((part) => part !== "");
+  const segments = normalizePath(path)
+    .split("\\")
+    .filter((part) => part !== "");
   if (segments.length === 0) return path;
   for (let index = segments.length - 1; index > 0; index--) {
     if (segments[index]!.toLowerCase() !== "skills") continue;
@@ -82,8 +92,12 @@ export function dirOptions(list: Pick<ListResult, "roots" | "skills">): DirOptio
       count: counts.get(root.rootId) ?? 0,
       title: root.path,
     }));
-  return options.sort((left, right) =>
-    LEVELS.indexOf(left.level) - LEVELS.indexOf(right.level) || left.tag.localeCompare(right.tag) || left.rootId.localeCompare(right.rootId));
+  return options.sort(
+    (left, right) =>
+      LEVELS.indexOf(left.level) - LEVELS.indexOf(right.level) ||
+      left.tag.localeCompare(right.tag) ||
+      left.rootId.localeCompare(right.rootId),
+  );
 }
 
 /** rootId → 目录标签（行上用）。 */
@@ -198,7 +212,11 @@ export function toggleFold(state: FoldState, filterKey: string, key: string): Fo
   return { ...state, filtered: { filterKey, collapsed: toggled(filteredCollapsed(state, filterKey), key) } };
 }
 
-function repoGroups(level: SkillLevel, skills: readonly SkillSummary[], sources: Readonly<Record<string, SourceEntry>>): RepoGroupView[] {
+function repoGroups(
+  level: SkillLevel,
+  skills: readonly SkillSummary[],
+  sources: Readonly<Record<string, SourceEntry>>,
+): RepoGroupView[] {
   const byRepo = new Map<string, SkillSummary[]>();
   const none: SkillSummary[] = [];
   for (const skill of skills) {
@@ -209,7 +227,8 @@ function repoGroups(level: SkillLevel, skills: readonly SkillSummary[], sources:
   const groups: RepoGroupView[] = [...byRepo.entries()]
     .sort(([left], [right]) => left.toLowerCase().localeCompare(right.toLowerCase()))
     .map(([repo, items]) => ({ key: repoKey(level, repo), repo, label: repo, skills: sortSkills(items) }));
-  if (none.length > 0) groups.push({ key: repoKey(level, undefined), label: t("skills.tree.noSource"), skills: sortSkills(none) });
+  if (none.length > 0)
+    groups.push({ key: repoKey(level, undefined), label: t("skills.tree.noSource"), skills: sortSkills(none) });
   return groups;
 }
 
@@ -222,9 +241,11 @@ export function buildSkillTree(input: TreeInput): TreeView {
   const dir = input.dir ?? "";
   const filtering = isFiltering(input.query, input.filter, dir);
   const rootById = new Map(list.roots.map((root) => [root.rootId, root]));
-  const levelOf = (skill: SkillSummary): SkillLevel => levelOfRoot(rootById.get(skill.rootId) ?? { rootId: skill.rootId, path: skill.path });
-  const kept = list.skills.filter((skill) =>
-    matches(skill, input.query, input.filter, input.context) && (dir === "" || skill.rootId === dir));
+  const levelOf = (skill: SkillSummary): SkillLevel =>
+    levelOfRoot(rootById.get(skill.rootId) ?? { rootId: skill.rootId, path: skill.path });
+  const kept = list.skills.filter(
+    (skill) => matches(skill, input.query, input.filter, input.context) && (dir === "" || skill.rootId === dir),
+  );
 
   const levels: LevelView[] = [];
   for (const level of LEVELS) {
@@ -233,7 +254,17 @@ export function buildSkillTree(input: TreeInput): TreeView {
     if (filtering && shown.length === 0) continue;
     if (!filtering && level === "builtin" && all.length === 0) continue;
     const multiDir = new Set(all.map((skill) => skill.rootId)).size > 1;
-    const view: LevelView = { level, key: levelKey(level), label: levelLabel(level), total: all.length, shown: shown.length, flat: true, multiDir, skills: shown, repos: [] };
+    const view: LevelView = {
+      level,
+      key: levelKey(level),
+      label: levelLabel(level),
+      total: all.length,
+      shown: shown.length,
+      flat: true,
+      multiDir,
+      skills: shown,
+      repos: [],
+    };
     if (level === "project" && !input.hasWorkspace) view.noWorkspace = true;
     if (level !== "builtin" && input.sources !== undefined && shown.length > 0) {
       const groups = repoGroups(level, shown, input.sources);

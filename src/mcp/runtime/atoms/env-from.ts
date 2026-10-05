@@ -9,11 +9,16 @@
  *   1. 命令起不来；2. 超时；3. 非零退出；4. stdout 超 64 KiB；5. 含 NUL 字节；6. 空值且不在 allowEmpty。
  * 任一失败 ⇒ 该服务器拒绝启动（绝不注入空值）。
  */
-import { spawn } from 'node:child_process';
-import { IS_WINDOWS } from './win-proc-platform.ts';
-import { ENV_FROM_DEFAULT_TIMEOUT_MS, ENV_FROM_KILL_GRACE_MS, ENV_FROM_STDERR_LIMIT, ENV_FROM_STDOUT_LIMIT } from '../constants.ts';
-import { proxyEnvironment, fallbackDefaultEnvironment } from './sandbox-env.ts';
-import { appendCappedBytes, decodeStderrBytes } from './stderr-tail.ts';
+import { spawn } from "node:child_process";
+import { IS_WINDOWS } from "./win-proc-platform.ts";
+import {
+  ENV_FROM_DEFAULT_TIMEOUT_MS,
+  ENV_FROM_KILL_GRACE_MS,
+  ENV_FROM_STDERR_LIMIT,
+  ENV_FROM_STDOUT_LIMIT,
+} from "../constants.ts";
+import { proxyEnvironment, fallbackDefaultEnvironment } from "./sandbox-env.ts";
+import { appendCappedBytes, decodeStderrBytes } from "./stderr-tail.ts";
 
 export interface EnvFromFailure {
   variable: string;
@@ -34,14 +39,18 @@ function appendCapped(current: string, chunk: string, limit: number): string {
 
 function commandSpec(command: string): { file: string; args: string[] } {
   if (IS_WINDOWS) {
-    const comspec = process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
-    return { file: comspec, args: ['/d', '/s', '/c', command] };
+    const comspec = process.env.ComSpec || process.env.COMSPEC || "cmd.exe";
+    return { file: comspec, args: ["/d", "/s", "/c", command] };
   }
-  return { file: '/bin/sh', args: ['-c', command] };
+  return { file: "/bin/sh", args: ["-c", command] };
 }
 
 export interface EnvFromRunner {
-  (variable: string, command: string, timeoutMs: number): Promise<{ ok: true; value: string } | { ok: false; message: string }>;
+  (
+    variable: string,
+    command: string,
+    timeoutMs: number,
+  ): Promise<{ ok: true; value: string } | { ok: false; message: string }>;
 }
 
 /** 真实实现：跑一条命令取它的 stdout。 */
@@ -49,7 +58,7 @@ export const runEnvFromCommand: EnvFromRunner = (variable, command, timeoutMs) =
   new Promise((resolve) => {
     const spec = commandSpec(command);
     let child: ReturnType<typeof spawn> | undefined;
-    let stdout = '';
+    let stdout = "";
     // FIX-4：stderr 攒**字节**，等命令结束后一次性解码（逐块解码会切断跨块的多字节字符）
     let stderrBytes: Buffer = Buffer.alloc(0);
     let settled = false;
@@ -67,21 +76,21 @@ export const runEnvFromCommand: EnvFromRunner = (variable, command, timeoutMs) =
       const pid = child?.pid;
       if (!pid) return;
       if (IS_WINDOWS) {
-        const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-        killer.on('error', () => undefined);
+        const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+        killer.on("error", () => undefined);
         setTimeout(() => {
           try {
-            child?.kill('SIGKILL');
+            child?.kill("SIGKILL");
           } catch {
             /* 已经不在了 */
           }
         }, ENV_FROM_KILL_GRACE_MS);
       } else {
         try {
-          process.kill(-pid, 'SIGKILL');
+          process.kill(-pid, "SIGKILL");
         } catch {
           try {
-            child?.kill('SIGKILL');
+            child?.kill("SIGKILL");
           } catch {
             /* 已经不在了 */
           }
@@ -93,7 +102,7 @@ export const runEnvFromCommand: EnvFromRunner = (variable, command, timeoutMs) =
       // detached：自成进程组，超时时可以整组回收（POSIX 语义；Windows 上靠 taskkill /T）。
       child = spawn(spec.file, spec.args, {
         env: { ...fallbackDefaultEnvironment(), ...proxyEnvironment() },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
         detached: !IS_WINDOWS,
       });
@@ -102,38 +111,41 @@ export const runEnvFromCommand: EnvFromRunner = (variable, command, timeoutMs) =
       return;
     }
 
-    timer = setTimeout(() => {
-      timedOut = true;
-      killTree();
-      finish({
-        ok: false,
-        message: `envFrom: "${variable}" 在 ${timeoutMs} ms 内没有结束，已终止 — 可调大该服务器的 envFromTimeoutMs`,
-      });
-    }, Math.max(1, timeoutMs));
+    timer = setTimeout(
+      () => {
+        timedOut = true;
+        killTree();
+        finish({
+          ok: false,
+          message: `envFrom: "${variable}" 在 ${timeoutMs} ms 内没有结束，已终止 — 可调大该服务器的 envFromTimeoutMs`,
+        });
+      },
+      Math.max(1, timeoutMs),
+    );
     (timer as { unref?: () => void }).unref?.();
 
-    child.stdout?.on('data', (chunk: Buffer) => {
+    child.stdout?.on("data", (chunk: Buffer) => {
       stdout = appendCapped(stdout, String(chunk), ENV_FROM_STDOUT_LIMIT + 1);
     });
-    child.stderr?.on('data', (chunk: Buffer) => {
+    child.stderr?.on("data", (chunk: Buffer) => {
       stderrBytes = appendCappedBytes(stderrBytes, chunk, ENV_FROM_STDERR_LIMIT);
     });
-    child.on('error', (err) => {
+    child.on("error", (err) => {
       finish({ ok: false, message: `envFrom: "${variable}" 无法执行 — ${err.message}` });
     });
-    child.on('close', (code) => {
+    child.on("close", (code) => {
       if (settled) return;
       if (timedOut) return;
       // FIX-4：解码统一走 decodeStderrBytes（严格 UTF-8 → win32 上的 GBK → 非 fatal UTF-8）
-      const stderrTail = decodeStderrBytes(stderrBytes).trim().split(/\r?\n/).filter(Boolean).slice(-3).join(' — ');
+      const stderrTail = decodeStderrBytes(stderrBytes).trim().split(/\r?\n/).filter(Boolean).slice(-3).join(" — ");
       if (code !== 0) {
         finish({
           ok: false,
-          message: `envFrom: "${variable}" 失败（退出码 ${code ?? '未知'}）${stderrTail ? `：${stderrTail}` : ''}`,
+          message: `envFrom: "${variable}" 失败（退出码 ${code ?? "未知"}）${stderrTail ? `：${stderrTail}` : ""}`,
         });
         return;
       }
-      if (Buffer.byteLength(stdout, 'utf8') > ENV_FROM_STDOUT_LIMIT) {
+      if (Buffer.byteLength(stdout, "utf8") > ENV_FROM_STDOUT_LIMIT) {
         // 截断的密钥是**错的**密钥，会在别处以更难读的方式失败 —— 所以是拒绝而不是截断。
         finish({
           ok: false,
@@ -142,7 +154,7 @@ export const runEnvFromCommand: EnvFromRunner = (variable, command, timeoutMs) =
         return;
       }
       const value = stdout.trim();
-      if (value.includes('\0')) {
+      if (value.includes("\0")) {
         // 含 NUL 时 spawn 自己的错误消息会把该值原文带出来，从而泄漏进诊断/模型面前。
         finish({ ok: false, message: `envFrom: "${variable}" 的结果包含 NUL 字节，已拒绝` });
         return;
@@ -175,7 +187,7 @@ export async function resolveEnvFrom(options: ResolveEnvFromOptions): Promise<En
   const settled = await Promise.all(
     variables.map(async (variable) => {
       const command = options.envFrom[variable];
-      if (typeof command !== 'string' || command.trim() === '') {
+      if (typeof command !== "string" || command.trim() === "") {
         return { variable, ok: false as const, message: `envFrom: "${variable}" 的命令为空` };
       }
       try {

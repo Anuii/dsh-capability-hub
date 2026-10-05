@@ -49,7 +49,13 @@ test("回归（FIX-8）：requestHeader() 是 LLM epoch header，父会话必须
     agent: {
       session: {
         id: "session-child",
-        header: { version: 4, id: "session-child", isSeeded: false, parentSession: "session-parent", origin: "subagent" },
+        header: {
+          version: 4,
+          id: "session-child",
+          isSeeded: false,
+          parentSession: "session-parent",
+          origin: "subagent",
+        },
         requestHeader: () => ({ config: { model: "deepseek-official" } }),
       },
     },

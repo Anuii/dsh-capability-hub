@@ -8,13 +8,13 @@
  * - 损坏恢复：原文件改名备份为 config.json.corrupt-<时间戳>，以空配置启动并记录 warning。
  */
 
-import { promises as fs } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { promises as fs } from "node:fs";
+import { dirname, join } from "node:path";
 
-import { emptyRawConfig, toEffectiveConfig } from './schema.ts';
-import type { RawMcpConfigFile } from './types.ts';
-import type { EffectiveMcpConfig, McpConfigSource } from '../contract/config.ts';
-import type { HubLogger } from '../../platform/contract/host.ts';
+import { emptyRawConfig, toEffectiveConfig } from "./schema.ts";
+import type { RawMcpConfigFile } from "./types.ts";
+import type { EffectiveMcpConfig, McpConfigSource } from "../contract/config.ts";
+import type { HubLogger } from "../../platform/contract/host.ts";
 
 export interface McpStore extends McpConfigSource {
   /** 配置文件绝对路径 */
@@ -45,16 +45,16 @@ export interface McpStoreOptions {
 }
 
 function timestamp(date: Date): string {
-  const p = (n: number, width = 2) => String(n).padStart(width, '0');
+  const p = (n: number, width = 2) => String(n).padStart(width, "0");
   return (
     String(date.getFullYear()) +
     p(date.getMonth() + 1) +
     p(date.getDate()) +
-    '-' +
+    "-" +
     p(date.getHours()) +
     p(date.getMinutes()) +
     p(date.getSeconds()) +
-    '-' +
+    "-" +
     p(date.getMilliseconds(), 3)
   );
 }
@@ -65,8 +65,8 @@ export function silentLogger(): HubLogger {
 }
 
 export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStoreOptions = {}): McpStore {
-  const dir = join(hubHome, 'mcp');
-  const filePath = join(dir, 'config.json');
+  const dir = join(hubHome, "mcp");
+  const filePath = join(dir, "config.json");
   const pollIntervalMs = opts.pollIntervalMs === undefined ? 2000 : opts.pollIntervalMs;
   const now = opts.now ?? (() => new Date());
 
@@ -95,45 +95,52 @@ export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStor
     try {
       const st = await fs.stat(filePath);
       mtime = st.mtimeMs;
-      text = await fs.readFile(filePath, 'utf8');
+      text = await fs.readFile(filePath, "utf8");
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT') return { raw: emptyRawConfig(), mtime: undefined, warnings: notes };
-      notes.push('读取 MCP 配置文件失败：' + (error as Error).message + '，已按空配置启动。');
+      if (code === "ENOENT") return { raw: emptyRawConfig(), mtime: undefined, warnings: notes };
+      notes.push("读取 MCP 配置文件失败：" + (error as Error).message + "，已按空配置启动。");
       return { raw: emptyRawConfig(), mtime: undefined, warnings: notes };
     }
-    if (text.trim() === '') return { raw: emptyRawConfig(), mtime, warnings: notes };
+    if (text.trim() === "") return { raw: emptyRawConfig(), mtime, warnings: notes };
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch (error) {
-      const backup = filePath + '.corrupt-' + timestamp(now());
+      const backup = filePath + ".corrupt-" + timestamp(now());
       try {
         await fs.rename(filePath, backup);
         notes.push(
-          'MCP 配置文件不是合法 JSON（' + (error as Error).message + '），已备份为 ' + backup + '，本次以空配置启动。',
+          "MCP 配置文件不是合法 JSON（" + (error as Error).message + "），已备份为 " + backup + "，本次以空配置启动。",
         );
       } catch (renameError) {
         notes.push(
-          'MCP 配置文件不是合法 JSON（' + (error as Error).message + '），备份失败：' + (renameError as Error).message + '，本次以空配置启动。',
+          "MCP 配置文件不是合法 JSON（" +
+            (error as Error).message +
+            "），备份失败：" +
+            (renameError as Error).message +
+            "，本次以空配置启动。",
         );
       }
       return { raw: emptyRawConfig(), mtime: undefined, warnings: notes };
     }
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      notes.push('MCP 配置文件结构异常（顶层必须是对象），已忽略其内容并以空配置启动。');
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      notes.push("MCP 配置文件结构异常（顶层必须是对象），已忽略其内容并以空配置启动。");
       return { raw: emptyRawConfig(), mtime, warnings: notes };
     }
     const record = parsed as Record<string, unknown>;
     const rawServers = Array.isArray(record.servers) ? record.servers : [];
-    const settings = record.settings && typeof record.settings === 'object' && !Array.isArray(record.settings)
-      ? (record.settings as RawMcpConfigFile['settings'])
-      : {};
+    const settings =
+      record.settings && typeof record.settings === "object" && !Array.isArray(record.settings)
+        ? (record.settings as RawMcpConfigFile["settings"])
+        : {};
     return {
       raw: {
         version: 1,
         settings,
-        servers: rawServers.filter((s) => s !== null && typeof s === 'object' && !Array.isArray(s)) as RawMcpConfigFile['servers'],
+        servers: rawServers.filter(
+          (s) => s !== null && typeof s === "object" && !Array.isArray(s),
+        ) as RawMcpConfigFile["servers"],
       },
       mtime,
       warnings: notes,
@@ -147,7 +154,7 @@ export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStor
       try {
         listener(next, prev);
       } catch (error) {
-        logger.error('MCP 配置变更监听器抛错', error);
+        logger.error("MCP 配置变更监听器抛错", error);
       }
     }
   }
@@ -166,7 +173,7 @@ export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStor
     effective = nextEffective;
     warnings = loaded.warnings;
     if (loaded.warnings.length > 0) {
-      for (const w of loaded.warnings) logger.warn('mcp-config: ' + w);
+      for (const w of loaded.warnings) logger.warn("mcp-config: " + w);
     }
     emit(nextEffective, prev);
     return changed;
@@ -185,15 +192,15 @@ export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStor
       warnings = loaded.warnings;
       return;
     }
-    logger.debug('mcp-config: 写入前发现外部修改，先重新加载再应用本次变更');
+    logger.debug("mcp-config: 写入前发现外部修改，先重新加载再应用本次变更");
     applyLoaded(loaded);
   }
 
   async function writeRaw(next: RawMcpConfigFile): Promise<void> {
     await fs.mkdir(dir, { recursive: true });
-    const tmp = join(dir, '.config.json.tmp-' + process.pid + '-' + Math.random().toString(36).slice(2, 10));
-    const text = JSON.stringify(next, null, 2) + '\n';
-    await fs.writeFile(tmp, text, 'utf8');
+    const tmp = join(dir, ".config.json.tmp-" + process.pid + "-" + Math.random().toString(36).slice(2, 10));
+    const text = JSON.stringify(next, null, 2) + "\n";
+    await fs.writeFile(tmp, text, "utf8");
     try {
       await fs.rename(tmp, filePath);
     } catch (error) {
@@ -214,7 +221,7 @@ export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStor
     effective = nextEffective;
     warnings = loaded.warnings;
     initialized = true;
-    for (const w of loaded.warnings) logger.warn('mcp-config: ' + w);
+    for (const w of loaded.warnings) logger.warn("mcp-config: " + w);
     emit(nextEffective, prev);
   })();
 
@@ -223,11 +230,11 @@ export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStor
       void (async () => {
         const current = await statMtime();
         if (current === mtimeMs) return;
-        logger.debug('mcp-config: 检测到外部修改，重新加载配置');
+        logger.debug("mcp-config: 检测到外部修改，重新加载配置");
         await reloadInternal();
-      })().catch((error) => logger.error('mcp-config: 轮询外部修改失败', error));
+      })().catch((error) => logger.error("mcp-config: 轮询外部修改失败", error));
     }, pollIntervalMs);
-    if (typeof timer.unref === 'function') timer.unref();
+    if (typeof timer.unref === "function") timer.unref();
   }
 
   return {

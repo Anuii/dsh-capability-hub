@@ -53,7 +53,7 @@ const CSS = [
   ".ch_kvKey{margin:0;font-size:12px;color:var(--dsw-alias-label-tertiary)}",
   // 等宽用 DSH 自己的代码字体变量（--ds- 前缀，主题 base.css 的 :root 里定义）；
   // 退回泛型 monospace 会在中文系统上落到中文等宽字体，字距松散。
-  ".ch_kvValue{margin:0;font-size:12px;font-family:var(--ds-font-family-code,\"Cascadia Mono\",Consolas,Menlo,ui-monospace,monospace);color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}",
+  '.ch_kvValue{margin:0;font-size:12px;font-family:var(--ds-font-family-code,"Cascadia Mono",Consolas,Menlo,ui-monospace,monospace);color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}',
 ].join("");
 
 /** 类名表：键是语义名，值是带前缀的实际类名。 */

@@ -9,7 +9,17 @@
 import { isFlatSkill } from "../format.ts";
 import { t } from "../strings.ts";
 import type { RootInfo, SkillSummary } from "../../contract/local.ts";
-import type { AuthMode, Confidence, DiscoverCandidate, InstallItemResult, InstallTarget, SourceEntry, UpdateApplyItem, UpdateCheckItem, UpdateStatus } from "../../contract/remote.ts";
+import type {
+  AuthMode,
+  Confidence,
+  DiscoverCandidate,
+  InstallItemResult,
+  InstallTarget,
+  SourceEntry,
+  UpdateApplyItem,
+  UpdateCheckItem,
+  UpdateStatus,
+} from "../../contract/remote.ts";
 
 /* ---------------- 平铺 .md 技能 ---------------- */
 
@@ -294,10 +304,7 @@ export function sourceIdsOf(
 }
 
 /** 需要（且可以）推测来源的技能：可写 + 非平铺 + 当前没有来源记录。 */
-export function skillsNeedingSource(
-  skills: readonly SkillSummary[],
-  sourceIds: ReadonlySet<string>,
-): SkillSummary[] {
+export function skillsNeedingSource(skills: readonly SkillSummary[], sourceIds: ReadonlySet<string>): SkillSummary[] {
   return skills.filter((skill) => skill.writable && !isFlatSkill(skill) && !sourceIds.has(skill.id));
 }
 

@@ -3,11 +3,11 @@
  * HTTP 形状在 ../contract/remote.ts，宿主上下文在 platform/contract/host.ts（ADR-0002）。
  */
 
-import type { SkillsLocalApi as LocalApi } from '../contract/local.ts';
-import type { RepoRecord, DiscoverySkill, InstallTarget } from '../contract/remote.ts';
+import type { SkillsLocalApi as LocalApi } from "../contract/local.ts";
+import type { RepoRecord, DiscoverySkill, InstallTarget } from "../contract/remote.ts";
 
 /** 远程技能模块用到的本地技能接口子集（外壳注入；测试用假实现）。 */
-export type SkillsLocalPort = Pick<LocalApi, 'list' | 'get' | 'setEnabled' | 'moveToTrash' | 'rootPath' | 'restore'>;
+export type SkillsLocalPort = Pick<LocalApi, "list" | "get" | "setEnabled" | "moveToTrash" | "rootPath" | "restore">;
 
 /* ---------- skills-remote 自身（PLAN §3.4 / §3.7） ---------- */
 
@@ -83,10 +83,10 @@ export interface DiscoveryCacheFile {
 }
 
 /** 需要项目级根的目标 */
-export const PROJECT_TARGETS: InstallTarget[] = ['project-agents', 'project-dsh'];
+export const PROJECT_TARGETS: InstallTarget[] = ["project-agents", "project-dsh"];
 
 /** 与 npx skills 的 lock 写在同一位置的根（其余根写 hubHome/skills/sources.json） */
-export const LOCK_BACKED_ROOT = 'user-agents';
+export const LOCK_BACKED_ROOT = "user-agents";
 
 /**
  * 工厂第三可选参数：注入点（测试与宿主替换用）。

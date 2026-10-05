@@ -56,7 +56,8 @@ export function secretSummary(server: ParsedServer): string {
   const parts: string[] = [];
   for (const field of ["env", "headers"] as const) {
     const raw = server[field];
-    if (isPlainObject(raw) && Object.keys(raw).length > 0) parts.push(field + " " + Object.keys(raw).length + " 项（值已遮罩）");
+    if (isPlainObject(raw) && Object.keys(raw).length > 0)
+      parts.push(field + " " + Object.keys(raw).length + " 项（值已遮罩）");
   }
   return parts.join(" · ");
 }
@@ -149,7 +150,9 @@ export function defaultSelection(rows: readonly PasteRow[]): number[] {
 }
 
 export function toggleSelection(selected: readonly number[], index: number): number[] {
-  return selected.includes(index) ? selected.filter((item) => item !== index) : [...selected, index].sort((a, b) => a - b);
+  return selected.includes(index)
+    ? selected.filter((item) => item !== index)
+    : [...selected, index].sort((a, b) => a - b);
 }
 
 /** 勾选里的「还不能保存」的行（冲突没改名 / 名字非法）。 */
@@ -196,6 +199,9 @@ export function importableNames(servers: readonly ParsedServer[], existingNames:
 }
 
 /** 导入结果的一句话摘要（imported / skipped 的计数）。 */
-export function importCounts(imported: readonly string[], skipped: readonly SkippedServer[]): { imported: number; skipped: number } {
+export function importCounts(
+  imported: readonly string[],
+  skipped: readonly SkippedServer[],
+): { imported: number; skipped: number } {
   return { imported: imported.length, skipped: skipped.length };
 }

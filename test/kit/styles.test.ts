@@ -27,7 +27,10 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const files = [...sourceFiles(shellDir), ...sourceFiles(kitDir)].map((file) => ({ file, text: fs.readFileSync(file, "utf8") }));
+const files = [...sourceFiles(shellDir), ...sourceFiles(kitDir)].map((file) => ({
+  file,
+  text: fs.readFileSync(file, "utf8"),
+}));
 
 test("组件里引用的 kit.x 都存在于 kit 样式表", () => {
   const known = new Set(Object.keys(kit));
@@ -53,7 +56,12 @@ test("组件里引用的 styles.x 都存在于外壳样式表", () => {
 
 test("kit 样式表里每个类名都有 CSS 规则", () => {
   const dead = Object.entries(kit)
-    .filter(([, className]) => !KIT_CSS.includes("." + className + "{") && !KIT_CSS.includes("." + className + " ") && !KIT_CSS.includes("." + className + ","))
+    .filter(
+      ([, className]) =>
+        !KIT_CSS.includes("." + className + "{") &&
+        !KIT_CSS.includes("." + className + " ") &&
+        !KIT_CSS.includes("." + className + ","),
+    )
     .map(([key, className]) => key + " (" + className + ")");
   assert.deepEqual(dead.sort(), []);
 });
@@ -96,8 +104,25 @@ test("kit 的类名带 chk_ 前缀，外壳带 ch_ 前缀，互不冲突", () =>
 });
 
 test("kit 覆盖了 UI-DESIGN §1 的关键容器", () => {
-  const keys = ["surface", "group", "row", "badge", "dot", "drawer", "drawerMask", "section", "kv", "empty", "skeleton", "banner", "toolbar", "search", "segments"] as const;
-  for (const key of keys) assert.ok(KIT_CSS.includes("." + kit[key] + "{") || KIT_CSS.includes("." + kit[key] + " "), key);
+  const keys = [
+    "surface",
+    "group",
+    "row",
+    "badge",
+    "dot",
+    "drawer",
+    "drawerMask",
+    "section",
+    "kv",
+    "empty",
+    "skeleton",
+    "banner",
+    "toolbar",
+    "search",
+    "segments",
+  ] as const;
+  for (const key of keys)
+    assert.ok(KIT_CSS.includes("." + kit[key] + "{") || KIT_CSS.includes("." + kit[key] + " "), key);
 });
 
 test("尊重 prefers-reduced-motion", () => {
@@ -126,7 +151,8 @@ test("开关的缩小只作用于能力中心作用域内", () => {
   assert.equal(switchRules.length, 3, "应当有三条（轨道尺寸 / 滑块尺寸 / 打开态位移）");
   for (const rule of switchRules) {
     assert.ok(
-      rule.includes("[data-dsh-capability-hub-view] button[role=switch]") || rule.startsWith(".chk_scope button[role=switch]"),
+      rule.includes("[data-dsh-capability-hub-view] button[role=switch]") ||
+        rule.startsWith(".chk_scope button[role=switch]"),
       "开关规则必须限定在 [data-dsh-capability-hub-view] 或 .chk_scope 之内：" + rule,
     );
     assert.ok(/chk-switch-(w|h|thumb|travel)/.test(rule));
@@ -156,7 +182,6 @@ test("抽屉底部只放真正的操作（不放多余的「关闭」）", () =>
   const preview = fs.readFileSync(path.join(kitDir, "preview.tsx"), "utf8");
   assert.equal(preview.includes('"关闭"'), false, "抽屉底部不应再有「关闭」按钮（已有 × 与 Esc）");
 });
-
 
 /* ---------------- UI-C 增量 ---------------- */
 
@@ -189,7 +214,10 @@ test("可折叠分组：标题行是按钮、带 aria-expanded，二级分组无
 
 test("菜单项的 data-testid 挂在包文字的 span 上（宿主 MenuItemButton 不透传未知 props）", () => {
   const menu = fs.readFileSync(path.join(kitDir, "menu.tsx"), "utf8");
-  assert.ok(menu.includes("<span data-testid={item.testId ?? item.id}>"), "菜单项文字要包一层 span，testid 挂在 span 上");
+  assert.ok(
+    menu.includes("<span data-testid={item.testId ?? item.id}>"),
+    "菜单项文字要包一层 span，testid 挂在 span 上",
+  );
   // MenuItemButton 自己不再收到未知属性
   assert.equal(/<MenuItemButton[^>]*data-testid/s.test(menu), false);
 });
@@ -219,7 +247,9 @@ function mixHex(a: string, b: string, ratio: number): string {
   const [ar, ag, ab] = parse(a);
   const [br, bg, bb] = parse(b);
   const to = (x: number): string => Math.round(x).toString(16).padStart(2, "0");
-  return "#" + to(ar * ratio + br * (1 - ratio)) + to(ag * ratio + bg * (1 - ratio)) + to(ab * ratio + bb * (1 - ratio));
+  return (
+    "#" + to(ar * ratio + br * (1 - ratio)) + to(ag * ratio + bg * (1 - ratio)) + to(ab * ratio + bb * (1 - ratio))
+  );
 }
 
 /** WCAG 2.x 相对亮度。 */
@@ -241,13 +271,23 @@ test("行副标题色：比次级色更弱，亮暗两套仍然 ≥ 4.5:1（WCAG
   //   亮：label-tertiary = bluish-600 #81858c，label-primary = bluish-1000 #0f1115，底 = bluish-00 #ffffff
   //   暗：label-tertiary = bluish-400 #adb2b8，label-primary = bluish-50 #f9fafb，底 = bluish-875 #232324
   // --chk-fg-sub = color-mix(in srgb, var(--dsw-alias-label-tertiary) 85%, var(--dsw-alias-label-primary))
-  assert.ok(KIT_CSS.includes("--chk-fg-sub:color-mix(in srgb, var(--dsw-alias-label-tertiary) 85%, var(--dsw-alias-label-primary))"));
+  assert.ok(
+    KIT_CSS.includes(
+      "--chk-fg-sub:color-mix(in srgb, var(--dsw-alias-label-tertiary) 85%, var(--dsw-alias-label-primary))",
+    ),
+  );
   const lightSub = mixHex("#81858c", "#0f1115", 0.85);
   const darkSub = mixHex("#adb2b8", "#f9fafb", 0.85);
   assert.equal(lightSub, "#70747a");
   assert.equal(darkSub, "#b8bdc2");
-  assert.ok(contrast(lightSub, "#ffffff") >= 4.5, "亮色 " + lightSub + " on #ffffff = " + contrast(lightSub, "#ffffff").toFixed(2));
-  assert.ok(contrast(darkSub, "#232324") >= 4.5, "暗色 " + darkSub + " on #232324 = " + contrast(darkSub, "#232324").toFixed(2));
+  assert.ok(
+    contrast(lightSub, "#ffffff") >= 4.5,
+    "亮色 " + lightSub + " on #ffffff = " + contrast(lightSub, "#ffffff").toFixed(2),
+  );
+  assert.ok(
+    contrast(darkSub, "#232324") >= 4.5,
+    "暗色 " + darkSub + " on #232324 = " + contrast(darkSub, "#232324").toFixed(2),
+  );
   // 直接用 tertiary 在亮色下不达标（3.71:1）—— 这就是为什么混了 15% 的主文字色
   assert.ok(contrast("#81858c", "#ffffff") < 4.5);
   // 「更弱一级」确实更弱：副标题对比度低于次级色，暗色同理

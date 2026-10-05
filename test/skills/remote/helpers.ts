@@ -3,27 +3,27 @@
  * 所有落盘都发生在 os.tmpdir() 下自建的临时目录里，绝不碰真实用户目录（PLAN §4.1 / C5）。
  */
 
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { existsSync, mkdtempSync } from 'node:fs';
-import { gunzipSync } from 'node:zlib';
-import { hashLocalDirectory, hashTarDirectory, recordedHash } from '../../../src/skills/remote/hash.ts';
-import { readTarEntries } from '../../../src/skills/remote/tar.ts';
-import type { SkillsLocalPort } from '../../../src/skills/remote/types.ts';
-import type { HubContext, HubLogger } from '../../../src/platform/contract/host.ts';
-import type { SkillSummary, TrashItem, ListResult, RootId, RootInfo } from '../../../src/skills/contract/local.ts';
-import { repoArchive, type FixtureEntry } from './tarfixture.ts';
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { existsSync, mkdtempSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
+import { hashLocalDirectory, hashTarDirectory, recordedHash } from "../../../src/skills/remote/hash.ts";
+import { readTarEntries } from "../../../src/skills/remote/tar.ts";
+import type { SkillsLocalPort } from "../../../src/skills/remote/types.ts";
+import type { HubContext, HubLogger } from "../../../src/platform/contract/host.ts";
+import type { SkillSummary, TrashItem, ListResult, RootId, RootInfo } from "../../../src/skills/contract/local.ts";
+import { repoArchive, type FixtureEntry } from "./tarfixture.ts";
 
 /* ---------- 临时目录 ---------- */
 
-export function makeTempDir(prefix = 'cap-hub-t2-'): string {
+export function makeTempDir(prefix = "cap-hub-t2-"): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
 export async function writeTree(root: string, files: Record<string, string | Buffer>): Promise<void> {
   for (const [rel, content] of Object.entries(files)) {
-    const abs = path.join(root, ...rel.split('/'));
+    const abs = path.join(root, ...rel.split("/"));
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, content);
   }
@@ -34,29 +34,29 @@ export async function readTree(root: string): Promise<Record<string, string>> {
   async function visit(dir: string, prefix: string): Promise<void> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
-      const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+      const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
       if (entry.isDirectory()) await visit(path.join(dir, entry.name), rel);
-      else if (entry.isFile()) out[rel] = await fs.readFile(path.join(dir, entry.name), 'utf8');
+      else if (entry.isFile()) out[rel] = await fs.readFile(path.join(dir, entry.name), "utf8");
     }
   }
-  await visit(root, '');
+  await visit(root, "");
   return out;
 }
 
 /* ---------- 日志 ---------- */
 
 export interface LogRecord {
-  level: 'debug' | 'info' | 'warn' | 'error';
+  level: "debug" | "info" | "warn" | "error";
   args: unknown[];
 }
 
 export function makeLogger(sink: LogRecord[] = []): { logger: HubLogger; sink: LogRecord[] } {
   const push =
-    (level: LogRecord['level']) =>
+    (level: LogRecord["level"]) =>
     (...args: unknown[]) => {
       sink.push({ level, args });
     };
-  return { logger: { debug: push('debug'), info: push('info'), warn: push('warn'), error: push('error') }, sink };
+  return { logger: { debug: push("debug"), info: push("info"), warn: push("warn"), error: push("error") }, sink };
 }
 
 /* ---------- 假 SkillsLocalPort ---------- */
@@ -99,8 +99,8 @@ export interface FakeApi extends SkillsLocalPort {
 
 function summaryOf(skill: FakeSkillInit): SkillSummary {
   return {
-    id: `${skill.rootId ?? 'user-agents'}:${skill.dirName}`,
-    rootId: skill.rootId ?? 'user-agents',
+    id: `${skill.rootId ?? "user-agents"}:${skill.dirName}`,
+    rootId: skill.rootId ?? "user-agents",
     dirName: skill.dirName,
     path: skill.path,
     name: skill.name,
@@ -111,7 +111,7 @@ function summaryOf(skill: FakeSkillInit): SkillSummary {
     loadable: skill.loadable ?? true,
     modelVisible: !(skill.modelInvocationDisabled ?? false),
     diagnostics: [],
-    format: { eol: 'lf', bom: false, safeToToggle: true },
+    format: { eol: "lf", bom: false, safeToToggle: true },
     extraKeys: [],
     mtimeMs: 0,
   };
@@ -124,27 +124,29 @@ export function makeFakeApi(options: FakeApiOptions = {}): FakeApi {
   // 这里用 known + 磁盘存在性判断来模拟，保证更新流程（移入回收站 → 写入新目录 →
   // setEnabled）在假实现上也成立。
   const known = new Map<string, FakeSkillInit>();
-  for (const skill of skills) known.set(`${skill.rootId ?? 'user-agents'}:${skill.dirName}`, skill);
+  for (const skill of skills) known.set(`${skill.rootId ?? "user-agents"}:${skill.dirName}`, skill);
   let setEnabledFailed = false;
   const trash = new Map<string, { located: FakeSkillInit; lockEntry?: unknown; reason: string }>();
   const setEnabledCalls: { id: string; enabled: boolean }[] = [];
   const moveToTrashCalls: { id: string; reason: string; lockEntry?: unknown }[] = [];
   const restoreCalls: { trashId: string; replace?: boolean }[] = [];
   let moveToTrashFailed = false;
-  const trashRoot = options.trashRoot ?? path.join(path.dirname(skills[0]?.path ?? os.tmpdir()), '.fake-trash');
+  const trashRoot = options.trashRoot ?? path.join(path.dirname(skills[0]?.path ?? os.tmpdir()), ".fake-trash");
   /** 回收站里条目的磁盘位置（供测试断言） */
   const trashDirOf = (trashId: string): string => path.join(trashRoot, trashId);
 
   const roots: RootInfo[] = options.roots ?? [
-    { rootId: 'user-agents', path: '', exists: true, writable: true, precedence: 500 },
-    { rootId: 'user-dsh', path: '', exists: true, writable: true, precedence: 400 },
-    { rootId: 'project-agents', path: '', exists: true, writable: true, precedence: 200 },
-    { rootId: 'project-dsh', path: '', exists: true, writable: true, precedence: 100 },
+    { rootId: "user-agents", path: "", exists: true, writable: true, precedence: 500 },
+    { rootId: "user-dsh", path: "", exists: true, writable: true, precedence: 400 },
+    { rootId: "project-agents", path: "", exists: true, writable: true, precedence: 200 },
+    { rootId: "project-dsh", path: "", exists: true, writable: true, precedence: 100 },
   ];
 
   const idOf = (id: string): { rootId: string; dirName: string } => {
-    const idx = id.indexOf(':');
-    return idx === -1 ? { rootId: 'user-agents', dirName: id } : { rootId: id.slice(0, idx), dirName: id.slice(idx + 1) };
+    const idx = id.indexOf(":");
+    return idx === -1
+      ? { rootId: "user-agents", dirName: id }
+      : { rootId: id.slice(0, idx), dirName: id.slice(idx + 1) };
   };
 
   /** 磁盘上重新出现（例如更新流程写入新目录）→ 重新纳入清单 */
@@ -152,7 +154,7 @@ export function makeFakeApi(options: FakeApiOptions = {}): FakeApi {
     for (const [id, skill] of known) {
       if (skills.includes(skill)) continue;
       if (!existsSync(skill.path)) continue;
-      if (!skills.some((s) => `${s.rootId ?? 'user-agents'}:${s.dirName}` === id)) skills.push(skill);
+      if (!skills.some((s) => `${s.rootId ?? "user-agents"}:${s.dirName}` === id)) skills.push(skill);
     }
   };
 
@@ -165,7 +167,7 @@ export function makeFakeApi(options: FakeApiOptions = {}): FakeApi {
     restoreCalls,
     trashDirOf,
     async list(): Promise<ListResult> {
-      calls.push('list');
+      calls.push("list");
       await adoptFromDisk();
       return { roots, skills: skills.map(summaryOf), warnings: [] };
     },
@@ -173,7 +175,7 @@ export function makeFakeApi(options: FakeApiOptions = {}): FakeApi {
       calls.push(`get(${id})`);
       await adoptFromDisk();
       const { rootId, dirName } = idOf(id);
-      const found = skills.find((s) => (s.rootId ?? 'user-agents') === rootId && s.dirName === dirName);
+      const found = skills.find((s) => (s.rootId ?? "user-agents") === rootId && s.dirName === dirName);
       return found ? summaryOf(found) : undefined;
     },
     async setEnabled(id, enabled) {
@@ -181,11 +183,11 @@ export function makeFakeApi(options: FakeApiOptions = {}): FakeApi {
       setEnabledCalls.push({ id, enabled });
       if (options.failSetEnabledOnce && !setEnabledFailed) {
         setEnabledFailed = true;
-        throw new Error('假实现：改写 frontmatter 失败');
+        throw new Error("假实现：改写 frontmatter 失败");
       }
       await adoptFromDisk();
       const { rootId, dirName } = idOf(id);
-      const found = skills.find((s) => (s.rootId ?? 'user-agents') === rootId && s.dirName === dirName);
+      const found = skills.find((s) => (s.rootId ?? "user-agents") === rootId && s.dirName === dirName);
       if (!found) throw new Error(`假实现：找不到技能 ${id}`);
       found.modelInvocationDisabled = !enabled;
       return summaryOf(found);
@@ -195,10 +197,10 @@ export function makeFakeApi(options: FakeApiOptions = {}): FakeApi {
       moveToTrashCalls.push({ id, reason: opts.reason, lockEntry: opts.lockEntry });
       if (options.failMoveToTrashOnce && !moveToTrashFailed) {
         moveToTrashFailed = true;
-        throw new Error('假实现：回收站满');
+        throw new Error("假实现：回收站满");
       }
       const { rootId, dirName } = idOf(id);
-      const index = skills.findIndex((s) => (s.rootId ?? 'user-agents') === rootId && s.dirName === dirName);
+      const index = skills.findIndex((s) => (s.rootId ?? "user-agents") === rootId && s.dirName === dirName);
       if (index === -1) throw new Error(`假实现：找不到技能 ${id}`);
       const [located] = skills.splice(index, 1);
       known.set(id, located!);
@@ -228,7 +230,7 @@ export function makeFakeApi(options: FakeApiOptions = {}): FakeApi {
     async restore(trashId, opts) {
       calls.push(`restore(${trashId})`);
       restoreCalls.push({ trashId, replace: opts?.replace });
-      if (options.failRestore) throw new Error('假实现：恢复失败');
+      if (options.failRestore) throw new Error("假实现：恢复失败");
       const item = trash.get(trashId);
       if (!item) throw new Error(`假实现：回收站里没有 ${trashId}`);
       const trashDir = path.join(trashRoot, trashId);
@@ -261,13 +263,18 @@ export function withRootPaths(api: FakeApi, map: Record<string, string>): FakeAp
 
 /* ---------- 假 HubContext ---------- */
 
-export function makeCtx(options: { homeDir: string; hubHome: string; logger?: HubLogger; profileName?: string }): HubContext {
+export function makeCtx(options: {
+  homeDir: string;
+  hubHome: string;
+  logger?: HubLogger;
+  profileName?: string;
+}): HubContext {
   const logger = options.logger ?? makeLogger().logger;
   return {
     homeDir: options.homeDir,
-    dshHome: path.join(options.homeDir, '.dsh'),
+    dshHome: path.join(options.homeDir, ".dsh"),
     hubHome: options.hubHome,
-    profileName: options.profileName ?? 'capability-hub-dev',
+    profileName: options.profileName ?? "capability-hub-dev",
     logger,
     customSkillDirs: [],
   };
@@ -290,17 +297,17 @@ export interface FakeFetch {
 export function makeFakeFetch(routes: FakeFetchRoute[]): FakeFetch {
   const calls: { url: string; headers: Record<string, string> }[] = [];
   const fake = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const headers: Record<string, string> = {};
     const rawHeaders = init?.headers;
-    if (rawHeaders && typeof rawHeaders === 'object' && !Array.isArray(rawHeaders)) {
+    if (rawHeaders && typeof rawHeaders === "object" && !Array.isArray(rawHeaders)) {
       for (const [k, v] of Object.entries(rawHeaders as Record<string, string>)) headers[k.toLowerCase()] = String(v);
     }
     calls.push({ url, headers });
     for (const route of routes) {
       if (route.match(url, init)) return await route.response(url, init);
     }
-    return new Response('not found', { status: 404 });
+    return new Response("not found", { status: 404 });
   };
   return { fetch: fake as unknown as typeof fetch, calls };
 }
@@ -308,26 +315,31 @@ export function makeFakeFetch(routes: FakeFetchRoute[]): FakeFetch {
 export function gzipResponse(body: Buffer, init: { status?: number; headers?: Record<string, string> } = {}): Response {
   return new Response(new Uint8Array(body), {
     status: init.status ?? 200,
-    headers: { 'content-type': 'application/x-gzip', ...(init.headers ?? {}) },
+    headers: { "content-type": "application/x-gzip", ...(init.headers ?? {}) },
   });
 }
 
-export function jsonResponse(value: unknown, init: { status?: number; headers?: Record<string, string> } = {}): Response {
+export function jsonResponse(
+  value: unknown,
+  init: { status?: number; headers?: Record<string, string> } = {},
+): Response {
   return new Response(JSON.stringify(value), {
     status: init.status ?? 200,
-    headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
+    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
   });
 }
 
 /** 造一个 codeload 形态的 tar.gz 响应字节 */
-export function tarGzOf(entries: FixtureEntry[], root = 'demo-main'): Buffer {
+export function tarGzOf(entries: FixtureEntry[], root = "demo-main"): Buffer {
   return repoArchive(entries, { root });
 }
 
 /** 归档内某个技能目录的「安装时记录值」（= 模块写入 lock 的那个值） */
 export function archiveInstalledHash(gz: Buffer, dir?: string): string {
   const entries = readTarEntries(gunzipSync(gz));
-  const target = dir ?? entries.filter((e) => e.type === 'file' && /\/SKILL\.md$/i.test(e.path))[0]!.path.replace(/\/SKILL\.md$/i, '');
+  const target =
+    dir ??
+    entries.filter((e) => e.type === "file" && /\/SKILL\.md$/i.test(e.path))[0]!.path.replace(/\/SKILL\.md$/i, "");
   return recordedHash(hashTarDirectory(entries, target));
 }
 

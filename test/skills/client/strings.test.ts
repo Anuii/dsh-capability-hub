@@ -48,7 +48,9 @@ test("用到的每个 key 都在字典里", () => {
 
 test("字典里没有没被用到的 key", () => {
   const used = usedKeys();
-  const orphans = Object.keys(zh).filter((key) => !used.has(key)).sort();
+  const orphans = Object.keys(zh)
+    .filter((key) => !used.has(key))
+    .sort();
   assert.deepEqual(orphans, [], "这些 key 没有被任何组件使用：" + orphans.join("、"));
 });
 

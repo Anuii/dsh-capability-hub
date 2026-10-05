@@ -20,8 +20,9 @@ function sourceFiles(): string[] {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       // running/ 有自己的样式表，由它自己的测试检查。
-      if (entry.isDirectory()) { if (entry.name !== "running") walk(full); }
-      else if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) out.push(full);
+      if (entry.isDirectory()) {
+        if (entry.name !== "running") walk(full);
+      } else if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) out.push(full);
     }
   };
   walk(mcpDir);

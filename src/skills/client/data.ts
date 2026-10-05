@@ -33,7 +33,11 @@ export async function listSkills(workspace: string | undefined): Promise<ListRes
 export async function viewSkill(id: string, workspace: string | undefined): Promise<SkillView> {
   const query: Record<string, unknown> = { id, ...(workspaceQuery(workspace) ?? {}) };
   const data = await api.get<SkillView>("skills/view", query);
-  return { skill: data.skill, content: typeof data.content === "string" ? data.content : "", files: Array.isArray(data.files) ? data.files : [] };
+  return {
+    skill: data.skill,
+    content: typeof data.content === "string" ? data.content : "",
+    files: Array.isArray(data.files) ? data.files : [],
+  };
 }
 
 /** POST skills/set-enabled { id, enabled, workspace? } → { skill }。 */

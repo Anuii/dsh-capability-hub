@@ -14,23 +14,23 @@
  *   （这样若上游不同就会显示有更新，且与 npx skills 的语义一致）。
  */
 
-import path from 'node:path';
-import { mkdir } from 'node:fs/promises';
-import { pathExists, writeDirectoryFiles } from './fsx.ts';
-import { recordedHash } from './hash.ts';
-import { locateSkillDirectory } from './tar.ts';
-import { rootSkillNameOf, skillMdTextOf, upstreamSkillFiles, upstreamSkillHash } from './rootskill.ts';
-import { assertPathInsideDirectory, describeUnsafePath, safeRelativePath, safeSegmentName } from './safepath.ts';
-import { skillDirOf, skillMdPathOf } from './sourceurl.ts';
-import { assertRepoShape } from './repos.ts';
-import { badRequest, conflict, notFound, validation } from './errors.ts';
-import { localFolderHash, type SourceStore } from './lockstore.ts';
-import { FLAT_SKILL_UNSUPPORTED_MESSAGE, isFlatSkill } from './skillshape.ts';
-import type { GitHubClient } from './github.ts';
-import type { SkillsLocalPort } from './types.ts';
-import type { HubContext } from '../../platform/contract/host.ts';
-import type { InstallItemResult, InstallTarget, SourceEntry } from '../contract/remote.ts';
-import { PROJECT_TARGETS } from './types.ts';
+import path from "node:path";
+import { mkdir } from "node:fs/promises";
+import { pathExists, writeDirectoryFiles } from "./fsx.ts";
+import { recordedHash } from "./hash.ts";
+import { locateSkillDirectory } from "./tar.ts";
+import { rootSkillNameOf, skillMdTextOf, upstreamSkillFiles, upstreamSkillHash } from "./rootskill.ts";
+import { assertPathInsideDirectory, describeUnsafePath, safeRelativePath, safeSegmentName } from "./safepath.ts";
+import { skillDirOf, skillMdPathOf } from "./sourceurl.ts";
+import { assertRepoShape } from "./repos.ts";
+import { badRequest, conflict, notFound, validation } from "./errors.ts";
+import { localFolderHash, type SourceStore } from "./lockstore.ts";
+import { FLAT_SKILL_UNSUPPORTED_MESSAGE, isFlatSkill } from "./skillshape.ts";
+import type { GitHubClient } from "./github.ts";
+import type { SkillsLocalPort } from "./types.ts";
+import type { HubContext } from "../../platform/contract/host.ts";
+import type { InstallItemResult, InstallTarget, SourceEntry } from "../contract/remote.ts";
+import { PROJECT_TARGETS } from "./types.ts";
 
 export interface InstallDeps {
   ctx: HubContext;
@@ -55,28 +55,30 @@ export interface InstallOptions {
 function assertUserSkillPath(raw: string): string {
   const reason = describeUnsafePath(raw);
   if (reason !== undefined) {
-    throw badRequest(`技能路径 "${raw}" 不安全（${reason}），已拒绝。技能路径只能是不含 ".."、反斜杠或盘符的相对路径。`);
+    throw badRequest(
+      `技能路径 "${raw}" 不安全（${reason}），已拒绝。技能路径只能是不含 ".."、反斜杠或盘符的相对路径。`,
+    );
   }
   return raw;
 }
 
 export function assertInstallTarget(target: string): InstallTarget {
-  const allowed: InstallTarget[] = ['user-agents', 'user-dsh', 'project-agents', 'project-dsh'];
+  const allowed: InstallTarget[] = ["user-agents", "user-dsh", "project-agents", "project-dsh"];
   if (!allowed.includes(target as InstallTarget)) {
-    throw validation(`安装目标 "${target}" 不合法，只能是 ${allowed.join(' / ')}。`, [
-      { path: 'target', message: '未知的安装目标' },
+    throw validation(`安装目标 "${target}" 不合法，只能是 ${allowed.join(" / ")}。`, [
+      { path: "target", message: "未知的安装目标" },
     ]);
   }
   return target as InstallTarget;
 }
 
 export function targetRootPath(deps: InstallDeps, target: InstallTarget, workspace?: string): string {
-  if (PROJECT_TARGETS.includes(target) && (workspace === undefined || workspace.trim() === '')) {
-    throw badRequest('安装到项目级目录需要当前会话的工作区路径（workspace），当前没有可用工作区。');
+  if (PROJECT_TARGETS.includes(target) && (workspace === undefined || workspace.trim() === "")) {
+    throw badRequest("安装到项目级目录需要当前会话的工作区路径（workspace），当前没有可用工作区。");
   }
   const resolved = deps.skills.rootPath(target, { workspace });
-  if (resolved === undefined || resolved.trim() === '') {
-    throw badRequest(`找不到目标技能根 "${target}"${workspace ? `（工作区 ${workspace}）` : ''}。`);
+  if (resolved === undefined || resolved.trim() === "") {
+    throw badRequest(`找不到目标技能根 "${target}"${workspace ? `（工作区 ${workspace}）` : ""}。`);
   }
   return resolved;
 }
@@ -85,7 +87,7 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
   const repo = assertRepoShape(options.repo);
   const target = assertInstallTarget(options.target);
   if (!Array.isArray(options.skillPaths) || options.skillPaths.length === 0) {
-    throw badRequest('请至少选择一个要安装的技能。');
+    throw badRequest("请至少选择一个要安装的技能。");
   }
 
   const rootPath = targetRootPath(deps, target, options.workspace);
@@ -96,7 +98,7 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
   const nowIso = (deps.now ?? (() => new Date()))().toISOString();
   const results: InstallItemResult[] = [];
   /** 根级技能取不到 frontmatter name 时的目录名回退值（= 仓库名的最后一段） */
-  const repoBase = repo.split('/').pop() ?? repo;
+  const repoBase = repo.split("/").pop() ?? repo;
 
   for (const requested of options.skillPaths) {
     const skillPath = skillMdPathOf(skillDirOf(String(requested)).dirPath);
@@ -112,7 +114,7 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
       let dirName: string;
       /** 写进 lock / sources.json 的键（npx 语义：技能名；普通技能仍是 tar 里的目录名） */
       let storeName: string;
-      if (located.path === '') {
+      if (located.path === "") {
         // FIX-7：技能 = 仓库根。lock 键 = 原始技能名（取不到就用仓库名），
         // 目录名 = sanitizeName(键)（与 npx skills 的 getInstallPath 一致）；仍须通过 safeSegmentName 校验。
         const named = rootSkillNameOf(skillMdTextOf(files), repoBase);
@@ -128,7 +130,7 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
         storeName = located.dirName;
       }
       const destDir = path.join(rootPath, dirName);
-      assertPathInsideDirectory(rootPath, destDir, '安装目标目录');
+      assertPathInsideDirectory(rootPath, destDir, "安装目标目录");
       if (await pathExists(destDir)) {
         throw conflict(`目标位置已存在同名技能目录 ${dirName}（${destDir}），未做任何改动。请先删除或改名后再安装。`);
       }
@@ -141,17 +143,13 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
         skillId: `${target}:${dirName}`,
         repo,
         skillPath: skillMdPathOf(located.path),
-        store: target === 'user-agents' ? 'skill-lock' : 'hub',
+        store: target === "user-agents" ? "skill-lock" : "hub",
         installedAt: nowIso,
         updatedAt: nowIso,
         skillFolderHash: folderHash,
       };
       if (tarball.ref !== undefined) entry.ref = tarball.ref;
-      const stored = await deps.sources.upsert(
-        { rootId: target, dirName, path: destDir },
-        entry,
-        storeName
-      );
+      const stored = await deps.sources.upsert({ rootId: target, dirName, path: destDir }, entry, storeName);
       results.push({ skillPath: skillMdPathOf(located.path), ok: true, skillId: stored.skillId });
     } catch (error) {
       results.push({
@@ -198,9 +196,10 @@ export async function registerSource(deps: RegisterDeps, options: RegisterOption
 
   // FIX-5：登记的 skillPath 也是用户输入，同样先过路径安全校验（否则会把穿越路径写进 lock，
   // 成为后续「检查更新 / 应用更新」的输入）。
-  const skillPath = options.skillPath !== undefined && options.skillPath.trim() !== ''
-    ? skillMdPathOf(skillDirOf(assertUserSkillPath(options.skillPath.trim())).dirPath)
-    : skillMdPathOf('');
+  const skillPath =
+    options.skillPath !== undefined && options.skillPath.trim() !== ""
+      ? skillMdPathOf(skillDirOf(assertUserSkillPath(options.skillPath.trim())).dirPath)
+      : skillMdPathOf("");
 
   const nowIso = (deps.now ?? (() => new Date()))().toISOString();
   const folderHash = options.skillFolderHash ?? (await localFolderHash(dirPath));
@@ -209,17 +208,17 @@ export async function registerSource(deps: RegisterDeps, options: RegisterOption
     skillId: skill.id,
     repo,
     skillPath,
-    store: skill.rootId === 'user-agents' ? 'skill-lock' : 'hub',
+    store: skill.rootId === "user-agents" ? "skill-lock" : "hub",
     installedAt: nowIso,
     updatedAt: nowIso,
     skillFolderHash: folderHash,
   };
-  if (options.ref !== undefined && options.ref.trim() !== '') entry.ref = options.ref.trim();
+  if (options.ref !== undefined && options.ref.trim() !== "") entry.ref = options.ref.trim();
 
   const stored = await deps.sources.upsert(
     { rootId: skill.rootId, dirName: skill.dirName, path: dirPath },
     entry,
-    skill.name ?? skill.dirName
+    skill.name ?? skill.dirName,
   );
   return stored;
 }
@@ -231,13 +230,13 @@ export interface UnregisterDeps {
 
 export async function unregisterSource(
   deps: UnregisterDeps,
-  options: { skillId: string; workspace?: string }
+  options: { skillId: string; workspace?: string },
 ): Promise<{ removed: boolean }> {
   const skill = await deps.skills.get(options.skillId, { workspace: options.workspace });
   if (skill === undefined) throw notFound(`找不到技能 ${options.skillId}。`);
   const removed = await deps.sources.remove(
     { rootId: skill.rootId, dirName: skill.dirName, path: skill.path },
-    skill.name ?? skill.dirName
+    skill.name ?? skill.dirName,
   );
   if (!removed) throw notFound(`技能 ${options.skillId} 没有登记来源，无需注销。`);
   return { removed: true };
@@ -259,13 +258,13 @@ export interface LocatedSkill {
 export async function locateSkill(
   deps: { skills: SkillsLocalPort; sources: SourceStore },
   id: string,
-  workspace?: string
+  workspace?: string,
 ): Promise<LocatedSkill | undefined> {
   const skill = await deps.skills.get(id, { workspace });
   if (skill === undefined) return undefined;
   const record = await deps.sources.get(
     { rootId: skill.rootId, dirName: skill.dirName, path: skill.path },
-    skill.name ?? skill.dirName
+    skill.name ?? skill.dirName,
   );
   const located: LocatedSkill = {
     id: skill.id,

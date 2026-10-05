@@ -27,9 +27,31 @@ import { normalizeDiscovery } from "../../../src/skills/client/remote/data.ts";
 import type { DiscoveredSkill } from "../../../src/skills/contract/remote.ts";
 
 const SKILLS: DiscoveredSkill[] = [
-  { repo: "mattpocock/skills", ref: "main", skillPath: "skills/tdd/SKILL.md", dirName: "tdd", name: "tdd", description: "测试驱动开发", installedId: "user-agents:tdd" },
-  { repo: "mattpocock/skills", ref: "main", skillPath: "skills/grill/SKILL.md", dirName: "grill", name: "grill", description: "拷问计划" },
-  { repo: "anthropics/skills", ref: "main", skillPath: "skills/pdf/SKILL.md", dirName: "pdf", name: "pdf", description: "PDF 工具" },
+  {
+    repo: "mattpocock/skills",
+    ref: "main",
+    skillPath: "skills/tdd/SKILL.md",
+    dirName: "tdd",
+    name: "tdd",
+    description: "测试驱动开发",
+    installedId: "user-agents:tdd",
+  },
+  {
+    repo: "mattpocock/skills",
+    ref: "main",
+    skillPath: "skills/grill/SKILL.md",
+    dirName: "grill",
+    name: "grill",
+    description: "拷问计划",
+  },
+  {
+    repo: "anthropics/skills",
+    ref: "main",
+    skillPath: "skills/pdf/SKILL.md",
+    dirName: "pdf",
+    name: "pdf",
+    description: "PDF 工具",
+  },
   { repo: "anthropics/skills", ref: "main", skillPath: "SKILL.md", dirName: "skills", description: "根级技能" },
 ];
 
@@ -37,10 +59,19 @@ test("筛选：搜索名称/描述/仓库，已安装/未安装，仓库（大�
   const all = filterDiscovered(SKILLS, { query: "", installed: "all", repo: "" });
   assert.equal(all.length, 4);
   assert.equal(all[all.length - 1]!.installedId, "user-agents:tdd", "已安装的排在最后");
-  assert.deepEqual(filterDiscovered(SKILLS, { query: "拷问", installed: "all", repo: "" }).map((s) => s.dirName), ["grill"]);
+  assert.deepEqual(
+    filterDiscovered(SKILLS, { query: "拷问", installed: "all", repo: "" }).map((s) => s.dirName),
+    ["grill"],
+  );
   assert.deepEqual(filterDiscovered(SKILLS, { query: "ANTHROPICS", installed: "all", repo: "" }).length, 2);
-  assert.deepEqual(filterDiscovered(SKILLS, { query: "", installed: "yes", repo: "" }).map((s) => s.dirName), ["tdd"]);
-  assert.deepEqual(filterDiscovered(SKILLS, { query: "", installed: "not", repo: "MattPocock/skills" }).map((s) => s.dirName), ["grill"]);
+  assert.deepEqual(
+    filterDiscovered(SKILLS, { query: "", installed: "yes", repo: "" }).map((s) => s.dirName),
+    ["tdd"],
+  );
+  assert.deepEqual(
+    filterDiscovered(SKILLS, { query: "", installed: "not", repo: "MattPocock/skills" }).map((s) => s.dirName),
+    ["grill"],
+  );
 });
 
 test("分段计数受搜索与仓库影响、不受已安装筛选影响", () => {
@@ -62,7 +93,10 @@ test("安装计划：按仓库 + 分支分组、去重、仓库名排序", () =>
     { repo: "Anthropics/skills", ref: "dev", skillPaths: ["skills/x/SKILL.md"] },
     { repo: "mattpocock/skills", ref: "main", skillPaths: ["skills/grill/SKILL.md"] },
   ]);
-  assert.equal(discoveredKey({ repo: "A/B", skillPath: "x/SKILL.md" }), discoveredKey({ repo: "a/b", skillPath: "x/SKILL.md" }));
+  assert.equal(
+    discoveredKey({ repo: "A/B", skillPath: "x/SKILL.md" }),
+    discoveredKey({ repo: "a/b", skillPath: "x/SKILL.md" }),
+  );
 });
 
 test("相对时间", () => {
@@ -79,7 +113,10 @@ test("首次自动扫描：从没扫过且仓库列表非空才扫", () => {
   assert.equal(shouldAutoScan(undefined), false);
   assert.equal(shouldAutoScan({ cached: false, repos: [{ repo: "a/b", preset: true }], skills: [] }), true);
   assert.equal(shouldAutoScan({ cached: false, repos: [], skills: [] }), false);
-  assert.equal(shouldAutoScan({ cached: true, repos: [{ repo: "a/b", preset: true, scannedAt: "x" }], skills: [] }), false);
+  assert.equal(
+    shouldAutoScan({ cached: true, repos: [{ repo: "a/b", preset: true, scannedAt: "x" }], skills: [] }),
+    false,
+  );
 });
 
 test("仓库行文字：分支 · 子目录 与 扫描状态", () => {
@@ -100,7 +137,12 @@ test("增量渲染：每批 200 行", () => {
 
 test("接口返回补成安全形状", () => {
   assert.deepEqual(normalizeDiscovery(undefined), { cached: false, repos: [], skills: [] });
-  const view = normalizeDiscovery({ cached: true, lastScannedAt: "t", repos: [{ repo: "a/b", preset: true }, null as never], skills: [{ repo: "a/b", skillPath: "x/SKILL.md", dirName: "x" }, { bad: 1 } as never] });
+  const view = normalizeDiscovery({
+    cached: true,
+    lastScannedAt: "t",
+    repos: [{ repo: "a/b", preset: true }, null as never],
+    skills: [{ repo: "a/b", skillPath: "x/SKILL.md", dirName: "x" }, { bad: 1 } as never],
+  });
   assert.equal(view.repos.length, 1);
   assert.equal(view.skills.length, 1);
   assert.equal(view.lastScannedAt, "t");
@@ -119,11 +161,30 @@ test("合一的输入框：像仓库地址就浏览 / 加入，否则搜索 skil
 });
 
 test("汇总按仓库分组：顺序跟仓库列表，总数不受筛选影响，空组不出现", () => {
-  const groups = groupDiscovered(SKILLS, filterDiscovered(SKILLS, { query: "", installed: "not", repo: "" }), ["mattpocock/skills", "anthropics/skills"]);
-  assert.deepEqual(groups.map((g) => [g.repo, g.total, g.skills.length]), [["mattpocock/skills", 2, 1], ["anthropics/skills", 2, 2]]);
-  const onlyPdf = groupDiscovered(SKILLS, filterDiscovered(SKILLS, { query: "pdf", installed: "all", repo: "" }), ["mattpocock/skills", "anthropics/skills"]);
-  assert.deepEqual(onlyPdf.map((g) => g.repo), ["anthropics/skills"]);
-  const unknown = groupDiscovered([{ repo: "z/z", skillPath: "SKILL.md", dirName: "z" }], [{ repo: "z/z", skillPath: "SKILL.md", dirName: "z" }], []);
+  const groups = groupDiscovered(SKILLS, filterDiscovered(SKILLS, { query: "", installed: "not", repo: "" }), [
+    "mattpocock/skills",
+    "anthropics/skills",
+  ]);
+  assert.deepEqual(
+    groups.map((g) => [g.repo, g.total, g.skills.length]),
+    [
+      ["mattpocock/skills", 2, 1],
+      ["anthropics/skills", 2, 2],
+    ],
+  );
+  const onlyPdf = groupDiscovered(SKILLS, filterDiscovered(SKILLS, { query: "pdf", installed: "all", repo: "" }), [
+    "mattpocock/skills",
+    "anthropics/skills",
+  ]);
+  assert.deepEqual(
+    onlyPdf.map((g) => g.repo),
+    ["anthropics/skills"],
+  );
+  const unknown = groupDiscovered(
+    [{ repo: "z/z", skillPath: "SKILL.md", dirName: "z" }],
+    [{ repo: "z/z", skillPath: "SKILL.md", dirName: "z" }],
+    [],
+  );
   assert.equal(unknown[0]!.repo, "z/z", "不在仓库列表里的仓库排在后面");
 });
 
@@ -142,7 +203,11 @@ test("仓库分组折叠：大仓库默认折叠；筛选中先全部展开、�
   assert.equal(repoExpanded(fold, searching, small), true, "筛选中先全部展开");
   fold = toggleRepoFold(fold, searching, small);
   assert.equal(repoExpanded(fold, searching, small), false, "筛选中可以折叠");
-  assert.equal(repoExpanded(fold, discoveryFilterKey({ query: "", installed: "not", repo: "" }), small), true, "换一种筛选又展开");
+  assert.equal(
+    repoExpanded(fold, discoveryFilterKey({ query: "", installed: "not", repo: "" }), small),
+    true,
+    "换一种筛选又展开",
+  );
   assert.equal(repoExpanded(fold, none, small), false, "清空后回到不筛选时的折叠");
   assert.equal(repoExpanded(fold, none, big), true);
 });

@@ -7,24 +7,46 @@
  * 给出 confidence 与中文 reason。
  */
 
-import path from 'node:path';
-import { readFile, realpath, stat } from 'node:fs/promises';
-import { walkFiles } from './fsx.ts';
-import { repoRelativeSkillPath, skillMdPathOf } from './sourceurl.ts';
-import { isFlatSkill } from './skillshape.ts';
-import type { SkillsLocalPort } from './types.ts';
-import type { DiscoverCandidate, RepoRecord, SourceEntry } from '../contract/remote.ts';
-import type { SourceStore } from './lockstore.ts';
+import path from "node:path";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { walkFiles } from "./fsx.ts";
+import { repoRelativeSkillPath, skillMdPathOf } from "./sourceurl.ts";
+import { isFlatSkill } from "./skillshape.ts";
+import type { SkillsLocalPort } from "./types.ts";
+import type { DiscoverCandidate, RepoRecord, SourceEntry } from "../contract/remote.ts";
+import type { SourceStore } from "./lockstore.ts";
 
 /** 扫描链接时只看这些小体积文本文件，避免读大二进制 */
 const TEXT_EXTENSIONS = new Set([
-  '.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.ps1', '.sh', '.bash', '.cmd', '.bat',
-  '.py', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.toml', '.ini', '.cfg', '.conf', '.html',
+  ".md",
+  ".markdown",
+  ".txt",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".ps1",
+  ".sh",
+  ".bash",
+  ".cmd",
+  ".bat",
+  ".py",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".ts",
+  ".tsx",
+  ".jsx",
+  ".toml",
+  ".ini",
+  ".cfg",
+  ".conf",
+  ".html",
 ]);
 const MAX_FILE_BYTES = 512 * 1024;
 const MAX_FILES = 400;
 
-const GITHUB_URL_PATTERN = /(?:https?:\/\/)?(?:raw\.githubusercontent\.com|github\.com)\/([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\/([A-Za-z0-9._-]+)/g;
+const GITHUB_URL_PATTERN =
+  /(?:https?:\/\/)?(?:raw\.githubusercontent\.com|github\.com)\/([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\/([A-Za-z0-9._-]+)/g;
 
 /**
  * 这些 owner 是普通链接目标 / GitHub 的保留一级路径，不是技能来源。
@@ -33,11 +55,40 @@ const GITHUB_URL_PATTERN = /(?:https?:\/\/)?(?:raw\.githubusercontent\.com|githu
  */
 const IGNORED_OWNERS = new Set([
   // 链接目标（原本就有）
-  'github', 'www', 'docs', 'gist', 'api', 'codeload', 'raw', 'objects', 'avatars', 'user-images', 'assets',
+  "github",
+  "www",
+  "docs",
+  "gist",
+  "api",
+  "codeload",
+  "raw",
+  "objects",
+  "avatars",
+  "user-images",
+  "assets",
   // GitHub 保留路径（FIX-6 / D-4）
-  'sponsors', 'orgs', 'apps', 'marketplace', 'settings', 'features', 'topics', 'collections', 'explore',
-  'login', 'about', 'pricing', 'enterprise', 'issues', 'pulls', 'notifications', 'search', 'users', 'site',
-  'security', 'customer-stories', 'readme',
+  "sponsors",
+  "orgs",
+  "apps",
+  "marketplace",
+  "settings",
+  "features",
+  "topics",
+  "collections",
+  "explore",
+  "login",
+  "about",
+  "pricing",
+  "enterprise",
+  "issues",
+  "pulls",
+  "notifications",
+  "search",
+  "users",
+  "site",
+  "security",
+  "customer-stories",
+  "readme",
 ]);
 
 export interface DiscoverOptions {
@@ -68,20 +119,20 @@ interface LocalCheckout {
 
 /** 技能目录在仓库根之下的 SKILL.md 路径；目录不在仓库里 / 结果不安全 → undefined */
 function skillMdPathUnder(root: string, dir: string): string | undefined {
-  const rel = path.relative(root, dir).split(path.sep).join('/');
-  if (rel === '') return 'SKILL.md';
-  if (rel === '..' || rel.startsWith('../')) return undefined;
+  const rel = path.relative(root, dir).split(path.sep).join("/");
+  if (rel === "") return "SKILL.md";
+  if (rel === ".." || rel.startsWith("../")) return undefined;
   return repoRelativeSkillPath(`${rel}/SKILL.md`);
 }
 
 /** dir 的 git 目录（.git 目录，或 worktree/submodule 的 `.git` 文件里记的路径） */
 async function gitDirOf(dir: string): Promise<string | undefined> {
-  const marker = path.join(dir, '.git');
+  const marker = path.join(dir, ".git");
   try {
     const stats = await stat(marker);
     if (stats.isDirectory()) return marker;
     if (!stats.isFile()) return undefined;
-    const text = await readFile(marker, 'utf8');
+    const text = await readFile(marker, "utf8");
     const match = /^gitdir:\s*(.+)$/im.exec(text);
     if (match === null) return undefined;
     const target = match[1]!.trim();
@@ -102,14 +153,14 @@ export function repoOfGitUrl(url: string): string | undefined {
 async function originOfGitDir(gitDir: string): Promise<string | undefined> {
   let text: string;
   try {
-    text = await readFile(path.join(gitDir, 'config'), 'utf8');
+    text = await readFile(path.join(gitDir, "config"), "utf8");
   } catch {
     return undefined;
   }
   let inOrigin = false;
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (line.startsWith('[')) {
+    if (line.startsWith("[")) {
       inOrigin = /^\[remote\s+"origin"\]$/i.test(line);
       continue;
     }
@@ -152,16 +203,16 @@ export async function discoverSources(deps: DiscoverDeps, options: DiscoverOptio
 
   const repoPool = new Map<string, { repo: string; ref?: string; note: string }>();
   for (const preset of deps.repos.presets()) {
-    repoPool.set(preset.repo.toLowerCase(), { repo: preset.repo, ref: preset.ref, note: '预置仓库' });
+    repoPool.set(preset.repo.toLowerCase(), { repo: preset.repo, ref: preset.ref, note: "预置仓库" });
   }
   for (const repo of await deps.repos.list()) {
     if (!repoPool.has(repo.repo.toLowerCase())) {
-      repoPool.set(repo.repo.toLowerCase(), { repo: repo.repo, ref: repo.ref, note: '你添加的仓库' });
+      repoPool.set(repo.repo.toLowerCase(), { repo: repo.repo, ref: repo.ref, note: "你添加的仓库" });
     }
   }
   for (const entry of await deps.sources.list()) {
     const key = entry.repo.toLowerCase();
-    if (!repoPool.has(key)) repoPool.set(key, { repo: entry.repo, ref: entry.ref, note: 'lock 中已出现过的仓库' });
+    if (!repoPool.has(key)) repoPool.set(key, { repo: entry.repo, ref: entry.ref, note: "lock 中已出现过的仓库" });
   }
 
   const candidates: DiscoverCandidate[] = [];
@@ -182,7 +233,7 @@ export async function discoverSources(deps: DiscoverDeps, options: DiscoverOptio
     const key = (skill.name ?? skill.dirName).toLowerCase();
     const dirKey = skill.dirName.toLowerCase();
     for (const pooled of repoPool.values()) {
-      const repoName = pooled.repo.split('/')[1] ?? '';
+      const repoName = pooled.repo.split("/")[1] ?? "";
       const repoBase = repoName.toLowerCase();
       if (repoBase === key || repoBase === dirKey) {
         const skillPath = repoRelativeSkillPath(verifiedSkillPath(pooled.repo) ?? skillMdPathOf(skill.dirName));
@@ -192,7 +243,7 @@ export async function discoverSources(deps: DiscoverDeps, options: DiscoverOptio
           repo: pooled.repo,
           ref: pooled.ref,
           skillPath,
-          confidence: 'medium',
+          confidence: "medium",
           reason: `仓库 ${pooled.repo} 的名字与技能名「${skill.name ?? skill.dirName}」相同（${pooled.note}），可能就是这个技能的来源，需要拉取上游后才能确认。`,
         });
       }
@@ -212,7 +263,7 @@ export async function discoverSources(deps: DiscoverDeps, options: DiscoverOptio
         repo: link.repo,
         ref: pooled?.ref ?? link.ref,
         skillPath,
-        confidence: verified !== undefined ? 'high' : 'low',
+        confidence: verified !== undefined ? "high" : "low",
         reason:
           verified !== undefined
             ? `技能目录内的文件里出现了 ${link.repo} 的链接（${link.where}），来源很可能就是它。`
@@ -223,14 +274,14 @@ export async function discoverSources(deps: DiscoverDeps, options: DiscoverOptio
 
   // 去重（同一 skillId + repo 只留置信度最高的一条）
   const deduped = new Map<string, DiscoverCandidate>();
-  const rank: Record<DiscoverCandidate['confidence'], number> = { high: 0, medium: 1, low: 2 };
+  const rank: Record<DiscoverCandidate["confidence"], number> = { high: 0, medium: 1, low: 2 };
   for (const candidate of candidates) {
     const key = `${candidate.skillId}|${candidate.repo.toLowerCase()}|${candidate.skillPath}`;
     const prev = deduped.get(key);
     if (!prev || rank[candidate.confidence] < rank[prev.confidence]) deduped.set(key, candidate);
   }
   return [...deduped.values()].sort(
-    (a, b) => rank[a.confidence] - rank[b.confidence] || a.skillId.localeCompare(b.skillId)
+    (a, b) => rank[a.confidence] - rank[b.confidence] || a.skillId.localeCompare(b.skillId),
   );
 }
 
@@ -247,7 +298,7 @@ async function scanLinks(files: { rel: string; abs: string }[]): Promise<Scanned
   for (const file of files) {
     if (inspected >= MAX_FILES || out.length >= 10) break;
     const ext = path.extname(file.rel).toLowerCase();
-    if (ext !== '' && !TEXT_EXTENSIONS.has(ext)) continue;
+    if (ext !== "" && !TEXT_EXTENSIONS.has(ext)) continue;
     inspected += 1;
     let buffer: Buffer;
     try {
@@ -256,18 +307,18 @@ async function scanLinks(files: { rel: string; abs: string }[]): Promise<Scanned
       continue;
     }
     if (buffer.length > MAX_FILE_BYTES) continue;
-    const text = buffer.toString('utf8');
+    const text = buffer.toString("utf8");
     GITHUB_URL_PATTERN.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = GITHUB_URL_PATTERN.exec(text)) !== null) {
       const owner = match[1]!;
-      const repoName = match[2]!.replace(/\.git$/i, '');
+      const repoName = match[2]!.replace(/\.git$/i, "");
       if (IGNORED_OWNERS.has(owner.toLowerCase())) continue;
       const repo = `${owner}/${repoName}`;
       const key = `${repo.toLowerCase()}|${file.rel}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ repo, ref: 'main', where: file.rel });
+      out.push({ repo, ref: "main", where: file.rel });
     }
   }
   return out;

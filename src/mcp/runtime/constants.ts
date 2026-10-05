@@ -4,7 +4,7 @@
  */
 
 /** 代理工具名（D-D1：全局只注册这一个工具）。 */
-export const PROXY_TOOL_NAME = 'mcp';
+export const PROXY_TOOL_NAME = "mcp";
 
 /** search 默认/最大条数（F3-Q1 SEARCH_DEFAULT_LIMIT / SEARCH_MAX_LIMIT）。 */
 export const SEARCH_DEFAULT_LIMIT = 12;
@@ -61,35 +61,35 @@ export const MAX_REGEX_QUERY_LENGTH = 256;
 
 /** 需要从父进程显式带入 MCP 子进程的代理相关变量（F1-Q2：#3 / 风险 2）。 */
 export const PROXY_ENV_KEYS = [
-  'HTTP_PROXY',
-  'HTTPS_PROXY',
-  'NO_PROXY',
-  'ALL_PROXY',
-  'http_proxy',
-  'https_proxy',
-  'no_proxy',
-  'all_proxy',
-  'NODE_EXTRA_CA_CERTS',
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "NO_PROXY",
+  "ALL_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy",
+  "all_proxy",
+  "NODE_EXTRA_CA_CERTS",
 ];
 
 /** 工具描述恒定前缀（D-D1：描述 = 恒定前缀 + 已启用服务器名，不写工具数量）。 */
 export const DESCRIPTION_PREFIX =
-  'MCP 服务器统一网关。它把本机配置的所有 MCP 服务器合成一个工具：' +
-  '用 { search } 在本地工具缓存里检索工具，用 { describe } 查看某个工具的完整参数，' +
-  '用 { tool, args } 真正调用它，用 { connect } 显式连接某个服务器并刷新它的工具清单，' +
-  '用 { instructions } 查看某个服务器自带的用法说明，不带任何参数则返回运行状态。' +
-  'search 与 describe 只读本地缓存、不启动任何进程；只有真正调用某个工具时才会启动它所属的服务器，并在空闲后自动回收。';
+  "MCP 服务器统一网关。它把本机配置的所有 MCP 服务器合成一个工具：" +
+  "用 { search } 在本地工具缓存里检索工具，用 { describe } 查看某个工具的完整参数，" +
+  "用 { tool, args } 真正调用它，用 { connect } 显式连接某个服务器并刷新它的工具清单，" +
+  "用 { instructions } 查看某个服务器自带的用法说明，不带任何参数则返回运行状态。" +
+  "search 与 describe 只读本地缓存、不启动任何进程；只有真正调用某个工具时才会启动它所属的服务器，并在空闲后自动回收。";
 
 /** 没有任何已启用服务器时的固定文案。 */
-export const DESCRIPTION_NO_SERVERS = '当前没有已启用的 MCP 服务器。';
+export const DESCRIPTION_NO_SERVERS = "当前没有已启用的 MCP 服务器。";
 
 /** 已启用服务器的描述后缀模板。 */
 export function describeEnabledServers(names: string[]): string {
   if (names.length === 0) return DESCRIPTION_NO_SERVERS;
-  return `已启用的 MCP 服务器（按配置顺序）：${names.join('，')}。`;
+  return `已启用的 MCP 服务器（按配置顺序）：${names.join("，")}。`;
 }
 
 /** 缓存目录相对 hubHome 的位置。 */
-export const MCP_DIR_NAME = 'mcp';
-export const CACHE_FILE_NAME = 'cache.json';
-export const SPILL_DIR_NAME = 'spill';
+export const MCP_DIR_NAME = "mcp";
+export const CACHE_FILE_NAME = "cache.json";
+export const SPILL_DIR_NAME = "spill";

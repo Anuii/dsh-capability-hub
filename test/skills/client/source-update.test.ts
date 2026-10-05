@@ -57,7 +57,7 @@ test("有来源时才渲染更新那一段", () => {
 test("抽屉副标题与「位置」都用缩写后的路径，完整路径走 title", () => {
   assert.ok(detail.includes("abbreviateHomePath(skill.path, props.homeDir)"));
   assert.ok(detail.includes("subtitleTitle={skill.path}"));
-  assert.ok(detail.includes('title: skill.path'), "位置那一项要给出完整路径的悬停提示");
+  assert.ok(detail.includes("title: skill.path"), "位置那一项要给出完整路径的悬停提示");
 });
 
 test("添加技能 = 仓库视图：地址输入占满、分支固定 140px、仓库列表默认折叠、汇总发现分批渲染", () => {
@@ -67,7 +67,10 @@ test("添加技能 = 仓库视图：地址输入占满、分支固定 140px、�
   assert.ok(SKILLS_CSS.includes(".chsk_refGrow{display:flex;flex:0 0 140px"), "分支输入框固定 140px");
   assert.ok(install.includes("React.useState<boolean>(false);\n  const [editing"), "仓库列表默认折叠");
   assert.ok(install.includes("shouldAutoScan(view)"), "第一次没有缓存时自动扫一次");
-  assert.ok(install.includes("sliceVisible(group.skills, limitOf(group.repo))"), "上千行分批渲染（按仓库分组，每组 200 行）");
+  assert.ok(
+    install.includes("sliceVisible(group.skills, limitOf(group.repo))"),
+    "上千行分批渲染（按仓库分组，每组 200 行）",
+  );
   assert.ok(/groupDiscovered\(\s*all,\s*filtered/.test(install), "汇总按仓库分组");
   assert.ok(install.includes("inputIntent(entry)"), "仓库地址与搜索合成一个输入框");
   assert.ok(install.includes("installPlan(selected.values())"), "跨仓库按仓库分组安装");

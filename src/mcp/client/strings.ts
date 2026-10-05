@@ -194,15 +194,17 @@ export const zh = {
   "mcp.command.check": "检查启动命令",
   "mcp.command.checking": "检查中…",
   "mcp.command.found": "找到启动命令：{path}",
-  "mcp.command.missing": "没有找到启动命令「{command}」：它可能没装或不在 PATH 里。仍然可以保存，但服务器可能启动失败。",
+  "mcp.command.missing":
+    "没有找到启动命令「{command}」：它可能没装或不在 PATH 里。仍然可以保存，但服务器可能启动失败。",
 
   /* ---- JSON 模式 ---- */
   "mcp.json.title": "JSON 编辑「{name}」",
   "mcp.json.newTitle": "JSON 新建服务器",
-  "mcp.json.hint": "这里只列显式设置过的字段（默认值不落盘）；敏感值是遮罩后的 ***hidden***，原样提交即保留原值。未知字段会被服务端拒绝。",
+  "mcp.json.hint":
+    "这里只列显式设置过的字段（默认值不落盘）；敏感值是遮罩后的 ***hidden***，原样提交即保留原值。未知字段会被服务端拒绝。",
   "mcp.json.hiddenWarning": "新建服务器时不要填 ***hidden*** 占位符，它会被当成真实值。",
   "mcp.json.parseError": "JSON 解析失败：{message}",
-  "mcp.json.needObject": "顶层必须是一个 JSON 对象（形如 { \"serverName\": \"…\", \"transport\": \"stdio\" }）。",
+  "mcp.json.needObject": '顶层必须是一个 JSON 对象（形如 { "serverName": "…", "transport": "stdio" }）。',
   "mcp.json.errors": "服务端返回 {count} 条错误",
   "mcp.json.ok": "校验通过。",
   "mcp.json.format": "格式化",
@@ -236,8 +238,9 @@ export const zh = {
 
   /* ---- 粘贴 JSON（D-C2） ---- */
   "mcp.paste.title": "粘贴 MCP 配置（JSON）",
-  "mcp.paste.hint": "支持 { \"mcpServers\": { … } }、{ \"servers\": { … } }、「名称 → 服务器对象」映射，或单个服务器对象。识别结果先预览，勾选后才逐个保存。",
-  "mcp.paste.placeholder": "{ \"mcpServers\": { \"my-server\": { \"command\": \"npx\", \"args\": [\"-y\", \"pkg\"] } } }",
+  "mcp.paste.hint":
+    '支持 { "mcpServers": { … } }、{ "servers": { … } }、「名称 → 服务器对象」映射，或单个服务器对象。识别结果先预览，勾选后才逐个保存。',
+  "mcp.paste.placeholder": '{ "mcpServers": { "my-server": { "command": "npx", "args": ["-y", "pkg"] } } }',
   "mcp.paste.textLabel": "JSON 内容",
   "mcp.paste.parse": "解析",
   "mcp.paste.parsing": "解析中…",
@@ -283,7 +286,8 @@ export const zh = {
 
   /* ---- 只读导入（D-C2） ---- */
   "mcp.import.title": "从 Claude Code / Codex 导入",
-  "mcp.import.hint": "只读读取两个来源的配置（绝不写入它们的文件）。预览确认后逐个导入；同名服务器会被服务端跳过，不覆盖现有配置。",
+  "mcp.import.hint":
+    "只读读取两个来源的配置（绝不写入它们的文件）。预览确认后逐个导入；同名服务器会被服务端跳过，不覆盖现有配置。",
   "mcp.import.loadFailed": "读取导入来源失败：{message}",
   "mcp.import.retry": "重试",
   "mcp.import.path": "文件路径",

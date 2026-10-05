@@ -3,10 +3,10 @@
  * 整目录移动（跨盘时 copy+delete，失败回滚）；meta.json 记录 lock 条目以便恢复时放回。
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import type { TrashReason } from '../contract/local.ts';
-import { atomicWriteFile, copyPath, movePath, pathExists, readFileText, removePath, statOrUndefined } from './fsx.ts';
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { TrashReason } from "../contract/local.ts";
+import { atomicWriteFile, copyPath, movePath, pathExists, readFileText, removePath, statOrUndefined } from "./fsx.ts";
 
 export interface TrashMeta {
   version: 1;
@@ -24,17 +24,17 @@ export interface TrashMeta {
   /** npx skills 的 lock 条目原文（不透明，恢复时原样放回） */
   lockEntry?: unknown;
   /** payload 是目录还是平铺文件 */
-  kind: 'dir' | 'file';
+  kind: "dir" | "file";
 }
 
-export const TRASH_PAYLOAD = 'payload';
-export const TRASH_META = 'meta.json';
+export const TRASH_PAYLOAD = "payload";
+export const TRASH_META = "meta.json";
 
 export class TrashStore {
   private readonly root: string;
 
   constructor(hubHome: string) {
-    this.root = path.join(hubHome, 'skills', 'trash');
+    this.root = path.join(hubHome, "skills", "trash");
   }
 
   get rootDir(): string {
@@ -71,7 +71,10 @@ export class TrashStore {
    * 把 sourcePath 整条移入回收站，并落 meta.json。
    * 返回 trashId 与 payload 路径；失败时回滚（payload 移回原位、临时目录删除）。
    */
-  async stash(sourcePath: string, meta: Omit<TrashMeta, 'version' | 'trashId' | 'deletedAt'> & { trashId?: string; deletedAt?: string }): Promise<TrashMeta> {
+  async stash(
+    sourcePath: string,
+    meta: Omit<TrashMeta, "version" | "trashId" | "deletedAt"> & { trashId?: string; deletedAt?: string },
+  ): Promise<TrashMeta> {
     const trashId = meta.trashId ?? newTrashId();
     const dir = this.dirOf(trashId);
     const payload = this.payloadOf(trashId);
@@ -108,7 +111,7 @@ export class TrashStore {
   }
 
   async listMeta(): Promise<TrashMeta[]> {
-    let entries: import('node:fs').Dirent[];
+    let entries: import("node:fs").Dirent[];
     try {
       entries = await fs.readdir(this.root, { withFileTypes: true });
     } catch {
@@ -139,15 +142,15 @@ export class TrashStore {
     await removePath(this.dirOf(trashId));
   }
 
-  async payloadStat(trashId: string): Promise<import('node:fs').Stats | undefined> {
+  async payloadStat(trashId: string): Promise<import("node:fs").Stats | undefined> {
     return await statOrUndefined(this.payloadOf(trashId));
   }
 }
 
 export function newTrashId(now = new Date()): string {
-  const stamp = now.toISOString().replace(/[-:.]/g, '');
+  const stamp = now.toISOString().replace(/[-:.]/g, "");
   const rand = Math.random().toString(36).slice(2, 8);
-  return stamp + '-' + rand;
+  return stamp + "-" + rand;
 }
 
 /**
@@ -163,8 +166,8 @@ export function newTrashId(now = new Date()): string {
 export const TRASH_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 export function isValidTrashId(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  if (value === '.' || value === '..') return false;
+  if (typeof value !== "string") return false;
+  if (value === "." || value === "..") return false;
   return TRASH_ID_PATTERN.test(value);
 }
 

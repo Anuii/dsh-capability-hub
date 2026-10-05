@@ -74,7 +74,9 @@ function sessionHeaderOf(session: { header?: unknown; requestHeader?(): unknown 
  * @param exec 工具定义的第二个参数
  */
 export function sessionIdentityOf(exec: unknown): SessionIdentity {
-  const agent = (exec as { agent?: { session?: { id?: unknown; header?: unknown; requestHeader?(): unknown } } } | undefined)?.agent;
+  const agent = (
+    exec as { agent?: { session?: { id?: unknown; header?: unknown; requestHeader?(): unknown } } } | undefined
+  )?.agent;
   const sessionId = agent?.session?.id;
   if (typeof sessionId === "string" && sessionId !== "") {
     let header: unknown;

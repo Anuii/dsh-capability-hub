@@ -2,17 +2,17 @@
  * 文件系统小工具：原子写、目录创建、大小写不敏感路径比较。
  * 运行时只用 node: 内置模块。
  */
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import type { Dirent } from 'node:fs';
-import { dirname } from 'node:path';
-import { errorText } from './errors.ts';
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { dirname } from "node:path";
+import { errorText } from "./errors.ts";
 
 /** 是否为 Windows（大小写不敏感路径语义）。 */
-export const IS_WINDOWS = process.platform === 'win32';
+export const IS_WINDOWS = process.platform === "win32";
 
 /** 路径比较用的规范化形式。 */
 export function pathKey(p: string): string {
-  const normalized = p.replace(/[\\/]+/g, '/').replace(/\/+$/, '');
+  const normalized = p.replace(/[\\/]+/g, "/").replace(/\/+$/, "");
   return IS_WINDOWS ? normalized.toLowerCase() : normalized;
 }
 
@@ -42,8 +42,8 @@ export async function atomicWriteFile(filePath: string, text: string, mode = 0o6
   const tmp = `${filePath}.${process.pid}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}.tmp`;
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    handle = await open(tmp, 'w', mode);
-    await handle.writeFile(text, { encoding: 'utf8' });
+    handle = await open(tmp, "w", mode);
+    await handle.writeFile(text, { encoding: "utf8" });
     await handle.sync().catch(() => undefined);
   } finally {
     await handle?.close().catch(() => undefined);
@@ -67,7 +67,7 @@ export async function statMtimeMs(p: string): Promise<number | undefined> {
 
 export async function readTextFile(filePath: string): Promise<string | undefined> {
   try {
-    return await readFile(filePath, 'utf8');
+    return await readFile(filePath, "utf8");
   } catch {
     return undefined;
   }
@@ -75,7 +75,7 @@ export async function readTextFile(filePath: string): Promise<string | undefined
 
 export async function writeTextFile(filePath: string, text: string): Promise<void> {
   await ensureDir(dirname(filePath));
-  await writeFile(filePath, text, { encoding: 'utf8' });
+  await writeFile(filePath, text, { encoding: "utf8" });
 }
 
 export async function removeFile(path: string): Promise<void> {
@@ -93,7 +93,7 @@ export interface DirEntryInfo {
 }
 
 export async function listDir(dir: string): Promise<DirEntryInfo[]> {
-  const { readdir } = await import('node:fs/promises');
+  const { readdir } = await import("node:fs/promises");
   // readdir 有重载：ReturnType 取到的是 Buffer 版本；这里按默认 encoding（'utf8'）标注为字符串名版本。
   let entries: Dirent<string>[];
   try {
@@ -103,7 +103,7 @@ export async function listDir(dir: string): Promise<DirEntryInfo[]> {
   }
   const result: DirEntryInfo[] = [];
   for (const entry of entries) {
-    const full = `${dir}${IS_WINDOWS ? '\\' : '/'}${entry.name}`;
+    const full = `${dir}${IS_WINDOWS ? "\\" : "/"}${entry.name}`;
     let size = 0;
     let mtimeMs = 0;
     try {

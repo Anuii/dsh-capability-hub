@@ -20,54 +20,55 @@
  *     （实测 ctx.tools.register 接受这种写法。）
  */
 export const PROXY_TOOL_PARAMETERS = {
-  type: 'object',
+  type: "object",
   properties: {
     search: {
-      type: 'string',
-      description: '在本地工具缓存里检索 MCP 工具（按名称、描述、服务器名、searchKeywords 排序）。只读缓存，不启动任何服务器。',
+      type: "string",
+      description:
+        "在本地工具缓存里检索 MCP 工具（按名称、描述、服务器名、searchKeywords 排序）。只读缓存，不启动任何服务器。",
     },
     describe: {
-      type: 'string',
-      description: '查看一个具名工具的完整参数 schema。工具名可以用原名、<服务器>__<工具名>，或 glob。只读缓存。',
+      type: "string",
+      description: "查看一个具名工具的完整参数 schema。工具名可以用原名、<服务器>__<工具名>，或 glob。只读缓存。",
     },
     tool: {
-      type: 'string',
-      description: '要调用的 MCP 工具名。这是唯一会按需启动服务器的路径。',
+      type: "string",
+      description: "要调用的 MCP 工具名。这是唯一会按需启动服务器的路径。",
     },
     args: {
-      description: '传给 tool 的参数对象，形状与 describe 显示的一致。',
+      description: "传给 tool 的参数对象，形状与 describe 显示的一致。",
     },
     server: {
-      type: 'string',
-      description: 'MCP 服务器名；当两个服务器有同名工具时用来消歧。',
+      type: "string",
+      description: "MCP 服务器名；当两个服务器有同名工具时用来消歧。",
     },
     connect: {
-      type: 'string',
-      description: '立即连接某个服务器并刷新它的工具清单（不调用任何工具）。默认受失败退避约束。',
+      type: "string",
+      description: "立即连接某个服务器并刷新它的工具清单（不调用任何工具）。默认受失败退避约束。",
     },
     instructions: {
-      type: 'string',
-      description: '显示某个服务器自己发布的用法说明（如果有）。只读缓存。',
+      type: "string",
+      description: "显示某个服务器自己发布的用法说明（如果有）。只读缓存。",
     },
     regex: {
-      type: 'boolean',
-      description: '把 search 当成正则表达式。默认 false。',
+      type: "boolean",
+      description: "把 search 当成正则表达式。默认 false。",
     },
     includeSchemas: {
-      type: 'boolean',
-      description: 'search 结果里是否包含参数摘要。默认 true。',
+      type: "boolean",
+      description: "search 结果里是否包含参数摘要。默认 true。",
     },
     limit: {
-      type: 'integer',
-      description: 'search 最多返回多少条。默认 12，上限 40。',
+      type: "integer",
+      description: "search 最多返回多少条。默认 12，上限 40。",
     },
     offset: {
-      type: 'integer',
-      description: 'search 跳过前面多少条（分页用）。',
+      type: "integer",
+      description: "search 跳过前面多少条（分页用）。",
     },
     force: {
-      type: 'boolean',
-      description: '配合 connect 使用：绕过失败退避，强制重试一次。配置刚修好时用它。',
+      type: "boolean",
+      description: "配合 connect 使用：绕过失败退避，强制重试一次。配置刚修好时用它。",
     },
   },
   additionalProperties: false,

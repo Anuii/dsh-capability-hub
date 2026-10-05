@@ -108,7 +108,10 @@ test("预览样例：两个会话（一个子代理）、共 3 个实例、服�
   const status = runningPreviewStatus(T0);
   assert.equal(status.sessions.length, 2);
   assert.equal(runningInstanceCount(status), 3);
-  assert.deepEqual(status.sessions.map((session) => session.sessionId), ["preview-parent-0001", "preview-child-0002"]);
+  assert.deepEqual(
+    status.sessions.map((session) => session.sessionId),
+    ["preview-parent-0001", "preview-child-0002"],
+  );
   assert.equal(status.sessions[1].parentSessionId, "preview-parent-0001");
   assert.deepEqual(
     status.sessions.flatMap((session) => session.instances.map((instance) => instance.server)),

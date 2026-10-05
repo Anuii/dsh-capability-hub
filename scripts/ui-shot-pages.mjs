@@ -47,19 +47,33 @@ mkdirSync(profileDir, { recursive: true });
 
 // 上一次没退干净的 Edge 会占着调试端口 / 锁住 user-data-dir，表现是 CDP 调用永远不返回。
 try {
-  const probe = await fetch("http://127.0.0.1:" + String(debugPort) + "/json/version", { signal: AbortSignal.timeout(1200) });
-  if (probe.ok) throw new Error("调试端口 " + debugPort + " 已被占用：先收掉残留的无头 Edge（taskkill /IM msedge.exe /F 只在必要时用），或换 --debug-port。");
+  const probe = await fetch("http://127.0.0.1:" + String(debugPort) + "/json/version", {
+    signal: AbortSignal.timeout(1200),
+  });
+  if (probe.ok)
+    throw new Error(
+      "调试端口 " +
+        debugPort +
+        " 已被占用：先收掉残留的无头 Edge（taskkill /IM msedge.exe /F 只在必要时用），或换 --debug-port。",
+    );
 } catch (error) {
   if (error instanceof Error && error.message.startsWith("调试端口")) throw error;
 }
 
-const edge = spawn(EDGE, [
-  "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-  "--user-data-dir=" + profileDir,
-  "--remote-debugging-port=" + String(debugPort),
-  "--window-size=1440,1100",
-  "about:blank",
-], { stdio: "ignore" });
+const edge = spawn(
+  EDGE,
+  [
+    "--headless=new",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--user-data-dir=" + profileDir,
+    "--remote-debugging-port=" + String(debugPort),
+    "--window-size=1440,1100",
+    "about:blank",
+  ],
+  { stdio: "ignore" },
+);
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
@@ -69,7 +83,9 @@ async function findPage() {
       const list = await (await fetch("http://127.0.0.1:" + debugPort + "/json/list")).json();
       const page = list.find((entry) => entry.type === "page");
       if (page !== undefined) return page;
-    } catch { /* 调试端口还没起来 */ }
+    } catch {
+      /* 调试端口还没起来 */
+    }
     await sleep(300);
   }
   throw new Error("Edge 调试端口 " + debugPort + " 没起来");
@@ -112,8 +128,14 @@ function send(method, params = {}, timeoutMs = 20000) {
     }, timeoutMs);
     timer.unref?.();
     pending.set(id, {
-      done: (value) => { clearTimeout(timer); done(value); },
-      fail: (error) => { clearTimeout(timer); fail(error); },
+      done: (value) => {
+        clearTimeout(timer);
+        done(value);
+      },
+      fail: (error) => {
+        clearTimeout(timer);
+        fail(error);
+      },
     });
   });
 }
@@ -127,14 +149,27 @@ function send(method, params = {}, timeoutMs = 20000) {
  */
 function killEdge() {
   try {
-    if (edge.pid !== undefined) execFileSync("taskkill.exe", ["/PID", String(edge.pid), "/T", "/F"], { stdio: "ignore" });
-  } catch { /* 已经退了就算了 */ }
+    if (edge.pid !== undefined)
+      execFileSync("taskkill.exe", ["/PID", String(edge.pid), "/T", "/F"], { stdio: "ignore" });
+  } catch {
+    /* 已经退了就算了 */
+  }
   try {
-    execFileSync("powershell.exe", ["-NoProfile", "-Command",
-      "$c = Get-NetTCPConnection -LocalPort " + debugPort + " -State Listen -ErrorAction SilentlyContinue; " +
-      "foreach ($x in $c) { taskkill.exe /PID $x.OwningProcess /T /F 2>$null | Out-Null }",
-    ], { stdio: "ignore" });
-  } catch { /* 端口已经空了 */ }
+    execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        "$c = Get-NetTCPConnection -LocalPort " +
+          debugPort +
+          " -State Listen -ErrorAction SilentlyContinue; " +
+          "foreach ($x in $c) { taskkill.exe /PID $x.OwningProcess /T /F 2>$null | Out-Null }",
+      ],
+      { stdio: "ignore" },
+    );
+  } catch {
+    /* 端口已经空了 */
+  }
 }
 
 // 脚本中途抛错也要收掉无头 Edge（只收本脚本起的那一棵）。
@@ -142,7 +177,8 @@ process.on("exit", () => killEdge());
 
 async function evaluate(expression) {
   const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
-  if (result.exceptionDetails !== undefined) throw new Error("页面脚本异常：" + JSON.stringify(result.exceptionDetails));
+  if (result.exceptionDetails !== undefined)
+    throw new Error("页面脚本异常：" + JSON.stringify(result.exceptionDetails));
   return result.result.value;
 }
 
@@ -176,19 +212,27 @@ async function open(query) {
   }
   for (let i = 0; i < 80 && !loaded; i++) await sleep(250);
   await sleep(2500);
-  await evaluate("(() => { const b = [...document.querySelectorAll('button')].find((n) => (n.innerText || '').trim() === '继续'); if (b) b.click(); return true; })()");
+  await evaluate(
+    "(() => { const b = [...document.querySelectorAll('button')].find((n) => (n.innerText || '').trim() === '继续'); if (b) b.click(); return true; })()",
+  );
   await sleep(700);
 }
 
 async function openHub() {
-  const clicked = await evaluate("(() => { const icon = document.querySelector('[data-dsh-panel-entry=capability-hub]'); if (!icon) return false; const b = icon.closest('button'); (b ?? icon).click(); return true; })()");
+  const clicked = await evaluate(
+    "(() => { const icon = document.querySelector('[data-dsh-panel-entry=capability-hub]'); if (!icon) return false; const b = icon.closest('button'); (b ?? icon).click(); return true; })()",
+  );
   await sleep(1500);
   return clicked;
 }
 
 /** 真·鼠标悬停（:hover 只有真的派发鼠标事件才会触发）。 */
 async function hover(selector) {
-  const box = await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(selector) + "); if (!n) return null; const r = n.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()");
+  const box = await evaluate(
+    "(() => { const n = document.querySelector(" +
+      JSON.stringify(selector) +
+      "); if (!n) return null; const r = n.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()",
+  );
   if (box === null) return false;
   await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: box.x, y: box.y, buttons: 0 });
   await sleep(350);
@@ -196,10 +240,13 @@ async function hover(selector) {
 }
 
 async function setDark(dark) {
-  await evaluate("(() => { const b = document.body; if (" + String(dark) + ") b.setAttribute('data-ds-dark-theme',''); else b.removeAttribute('data-ds-dark-theme'); return true; })()");
+  await evaluate(
+    "(() => { const b = document.body; if (" +
+      String(dark) +
+      ") b.setAttribute('data-ds-dark-theme',''); else b.removeAttribute('data-ds-dark-theme'); return true; })()",
+  );
   await sleep(450);
 }
-
 
 const FACTS = {};
 await send("Page.enable");
@@ -208,14 +255,24 @@ await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, de
 
 /** 按可见文字点一个按钮 / 可点元素（在能力中心页面内）。 */
 async function clickText(text, within = "[data-testid=capability-hub-page]") {
-  return evaluate("(() => { const root = document.querySelector(" + JSON.stringify(within) + ") || document; " +
-    "const nodes = [...root.querySelectorAll('button, [role=button], [role=tab], [role=menuitem], [role=option], summary')]; " +
-    "const hit = nodes.find((n) => (n.innerText || n.textContent || '').trim().startsWith(" + JSON.stringify(text) + ")); " +
-    "if (!hit) return false; hit.scrollIntoView({ block: 'center' }); hit.click(); return true; })()");
+  return evaluate(
+    "(() => { const root = document.querySelector(" +
+      JSON.stringify(within) +
+      ") || document; " +
+      "const nodes = [...root.querySelectorAll('button, [role=button], [role=tab], [role=menuitem], [role=option], summary')]; " +
+      "const hit = nodes.find((n) => (n.innerText || n.textContent || '').trim().startsWith(" +
+      JSON.stringify(text) +
+      ")); " +
+      "if (!hit) return false; hit.scrollIntoView({ block: 'center' }); hit.click(); return true; })()",
+  );
 }
 
 async function clickTestId(id) {
-  return evaluate("(() => { const n = document.querySelector('[data-testid=" + id + "]'); if (!n) return false; n.click(); return true; })()");
+  return evaluate(
+    "(() => { const n = document.querySelector('[data-testid=" +
+      id +
+      "]'); if (!n) return false; n.click(); return true; })()",
+  );
 }
 
 async function escape() {
@@ -229,7 +286,14 @@ async function pair(prefix, label) {
   await setDark(false);
   await shot(prefix + "-" + label + "-light.png");
   await setDark(true);
-  await shot(String(Number(prefix.slice(1)) + 1).padStart(2, "0").replace(/^/, "p") + "-" + label + "-dark.png");
+  await shot(
+    String(Number(prefix.slice(1)) + 1)
+      .padStart(2, "0")
+      .replace(/^/, "p") +
+      "-" +
+      label +
+      "-dark.png",
+  );
   await setDark(false);
 }
 
@@ -253,7 +317,9 @@ const AUDIT = `(() => {
 // ---- 技能 -------------------------------------------------------------------
 await open("");
 FACTS.hubEntryClicked = await openHub();
-FACTS.tabs = await evaluate("[...document.querySelectorAll('[data-testid=capability-hub-page] [role=tab]')].map((n) => n.textContent.trim())");
+FACTS.tabs = await evaluate(
+  "[...document.querySelectorAll('[data-testid=capability-hub-page] [role=tab]')].map((n) => n.textContent.trim())",
+);
 await clickTestId("capability-hub-tab-skills");
 await sleep(1200);
 FACTS.skillsAudit = await evaluate(AUDIT);
@@ -261,8 +327,13 @@ await pair("p01", "skills");
 FACTS.expandedBuiltin = await clickText("DSH 内置");
 await sleep(500);
 await evaluate("window.scrollTo(0, 0)");
-const firstRow = await evaluate("(() => { const n = [...document.querySelectorAll('[data-testid=capability-hub-panel-skills] [role=button]')].find((x) => x.getBoundingClientRect().height >= 40); if (!n) return null; const r = n.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()");
-if (firstRow) { await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: firstRow.x, y: firstRow.y, buttons: 0 }); await sleep(350); }
+const firstRow = await evaluate(
+  "(() => { const n = [...document.querySelectorAll('[data-testid=capability-hub-panel-skills] [role=button]')].find((x) => x.getBoundingClientRect().height >= 40); if (!n) return null; const r = n.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()",
+);
+if (firstRow) {
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: firstRow.x, y: firstRow.y, buttons: 0 });
+  await sleep(350);
+}
 FACTS.skillsExpandedAudit = await evaluate(AUDIT);
 await pair("p03", "skills-expanded");
 await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 5, y: 5, buttons: 0 });
@@ -271,39 +342,69 @@ await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 5, y: 5, buttons
 FACTS.filterEnabled = await clickTestId("skills-toolbar-filter-enabled");
 await sleep(500);
 const repoToggle = "[data-testid^=skills-repo-user-][data-testid$=-toggle]";
-FACTS.filteredRepoBefore = await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); return n ? n.getAttribute('aria-expanded') : null; })()");
-await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); if (n) n.click(); return !!n; })()");
+FACTS.filteredRepoBefore = await evaluate(
+  "(() => { const n = document.querySelector(" +
+    JSON.stringify(repoToggle) +
+    "); return n ? n.getAttribute('aria-expanded') : null; })()",
+);
+await evaluate(
+  "(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); if (n) n.click(); return !!n; })()",
+);
 await sleep(400);
-FACTS.filteredRepoAfter = await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); return n ? n.getAttribute('aria-expanded') : null; })()");
+FACTS.filteredRepoAfter = await evaluate(
+  "(() => { const n = document.querySelector(" +
+    JSON.stringify(repoToggle) +
+    "); return n ? n.getAttribute('aria-expanded') : null; })()",
+);
 await evaluate("window.scrollTo(0, 0)");
 await shot("p17-skills-filtered-fold-light.png");
 await clickTestId("skills-toolbar-filter-all");
 await sleep(400);
-FACTS.unfilteredRepoAfterClear = await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); return n ? n.getAttribute('aria-expanded') : null; })()");
+FACTS.unfilteredRepoAfterClear = await evaluate(
+  "(() => { const n = document.querySelector(" +
+    JSON.stringify(repoToggle) +
+    "); return n ? n.getAttribute('aria-expanded') : null; })()",
+);
 
 FACTS.addSkillOpened = await clickText("添加技能");
 await sleep(2500);
-FACTS.addSkillDrawerWidth = await evaluate("(() => { const d = document.querySelector('[data-testid=kit-drawer]') || document.querySelector('[role=dialog]'); return d ? Math.round(d.getBoundingClientRect().width) : null; })()");
+FACTS.addSkillDrawerWidth = await evaluate(
+  "(() => { const d = document.querySelector('[data-testid=kit-drawer]') || document.querySelector('[role=dialog]'); return d ? Math.round(d.getBoundingClientRect().width) : null; })()",
+);
 await pair("p05", "add-skill");
 FACTS.repoListToggled = await clickTestId("skills-repo-group-toggle");
-FACTS.checked = await evaluate("(() => { const boxes = [...document.querySelectorAll('[data-testid=skills-discovery-list] input[type=checkbox]:not(:disabled)')].slice(0, 2); boxes.forEach((b) => b.click()); return boxes.length; })()");
+FACTS.checked = await evaluate(
+  "(() => { const boxes = [...document.querySelectorAll('[data-testid=skills-discovery-list] input[type=checkbox]:not(:disabled)')].slice(0, 2); boxes.forEach((b) => b.click()); return boxes.length; })()",
+);
 await sleep(600);
 FACTS.footerVisible = await evaluate("!!document.querySelector('[data-testid=skills-install-submit]')");
-FACTS.discoveryGroups = await evaluate("[...document.querySelectorAll('[data-testid^=skills-discovery-group-][data-testid$=-toggle]')].map((n) => n.textContent.trim().slice(0, 40) + ' ' + n.getAttribute('aria-expanded'))");
-FACTS.addSkillAudit = await evaluate("(() => { const d = document.querySelector('[data-testid=kit-drawer]'); if (!d) return null; const rows = [...d.querySelectorAll('[data-testid=skills-discovery-list] li')]; return rows.slice(0, 50).map((r) => [...r.querySelectorAll('button, input, [role=switch], [role=checkbox], select')].filter((c) => getComputedStyle(c).opacity !== '0' && c.getBoundingClientRect().width > 0 && getComputedStyle(c.closest('[class]')).opacity !== '0').length).reduce((m, n) => Math.max(m, n), 0); })()");
+FACTS.discoveryGroups = await evaluate(
+  "[...document.querySelectorAll('[data-testid^=skills-discovery-group-][data-testid$=-toggle]')].map((n) => n.textContent.trim().slice(0, 40) + ' ' + n.getAttribute('aria-expanded'))",
+);
+FACTS.addSkillAudit = await evaluate(
+  "(() => { const d = document.querySelector('[data-testid=kit-drawer]'); if (!d) return null; const rows = [...d.querySelectorAll('[data-testid=skills-discovery-list] li')]; return rows.slice(0, 50).map((r) => [...r.querySelectorAll('button, input, [role=switch], [role=checkbox], select')].filter((c) => getComputedStyle(c).opacity !== '0' && c.getBoundingClientRect().width > 0 && getComputedStyle(c.closest('[class]')).opacity !== '0').length).reduce((m, n) => Math.max(m, n), 0); })()",
+);
 await pair("p13", "add-skill-selected");
 // 搜索 skills.sh → 结果框；再从结果里「浏览」一个仓库（--no-network 时跳过）
 if (!process.argv.includes("--no-network")) {
-  await evaluate("(() => { const n = document.querySelector('[data-testid=skills-repo-entry]'); const input = n && (n.tagName === 'INPUT' ? n : n.querySelector('input')); if (!input) return false; input.focus(); return true; })()");
+  await evaluate(
+    "(() => { const n = document.querySelector('[data-testid=skills-repo-entry]'); const input = n && (n.tagName === 'INPUT' ? n : n.querySelector('input')); if (!input) return false; input.focus(); return true; })()",
+  );
   await send("Input.insertText", { text: "pdf" });
   await clickTestId("skills-remote-search-button");
   await sleep(4000);
-  FACTS.searchBoxHeight = await evaluate("(() => { const n = document.querySelector('[data-testid=skills-remote-search-box]'); return n ? Math.round(n.getBoundingClientRect().height) : null; })()");
+  FACTS.searchBoxHeight = await evaluate(
+    "(() => { const n = document.querySelector('[data-testid=skills-remote-search-box]'); return n ? Math.round(n.getBoundingClientRect().height) : null; })()",
+  );
   await shot("p15-add-skill-search-light.png");
   FACTS.browsedFromSearch = await clickTestId("skills-remote-search-browse-0");
   await sleep(6000);
-  FACTS.searchCollapsedAfterBrowse = await evaluate("!document.querySelector('[data-testid=skills-remote-search-box]')");
-  FACTS.browseVisible = await evaluate("(() => { const n = document.querySelector('[data-testid=skills-remote-browse-result]'); if (!n) return null; const r = n.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; })()");
+  FACTS.searchCollapsedAfterBrowse = await evaluate(
+    "!document.querySelector('[data-testid=skills-remote-search-box]')",
+  );
+  FACTS.browseVisible = await evaluate(
+    "(() => { const n = document.querySelector('[data-testid=skills-remote-browse-result]'); if (!n) return null; const r = n.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; })()",
+  );
   await shot("p16-add-skill-browse-light.png");
 }
 await escape();
@@ -311,36 +412,56 @@ await escape();
 // ---- MCP --------------------------------------------------------------------
 await clickTestId("capability-hub-tab-mcp");
 await sleep(1200);
-await evaluate("(() => { const p = document.querySelector('[data-testid=capability-hub-panel-mcp]'); if (p) p.scrollIntoView({ block: 'end' }); const s = [...document.querySelectorAll('*')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); if (s) s.scrollIntoView({ block: 'center' }); return true; })()");
+await evaluate(
+  "(() => { const p = document.querySelector('[data-testid=capability-hub-panel-mcp]'); if (p) p.scrollIntoView({ block: 'end' }); const s = [...document.querySelectorAll('*')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); if (s) s.scrollIntoView({ block: 'center' }); return true; })()",
+);
 await sleep(400);
 FACTS.mcpAudit = await evaluate(AUDIT);
-FACTS.runningQuiet = await evaluate("(() => { const n = document.querySelector('[data-testid=running-quiet]'); return n ? n.textContent : null; })()");
+FACTS.runningQuiet = await evaluate(
+  "(() => { const n = document.querySelector('[data-testid=running-quiet]'); return n ? n.textContent : null; })()",
+);
 FACTS.mcpTabDot = await evaluate("!!document.querySelector('[data-testid=capability-hub-tab-dot-mcp]')");
-FACTS.mcpRowSubtitle = await evaluate("(() => { const n = document.querySelector('[data-testid^=mcp-row-] .chk_rowSub'); return n ? [n.textContent, n.title] : null; })()");
-FACTS.runningHeader = await evaluate("(() => { const s = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] *')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); return s ? s.textContent.trim() : null; })()");
+FACTS.mcpRowSubtitle = await evaluate(
+  "(() => { const n = document.querySelector('[data-testid^=mcp-row-] .chk_rowSub'); return n ? [n.textContent, n.title] : null; })()",
+);
+FACTS.runningHeader = await evaluate(
+  "(() => { const s = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] *')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); return s ? s.textContent.trim() : null; })()",
+);
 await pair("p07", "mcp");
 
 await open("&hubPreviewRunning=1");
 await openHub();
 await clickTestId("capability-hub-tab-mcp");
 await sleep(1500);
-await evaluate("(() => { const s = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] *')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); if (s) s.scrollIntoView({ block: 'start' }); return true; })()");
+await evaluate(
+  "(() => { const s = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] *')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); if (s) s.scrollIntoView({ block: 'start' }); return true; })()",
+);
 await sleep(400);
-FACTS.previewRunningText = await evaluate("(() => { const p = document.querySelector('[data-testid=capability-hub-panel-mcp]'); return p ? p.innerText.slice(-600) : null; })()");
+FACTS.previewRunningText = await evaluate(
+  "(() => { const p = document.querySelector('[data-testid=capability-hub-panel-mcp]'); return p ? p.innerText.slice(-600) : null; })()",
+);
 await pair("p09", "mcp-running-preview");
 
 await open("");
 await openHub();
 await clickTestId("capability-hub-tab-mcp");
 await sleep(1200);
-FACTS.serverDrawerOpened = await evaluate("(() => { const n = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] [role=button]')].find((x) => x.getBoundingClientRect().height >= 40); if (!n) return false; n.click(); return true; })()");
+FACTS.serverDrawerOpened = await evaluate(
+  "(() => { const n = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] [role=button]')].find((x) => x.getBoundingClientRect().height >= 40); if (!n) return false; n.click(); return true; })()",
+);
 await sleep(1500);
-FACTS.serverDrawerText = await evaluate("(() => { const d = document.querySelector('[data-testid=kit-drawer]') || document.querySelector('[role=dialog]'); return d ? d.innerText.slice(0, 800) : null; })()");
+FACTS.serverDrawerText = await evaluate(
+  "(() => { const d = document.querySelector('[data-testid=kit-drawer]') || document.querySelector('[role=dialog]'); return d ? d.innerText.slice(0, 800) : null; })()",
+);
 await pair("p11", "mcp-drawer");
 await escape();
 
 FACTS.console = consoleLines.filter((line) => /capability-hub|error/i.test(line)).slice(0, 20);
-writeFileSync(join(outDir, suffix === "" ? "pages-facts.json" : "pages-facts-" + suffix + ".json"), JSON.stringify(FACTS, null, 2), "utf8");
+writeFileSync(
+  join(outDir, suffix === "" ? "pages-facts.json" : "pages-facts-" + suffix + ".json"),
+  JSON.stringify(FACTS, null, 2),
+  "utf8",
+);
 console.log(JSON.stringify(FACTS, null, 2));
 socket.close();
 killEdge();

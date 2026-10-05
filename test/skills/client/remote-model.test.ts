@@ -105,9 +105,30 @@ test("检查/更新结果汇总", () => {
 
 test("候选来源：唯一键、分组与置信度文案", () => {
   const candidates: DiscoverCandidate[] = [
-    { skillId: "user-agents:a", repo: "x/y", ref: "main", skillPath: "a/SKILL.md", confidence: "high", reason: "目录里有链接" },
-    { skillId: "user-agents:a", repo: "x/y", ref: "dev", skillPath: "a/SKILL.md", confidence: "medium", reason: "仓库同名" },
-    { skillId: "user-agents:b", repo: "x/y", ref: "main", skillPath: "b/SKILL.md", confidence: "low", reason: "弱信号" },
+    {
+      skillId: "user-agents:a",
+      repo: "x/y",
+      ref: "main",
+      skillPath: "a/SKILL.md",
+      confidence: "high",
+      reason: "目录里有链接",
+    },
+    {
+      skillId: "user-agents:a",
+      repo: "x/y",
+      ref: "dev",
+      skillPath: "a/SKILL.md",
+      confidence: "medium",
+      reason: "仓库同名",
+    },
+    {
+      skillId: "user-agents:b",
+      repo: "x/y",
+      ref: "main",
+      skillPath: "b/SKILL.md",
+      confidence: "low",
+      reason: "弱信号",
+    },
   ];
   assert.equal(candidateKey(candidates[0]!), "user-agents:a|x/y|main|a/SKILL.md");
   assert.notEqual(candidateKey(candidates[0]!), candidateKey(candidates[1]!));
@@ -129,17 +150,29 @@ test("安装目标：有工作区才有项目级，路径来自 roots", () => {
     root("user-agents", { path: "C:\\home\\.agents\\skills" }),
   ];
   const without = installTargetOptions(roots, undefined);
-  assert.deepEqual(without.map((option) => option.id), ["user-agents", "user-dsh"]);
+  assert.deepEqual(
+    without.map((option) => option.id),
+    ["user-agents", "user-dsh"],
+  );
   assert.equal(without[0]!.path, "C:\\home\\.agents\\skills");
   const withSpace = installTargetOptions(roots, "C:\\proj");
-  assert.deepEqual(withSpace.map((option) => option.id), ["user-agents", "user-dsh", "project-agents", "project-dsh"]);
+  assert.deepEqual(
+    withSpace.map((option) => option.id),
+    ["user-agents", "user-dsh", "project-agents", "project-dsh"],
+  );
   assert.equal(withSpace[2]!.path, "C:\\proj\\.agents\\skills");
   assert.equal(targetLabel("project-dsh"), t("skills.install.targetProjectDsh"));
 });
 
 test("安装结果文案", () => {
-  assert.equal(installResultText({ skillPath: "a/SKILL.md", ok: true, skillId: "user-agents:a" }), t("skills.install.resultOk", { id: "user-agents:a" }));
-  assert.equal(installResultText({ skillPath: "a/SKILL.md", ok: false, message: "已存在同名技能" }), t("skills.install.resultFail", { message: "已存在同名技能" }));
+  assert.equal(
+    installResultText({ skillPath: "a/SKILL.md", ok: true, skillId: "user-agents:a" }),
+    t("skills.install.resultOk", { id: "user-agents:a" }),
+  );
+  assert.equal(
+    installResultText({ skillPath: "a/SKILL.md", ok: false, message: "已存在同名技能" }),
+    t("skills.install.resultFail", { message: "已存在同名技能" }),
+  );
   assert.equal(installSummaryText(1, 0), t("skills.install.done", { ok: 1, failed: 0 }));
 });
 
@@ -151,13 +184,20 @@ test("哪些技能需要推测来源：可写 + 非平铺 + 尚无记录", () =>
     makeSkill({ id: "user-agents:c" }),
   ];
   const needing = skillsNeedingSource(skills, new Set<string>(["user-agents:c"]));
-  assert.deepEqual(needing.map((skill) => skill.id), ["user-agents:a"]);
+  assert.deepEqual(
+    needing.map((skill) => skill.id),
+    ["user-agents:a"],
+  );
   assert.equal(isFlatSkill({ dirName: "flat.md" }), true);
   assert.ok(flatUnsupportedText().includes("平铺 .md"));
 });
 
 test("「全部更新」只挑有更新且非平铺的技能", () => {
-  const skills = [makeSkill({ id: "user-agents:a" }), makeSkill({ id: "user-agents:b" }), makeSkill({ id: "user-agents:flat.md" })];
+  const skills = [
+    makeSkill({ id: "user-agents:a" }),
+    makeSkill({ id: "user-agents:b" }),
+    makeSkill({ id: "user-agents:flat.md" }),
+  ];
   const checks = {
     "user-agents:a": { status: "update-available" as const },
     "user-agents:b": { status: "up-to-date" as const },

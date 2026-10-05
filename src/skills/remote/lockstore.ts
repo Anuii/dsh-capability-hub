@@ -15,16 +15,22 @@
  * LockStash 的 take/put 也在这里实现（skills-local 删除/恢复技能时挂接）。
  */
 
-import path from 'node:path';
-import { pathExists, readJsonFile, writeJsonFile } from './fsx.ts';
-import { hashLocalDirectory, recordedHash } from './hash.ts';
-import { internal } from './errors.ts';
-import { repoRelativeSkillPath, skillMdPathOf } from './sourceurl.ts';
-import { sanitizeName } from './rootskill.ts';
-import { LOCK_BACKED_ROOT, type HubStoreEntry, type HubStoreFile, type SkillLockEntry, type SkillLockFile } from './types.ts';
-import type { HubContext } from '../../platform/contract/host.ts';
-import type { LockStash } from '../contract/local.ts';
-import type { SourceEntry } from '../contract/remote.ts';
+import path from "node:path";
+import { pathExists, readJsonFile, writeJsonFile } from "./fsx.ts";
+import { hashLocalDirectory, recordedHash } from "./hash.ts";
+import { internal } from "./errors.ts";
+import { repoRelativeSkillPath, skillMdPathOf } from "./sourceurl.ts";
+import { sanitizeName } from "./rootskill.ts";
+import {
+  LOCK_BACKED_ROOT,
+  type HubStoreEntry,
+  type HubStoreFile,
+  type SkillLockEntry,
+  type SkillLockFile,
+} from "./types.ts";
+import type { HubContext } from "../../platform/contract/host.ts";
+import type { LockStash } from "../contract/local.ts";
+import type { SourceEntry } from "../contract/remote.ts";
 
 const LOCK_VERSION = 3;
 const SOURCES_VERSION = 1;
@@ -37,11 +43,11 @@ export interface SkillLocation {
 }
 
 export function lockFilePath(ctx: HubContext): string {
-  return path.join(ctx.homeDir, '.agents', '.skill-lock.json');
+  return path.join(ctx.homeDir, ".agents", ".skill-lock.json");
 }
 
 export function sourcesFilePath(ctx: HubContext): string {
-  return path.join(ctx.hubHome, 'skills', 'sources.json');
+  return path.join(ctx.hubHome, "skills", "sources.json");
 }
 
 export function useSkillLock(rootId: string): boolean {
@@ -53,9 +59,9 @@ function emptyLock(): SkillLockFile {
 }
 
 function readLockShape(raw: SkillLockFile | undefined): SkillLockFile {
-  if (!raw || typeof raw !== 'object') return emptyLock();
+  if (!raw || typeof raw !== "object") return emptyLock();
   const lock = raw as SkillLockFile;
-  if (typeof lock.version !== 'number' || !lock.skills || typeof lock.skills !== 'object') return emptyLock();
+  if (typeof lock.version !== "number" || !lock.skills || typeof lock.skills !== "object") return emptyLock();
   // 与 npx skills 一致：version < 3 视为旧格式。但我们不主动清空用户的锁 ——
   // 只在写回时保持原 version，读到的旧数据照常展示。
   return lock;
@@ -68,8 +74,8 @@ export async function readSkillLockRaw(ctx: HubContext): Promise<SkillLockFile> 
 
 export async function writeSkillLockRaw(ctx: HubContext, lock: SkillLockFile): Promise<void> {
   const next: SkillLockFile = { ...lock };
-  if (typeof next.version !== 'number') next.version = LOCK_VERSION;
-  if (!next.skills || typeof next.skills !== 'object') next.skills = {};
+  if (typeof next.version !== "number") next.version = LOCK_VERSION;
+  if (!next.skills || typeof next.skills !== "object") next.skills = {};
   await writeJsonFile(lockFilePath(ctx), next);
 }
 
@@ -77,14 +83,18 @@ export type HubSourcesFile = HubStoreFile;
 
 export async function readSourcesRaw(ctx: HubContext): Promise<HubSourcesFile> {
   const raw = await readJsonFile<HubSourcesFile>(sourcesFilePath(ctx));
-  if (!raw || typeof raw !== 'object') return { version: SOURCES_VERSION, entries: {} };
-  return { ...raw, version: typeof raw.version === 'number' ? raw.version : SOURCES_VERSION, entries: raw.entries && typeof raw.entries === 'object' ? raw.entries : {} };
+  if (!raw || typeof raw !== "object") return { version: SOURCES_VERSION, entries: {} };
+  return {
+    ...raw,
+    version: typeof raw.version === "number" ? raw.version : SOURCES_VERSION,
+    entries: raw.entries && typeof raw.entries === "object" ? raw.entries : {},
+  };
 }
 
 export async function writeSourcesRaw(ctx: HubContext, file: HubSourcesFile): Promise<void> {
   const next: HubSourcesFile = { ...file };
-  if (typeof next.version !== 'number') next.version = SOURCES_VERSION;
-  if (!next.entries || typeof next.entries !== 'object') next.entries = {};
+  if (typeof next.version !== "number") next.version = SOURCES_VERSION;
+  if (!next.entries || typeof next.entries !== "object") next.entries = {};
   await writeJsonFile(sourcesFilePath(ctx), next);
 }
 
@@ -102,8 +112,6 @@ export interface SourceRecord {
   /** 记录在 lock 中是否存在 */
   present: boolean;
 }
-
-
 
 /**
  * 读侧归一：来源记录里的 skillPath 必须是「仓库内相对路径」。
@@ -143,7 +151,7 @@ export function lockEntryToSourceEntry(lockName: string, entry: SkillLockEntry):
     skillId: `user-agents:${dirName}`,
     repo: entry.source,
     skillPath: storedSkillPath(entry.skillPath, dirName),
-    store: 'skill-lock',
+    store: "skill-lock",
   };
   if (entry.ref !== undefined) result.ref = entry.ref;
   if (entry.installedAt !== undefined) result.installedAt = entry.installedAt;
@@ -154,14 +162,14 @@ export function lockEntryToSourceEntry(lockName: string, entry: SkillLockEntry):
 
 export function hubEntryToSourceEntry(entry: HubStoreEntry): SourceEntry {
   const dirName =
-    typeof entry.dirName === 'string' && entry.dirName !== ''
+    typeof entry.dirName === "string" && entry.dirName !== ""
       ? entry.dirName
-      : entry.skillId.split(':').slice(1).join(':');
+      : entry.skillId.split(":").slice(1).join(":");
   const result: SourceEntry = {
     skillId: entry.skillId,
     repo: entry.repo,
     skillPath: storedSkillPath(entry.skillPath, dirName),
-    store: 'hub',
+    store: "hub",
   };
   if (entry.ref !== undefined) result.ref = entry.ref;
   if (entry.installedAt !== undefined) result.installedAt = entry.installedAt;
@@ -191,15 +199,15 @@ export interface SourceStore {
  */
 function resolveLockName(skillName: string | undefined, dirName: string): string {
   const trimmed = skillName?.trim();
-  return trimmed && trimmed !== '' ? trimmed : dirName;
+  return trimmed && trimmed !== "" ? trimmed : dirName;
 }
 
 /** skillPath 的父目录名（小写）；根级 "SKILL.md" 没有父目录 → undefined */
 function parentDirOfSkillPath(skillPath: unknown): string | undefined {
-  if (typeof skillPath !== 'string') return undefined;
+  if (typeof skillPath !== "string") return undefined;
   const normalized = repoRelativeSkillPath(skillPath);
   if (normalized === undefined) return undefined;
-  const segments = normalized.split('/').filter((s) => s !== '');
+  const segments = normalized.split("/").filter((s) => s !== "");
   return segments.length >= 2 ? segments[segments.length - 2]!.toLowerCase() : undefined;
 }
 
@@ -215,11 +223,11 @@ function parentDirOfSkillPath(skillPath: unknown): string | undefined {
 function findLockKey(lock: SkillLockFile, names: (string | undefined)[], dirName: string): string | undefined {
   for (const raw of names) {
     const name = raw?.trim();
-    if (name !== undefined && name !== '' && Object.prototype.hasOwnProperty.call(lock.skills, name)) return name;
+    if (name !== undefined && name !== "" && Object.prototype.hasOwnProperty.call(lock.skills, name)) return name;
   }
   const keys = Object.keys(lock.skills);
-  const lower = (dirName ?? '').trim().toLowerCase();
-  if (lower !== '') {
+  const lower = (dirName ?? "").trim().toLowerCase();
+  if (lower !== "") {
     const byKey = keys.find((k) => sanitizeName(k).toLowerCase() === lower);
     if (byKey !== undefined) return byKey;
   }
@@ -253,12 +261,12 @@ export function createSourceStore(ctx: HubContext): SourceStore {
     const out: SourceEntry[] = [];
     const lock = await readLock();
     for (const [name, entry] of Object.entries(lock.skills)) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!entry || typeof entry !== "object") continue;
       out.push(lockEntryToSourceEntry(name, entry));
     }
     const hub = await readSourcesRaw(ctx);
     for (const entry of Object.values(hub.entries)) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!entry || typeof entry !== "object") continue;
       out.push(hubEntryToSourceEntry(entry));
     }
     out.sort((a, b) => a.skillId.localeCompare(b.skillId));
@@ -272,22 +280,22 @@ export function createSourceStore(ctx: HubContext): SourceStore {
       // 已有条目按同一套反查规则复用（否则「技能名与目录名不同」时会写出一条重复记录）
       const key = findLockKey(lock, [skillName], location.dirName) ?? resolveLockName(skillName, location.dirName);
       const existing = lock.skills[key];
-      const writePath = entry.skillPath === '' ? '' : storedSkillPath(entry.skillPath, location.dirName);
+      const writePath = entry.skillPath === "" ? "" : storedSkillPath(entry.skillPath, location.dirName);
       const next: SkillLockEntry = {
         ...(existing ?? {}),
         source: entry.repo,
-        sourceType: typeof existing?.sourceType === 'string' ? existing.sourceType : 'github',
+        sourceType: typeof existing?.sourceType === "string" ? existing.sourceType : "github",
         sourceUrl: `https://github.com/${entry.repo}.git`,
         skillPath: writePath,
-        skillFolderHash: entry.skillFolderHash ?? '',
+        skillFolderHash: entry.skillFolderHash ?? "",
         installedAt: existing?.installedAt ?? entry.installedAt ?? nowIso,
         updatedAt: entry.updatedAt ?? nowIso,
       };
       // sourceUrl 若已有则保留原样（用户可能是 fork 或用了别的协议）
-      if (typeof existing?.sourceUrl === 'string' && existing.sourceUrl !== '') next.sourceUrl = existing.sourceUrl;
+      if (typeof existing?.sourceUrl === "string" && existing.sourceUrl !== "") next.sourceUrl = existing.sourceUrl;
       if (entry.ref !== undefined) next.ref = entry.ref;
       if (entry.skillFolderHash === undefined) delete next.skillFolderHash;
-      if (writePath === '') delete next.skillPath;
+      if (writePath === "") delete next.skillPath;
       lock.skills[key] = next;
       await writeSkillLockRaw(ctx, lock);
       logger.info(`已写入技能来源（skill-lock）：${key} ← ${entry.repo}`);
@@ -303,7 +311,7 @@ export function createSourceStore(ctx: HubContext): SourceStore {
       rootId: location.rootId,
       dirName: location.dirName,
       repo: entry.repo,
-      skillPath: entry.skillPath === '' ? '' : storedSkillPath(entry.skillPath, location.dirName),
+      skillPath: entry.skillPath === "" ? "" : storedSkillPath(entry.skillPath, location.dirName),
       installedAt: existing?.installedAt ?? entry.installedAt ?? nowIso,
       updatedAt: entry.updatedAt ?? nowIso,
     };
@@ -351,7 +359,7 @@ export function createSourceStore(ctx: HubContext): SourceStore {
     },
     async put(skill: { rootId: string; dirName: string; path: string }, entry: unknown): Promise<void> {
       if (!useSkillLock(skill.rootId)) return;
-      if (!entry || typeof entry !== 'object') return;
+      if (!entry || typeof entry !== "object") return;
       const lock = await readLock();
       // 键用目录名（= sanitizeName(原键)）：派生出的 skillId 与 take 之前完全一致，
       // 因此「删除 → 收起 → 恢复 → 放回」在 sanitizeName 前后往返仍然自洽。

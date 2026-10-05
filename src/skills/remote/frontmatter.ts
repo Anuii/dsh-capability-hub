@@ -15,12 +15,7 @@ export interface MiniFrontmatter {
 function unquote(raw: string): string {
   const value = raw.trim();
   if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
-    return value
-      .slice(1, -1)
-      .replace(/\\n/g, '\n')
-      .replace(/\\t/g, '\t')
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, '\\');
+    return value.slice(1, -1).replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
   }
   if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
     return value.slice(1, -1).replace(/''/g, "'");
@@ -32,9 +27,9 @@ function unquote(raw: string): string {
 export function extractFrontmatterBlock(text: string): string | undefined {
   const normalized = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const lines = normalized.split(/\r?\n/);
-  if (lines.length === 0 || lines[0]!.trim() !== '---') return undefined;
+  if (lines.length === 0 || lines[0]!.trim() !== "---") return undefined;
   for (let i = 1; i < lines.length; i++) {
-    if (lines[i]!.trim() === '---') return lines.slice(1, i).join('\n');
+    if (lines[i]!.trim() === "---") return lines.slice(1, i).join("\n");
   }
   return undefined;
 }
@@ -42,38 +37,36 @@ export function extractFrontmatterBlock(text: string): string | undefined {
 export function parseMiniFrontmatter(text: string): MiniFrontmatter {
   const block = extractFrontmatterBlock(text);
   if (block === undefined) return { keys: [] };
-  const lines = block.split('\n');
+  const lines = block.split("\n");
   const result: MiniFrontmatter = { keys: [] };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    if (line.trim() === '' || /^\s/.test(line)) continue;
+    if (line.trim() === "" || /^\s/.test(line)) continue;
     const match = /^([A-Za-z][A-Za-z0-9_-]*):[ \t]*(.*)$/.exec(line);
     if (!match) continue;
     const key = match[1]!;
     const inline = match[2]!;
     result.keys.push(key);
 
-    if (inline === '>' || inline === '>-' || inline === '>+' || inline === '|' || inline === '|-' || inline === '|+') {
+    if (inline === ">" || inline === ">-" || inline === ">+" || inline === "|" || inline === "|-" || inline === "|+") {
       const chunks: string[] = [];
       let j = i + 1;
       for (; j < lines.length; j++) {
         const next = lines[j]!;
-        if (next.trim() !== '' && !/^\s/.test(next)) break;
-        chunks.push(next.replace(/^\s+/, ''));
+        if (next.trim() !== "" && !/^\s/.test(next)) break;
+        chunks.push(next.replace(/^\s+/, ""));
       }
       i = j - 1;
-      const folded = inline.startsWith('>')
-        ? chunks.join(' ').replace(/\s+/g, ' ').trim()
-        : chunks.join('\n').trim();
-      if (key === 'name') result.name = folded;
-      if (key === 'description') result.description = folded;
+      const folded = inline.startsWith(">") ? chunks.join(" ").replace(/\s+/g, " ").trim() : chunks.join("\n").trim();
+      if (key === "name") result.name = folded;
+      if (key === "description") result.description = folded;
       continue;
     }
-    if (inline === '') continue; // 嵌套映射或块序列，浏览不需要
+    if (inline === "") continue; // 嵌套映射或块序列，浏览不需要
     const value = unquote(inline);
-    if (key === 'name' && result.name === undefined) result.name = value;
-    if (key === 'description' && result.description === undefined) result.description = value;
+    if (key === "name" && result.name === undefined) result.name = value;
+    if (key === "description" && result.description === undefined) result.description = value;
   }
 
   return result;

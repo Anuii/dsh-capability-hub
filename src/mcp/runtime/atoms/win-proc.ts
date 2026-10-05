@@ -1,14 +1,14 @@
 /**
  * Windows 进程查询输出的解析（纯函数，便于单测）。
  */
-import { IS_WINDOWS } from './win-proc-platform.ts';
+import { IS_WINDOWS } from "./win-proc-platform.ts";
 
 export { IS_WINDOWS };
 
 /** CSV 行解析：支持双引号包裹与 "" 转义。 */
 export function parseCsvLine(line: string): string[] {
   const fields: string[] = [];
-  let current = '';
+  let current = "";
   let inQuotes = false;
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i];
@@ -25,9 +25,9 @@ export function parseCsvLine(line: string): string[] {
       }
     } else if (ch === '"') {
       inQuotes = true;
-    } else if (ch === ',') {
+    } else if (ch === ",") {
       fields.push(current);
-      current = '';
+      current = "";
     } else {
       current += ch;
     }

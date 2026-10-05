@@ -6,15 +6,15 @@
  * - 只有 reveal 接口返回明文；任何日志都不得出现这些值 —— 用 redact() 后再交给 logger。
  */
 
-import type { EffectiveServer, RawMcpServer } from '../contract/config.ts';
+import type { EffectiveServer, RawMcpServer } from "../contract/config.ts";
 
-export const HIDDEN = '***hidden***';
+export const HIDDEN = "***hidden***";
 
 /** FIX-3：没有原值可回填时的统一中文说明（upsert 与 validate 逐字一致）。 */
-export const HIDDEN_PLACEHOLDER_MESSAGE = '这是遮罩占位符，不是真实值。新建服务器时请填写实际的值。';
+export const HIDDEN_PLACEHOLDER_MESSAGE = "这是遮罩占位符，不是真实值。新建服务器时请填写实际的值。";
 
 /** 需要遮罩的字段名。 */
-const SECRET_FIELDS = ['env', 'headers'] as const;
+const SECRET_FIELDS = ["env", "headers"] as const;
 
 export function isHidden(value: unknown): boolean {
   return value === HIDDEN;
@@ -22,15 +22,15 @@ export function isHidden(value: unknown): boolean {
 
 /** 值里是否含有任何遮罩占位（用于日志安全断言/自检）。 */
 export function containsHidden(value: unknown): boolean {
-  if (typeof value === 'string') return value.includes(HIDDEN);
+  if (typeof value === "string") return value.includes(HIDDEN);
   if (Array.isArray(value)) return value.some(containsHidden);
-  if (value !== null && typeof value === 'object') return Object.values(value).some(containsHidden);
+  if (value !== null && typeof value === "object") return Object.values(value).some(containsHidden);
   return false;
 }
 
 function maskMapInPlace(target: Record<string, unknown>): void {
   for (const key of Object.keys(target)) {
-    if (typeof target[key] === 'string') target[key] = HIDDEN;
+    if (typeof target[key] === "string") target[key] = HIDDEN;
   }
 }
 
@@ -40,7 +40,8 @@ export function maskRawServer(raw: RawMcpServer | undefined): RawMcpServer | und
   const copy = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
   for (const field of SECRET_FIELDS) {
     const value = copy[field];
-    if (value !== null && typeof value === 'object' && !Array.isArray(value)) maskMapInPlace(value as Record<string, unknown>);
+    if (value !== null && typeof value === "object" && !Array.isArray(value))
+      maskMapInPlace(value as Record<string, unknown>);
   }
   return copy as RawMcpServer;
 }
@@ -51,7 +52,8 @@ export function maskEffectiveServer(server: EffectiveServer): EffectiveServer {
   const record = copy as unknown as Record<string, unknown>;
   for (const field of SECRET_FIELDS) {
     const value = record[field];
-    if (value !== null && typeof value === 'object' && !Array.isArray(value)) maskMapInPlace(value as Record<string, unknown>);
+    if (value !== null && typeof value === "object" && !Array.isArray(value))
+      maskMapInPlace(value as Record<string, unknown>);
   }
   return copy;
 }
@@ -94,21 +96,21 @@ export interface PlaceholderError {
  * 所有占位符都算「没有原值」。
  */
 export function findHiddenPlaceholders(submitted: unknown, existing: RawMcpServer | undefined): PlaceholderError[] {
-  if (submitted === null || typeof submitted !== 'object' || Array.isArray(submitted)) return [];
+  if (submitted === null || typeof submitted !== "object" || Array.isArray(submitted)) return [];
   const source = submitted as Record<string, unknown>;
   const out: PlaceholderError[] = [];
   for (const field of SECRET_FIELDS) {
     const value = source[field];
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) continue;
+    if (value === null || typeof value !== "object" || Array.isArray(value)) continue;
     const originRaw = existing === undefined ? undefined : (existing as unknown as Record<string, unknown>)[field];
     const origin =
-      originRaw !== null && typeof originRaw === 'object' && !Array.isArray(originRaw)
+      originRaw !== null && typeof originRaw === "object" && !Array.isArray(originRaw)
         ? (originRaw as Record<string, unknown>)
         : undefined;
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
       if (!isHidden(item)) continue;
-      if (typeof origin?.[key] === 'string') continue; // 原配置里有这个键 → 保留原值（行为不变）
-      out.push({ path: 'server.' + field + '.' + key, message: HIDDEN_PLACEHOLDER_MESSAGE });
+      if (typeof origin?.[key] === "string") continue; // 原配置里有这个键 → 保留原值（行为不变）
+      out.push({ path: "server." + field + "." + key, message: HIDDEN_PLACEHOLDER_MESSAGE });
     }
   }
   return out;
@@ -117,11 +119,16 @@ export function findHiddenPlaceholders(submitted: unknown, existing: RawMcpServe
 /** 日志安全副本：env / headers 的值全部替换为 "***hidden***"。 */
 export function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
-  if (value === null || typeof value !== 'object') return value;
+  if (value === null || typeof value !== "object") return value;
   const source = value as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(source)) {
-    if ((SECRET_FIELDS as readonly string[]).includes(key) && item !== null && typeof item === 'object' && !Array.isArray(item)) {
+    if (
+      (SECRET_FIELDS as readonly string[]).includes(key) &&
+      item !== null &&
+      typeof item === "object" &&
+      !Array.isArray(item)
+    ) {
       const masked: Record<string, unknown> = {};
       for (const name of Object.keys(item as Record<string, unknown>)) masked[name] = HIDDEN;
       out[key] = masked;

@@ -283,7 +283,9 @@ export function createFeatureModuleEntries(options: {
             state.runtimeStarted = false;
             state.runtimeStartError = errorTextOf(error);
             state.notes.push("mcp-runtime.start() 失败：" + state.runtimeStartError);
-            log.warn("mcp-runtime.start() 失败（自动探测与空闲回收不可用，其余功能不受影响）：" + state.runtimeStartError);
+            log.warn(
+              "mcp-runtime.start() 失败（自动探测与空闲回收不可用，其余功能不受影响）：" + state.runtimeStartError,
+            );
           },
         );
         return mod as unknown as HubModule;

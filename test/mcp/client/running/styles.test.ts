@@ -54,7 +54,17 @@ test("CSS 只用主题变量，没有硬编码颜色", () => {
 });
 
 test("样式表覆盖了关键容器类", () => {
-  for (const key of ["root", "note", "autoRefresh", "iconButton", "subGroup", "failure", "cooldown", "dialogBody", "dialogText"] as const) {
+  for (const key of [
+    "root",
+    "note",
+    "autoRefresh",
+    "iconButton",
+    "subGroup",
+    "failure",
+    "cooldown",
+    "dialogBody",
+    "dialogText",
+  ] as const) {
     assert.ok(RUNTIME_CSS.includes("." + styles[key] + "{"), key);
   }
 });

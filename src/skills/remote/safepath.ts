@@ -14,33 +14,33 @@
  * 技能内容不完整同样危险。
  */
 
-import path from 'node:path';
-import { upstream } from './errors.ts';
+import path from "node:path";
+import { upstream } from "./errors.ts";
 
 /** Windows 保留设备名（不区分大小写；带扩展名的形式 —— 如 NUL.txt —— 同样保留） */
 const WINDOWS_RESERVED_NAMES = new Set<string>([
-  'CON',
-  'PRN',
-  'AUX',
-  'NUL',
-  'COM1',
-  'COM2',
-  'COM3',
-  'COM4',
-  'COM5',
-  'COM6',
-  'COM7',
-  'COM8',
-  'COM9',
-  'LPT1',
-  'LPT2',
-  'LPT3',
-  'LPT4',
-  'LPT5',
-  'LPT6',
-  'LPT7',
-  'LPT8',
-  'LPT9',
+  "CON",
+  "PRN",
+  "AUX",
+  "NUL",
+  "COM1",
+  "COM2",
+  "COM3",
+  "COM4",
+  "COM5",
+  "COM6",
+  "COM7",
+  "COM8",
+  "COM9",
+  "LPT1",
+  "LPT2",
+  "LPT3",
+  "LPT4",
+  "LPT5",
+  "LPT6",
+  "LPT7",
+  "LPT8",
+  "LPT9",
 ]);
 
 /** NUL 与其它控制字符（含 DEL） */
@@ -54,19 +54,19 @@ const DRIVE_LETTER = /^[A-Za-z]:/;
  * 按 "/" 分段逐段检查，任一段不合格即整体不安全。
  */
 export function describeUnsafePath(rel: string): string | undefined {
-  if (typeof rel !== 'string') return '不是字符串';
-  if (rel === '') return '空路径';
-  if (CONTROL_CHARS.test(rel)) return '含 NUL 或其它控制字符';
-  if (DRIVE_LETTER.test(rel)) return '形如盘符的路径';
-  if (rel.startsWith('/') || rel.startsWith('\\\\')) return '绝对路径';
-  for (const segment of rel.split('/')) {
-    if (segment === '') return '含空的路径段';
-    if (segment === '.' || segment === '..') return '含 "." 或 ".." 路径段';
-    if (segment.includes('\\')) return '含反斜杠（Windows 上会被当作目录分隔符）';
-    if (segment.includes(':')) return '含冒号（盘符或 NTFS 备用数据流）';
-    if (/[. ]$/.test(segment)) return '路径段以点或空格结尾（Windows 上会被静默截断）';
-    const base = segment.split('.')[0]!.toUpperCase();
-    if (WINDOWS_RESERVED_NAMES.has(base)) return '是 Windows 保留设备名（' + base + '）';
+  if (typeof rel !== "string") return "不是字符串";
+  if (rel === "") return "空路径";
+  if (CONTROL_CHARS.test(rel)) return "含 NUL 或其它控制字符";
+  if (DRIVE_LETTER.test(rel)) return "形如盘符的路径";
+  if (rel.startsWith("/") || rel.startsWith("\\\\")) return "绝对路径";
+  for (const segment of rel.split("/")) {
+    if (segment === "") return "含空的路径段";
+    if (segment === "." || segment === "..") return '含 "." 或 ".." 路径段';
+    if (segment.includes("\\")) return "含反斜杠（Windows 上会被当作目录分隔符）";
+    if (segment.includes(":")) return "含冒号（盘符或 NTFS 备用数据流）";
+    if (/[. ]$/.test(segment)) return "路径段以点或空格结尾（Windows 上会被静默截断）";
+    const base = segment.split(".")[0]!.toUpperCase();
+    if (WINDOWS_RESERVED_NAMES.has(base)) return "是 Windows 保留设备名（" + base + "）";
   }
   return undefined;
 }
@@ -78,8 +78,8 @@ export function isSafeRelativePath(rel: string): boolean {
 
 /** 单段名（技能目录名 / 文件名）版本：额外要求「恰好一段」，即不含 "/"。 */
 export function describeUnsafeSegmentName(name: string): string | undefined {
-  if (typeof name !== 'string') return '不是字符串';
-  if (name.includes('/')) return '不是单段名（含 "/"）';
+  if (typeof name !== "string") return "不是字符串";
+  if (name.includes("/")) return '不是单段名（含 "/"）';
   return describeUnsafePath(name);
 }
 
@@ -88,19 +88,19 @@ export function isSafeSegmentName(name: string): boolean {
 }
 
 /** 校验并原样返回该相对路径；不安全就抛 UPSTREAM。 */
-export function safeRelativePath(rel: string, context = '上游归档路径'): string {
+export function safeRelativePath(rel: string, context = "上游归档路径"): string {
   const reason = describeUnsafePath(rel);
   if (reason !== undefined) {
-    throw upstream(context + ' "' + rel + '" 不安全（' + reason + '），已拒绝：本插件不会把内容写到技能目录之外。');
+    throw upstream(context + ' "' + rel + '" 不安全（' + reason + "），已拒绝：本插件不会把内容写到技能目录之外。");
   }
   return rel;
 }
 
 /** 校验技能目录名（安装目标名的最后一段）；不安全就抛 UPSTREAM。 */
-export function safeSegmentName(name: string, context = '技能目录名'): string {
+export function safeSegmentName(name: string, context = "技能目录名"): string {
   const reason = describeUnsafeSegmentName(name);
   if (reason !== undefined) {
-    throw upstream(context + ' "' + name + '" 不安全（' + reason + '），已拒绝。');
+    throw upstream(context + ' "' + name + '" 不安全（' + reason + "），已拒绝。");
   }
   return name;
 }
@@ -111,11 +111,11 @@ export function safeSegmentName(name: string, context = '技能目录名'): stri
  * 判定用的是「等于 '..' 或以 '..' + 分隔符开头」而不是 \`startsWith('..')\` ——
  * 后者会把合法的相对名字（如 \`..foo\`，本函数的另一个调用方允许它）误判成越界。
  */
-export function assertPathInsideDirectory(targetDir: string, absPath: string, context = '写入路径'): void {
+export function assertPathInsideDirectory(targetDir: string, absPath: string, context = "写入路径"): void {
   const root = path.resolve(targetDir);
   const target = path.resolve(absPath);
   const rel = path.relative(root, target);
-  if (rel === '' || rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) {
-    throw upstream(context + ' ' + target + ' 不在 ' + root + ' 之内，已拒绝写入。');
+  if (rel === "" || rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
+    throw upstream(context + " " + target + " 不在 " + root + " 之内，已拒绝写入。");
   }
 }

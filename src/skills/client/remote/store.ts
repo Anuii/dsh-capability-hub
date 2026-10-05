@@ -107,7 +107,8 @@ export function createRemoteStore(): RemoteStore {
           ? {}
           : {
               auth: auth.mode,
-              rateLimitRemaining: auth.rateLimitRemaining === undefined ? state.rateLimitRemaining : auth.rateLimitRemaining,
+              rateLimitRemaining:
+                auth.rateLimitRemaining === undefined ? state.rateLimitRemaining : auth.rateLimitRemaining,
             }),
       });
     },

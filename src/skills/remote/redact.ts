@@ -5,9 +5,9 @@
  * 一旦令牌字符串出现在日志参数里就被替换成 ***。响应与文件从不写令牌（代码层面没有路径）。
  */
 
-import type { HubLogger } from '../../platform/contract/host.ts';
+import type { HubLogger } from "../../platform/contract/host.ts";
 
-export const REDACTED = '***';
+export const REDACTED = "***";
 
 export class Redactor {
   private secrets = new Set<string>();
@@ -30,13 +30,13 @@ export class Redactor {
   /** 递归抹掉字符串里出现的敏感值 */
   scrubValue(value: unknown, depth = 0): unknown {
     if (depth > 6) return value;
-    if (typeof value === 'string') return this.scrub(value);
+    if (typeof value === "string") return this.scrub(value);
     if (Array.isArray(value)) return value.map((v) => this.scrubValue(v, depth + 1));
     if (value instanceof Error) {
       const clone = new Error(this.scrub(value.message));
       return clone;
     }
-    if (value && typeof value === 'object') {
+    if (value && typeof value === "object") {
       const out: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
         out[this.scrub(k)] = this.scrubValue(v, depth + 1);

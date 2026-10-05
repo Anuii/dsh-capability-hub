@@ -89,10 +89,13 @@ test("instanceTone / instanceStateText：连接池的五个状态都有中文与
   assert.equal(instanceTone("closing"), "idle");
   assert.equal(instanceTone("closed"), "idle");
   assert.equal(instanceTone("whatever"), "idle");
-  assert.deepEqual(
-    ["ready", "connecting", "failed", "closing", "closed"].map(instanceStateText),
-    ["就绪", "连接中", "失败", "关闭中", "已关闭"],
-  );
+  assert.deepEqual(["ready", "connecting", "failed", "closing", "closed"].map(instanceStateText), [
+    "就绪",
+    "连接中",
+    "失败",
+    "关闭中",
+    "已关闭",
+  ]);
   assert.equal(instanceStateText("mystery"), "未知（mystery）");
 });
 
@@ -137,7 +140,13 @@ test("failureText：message 原样（服务端中文）+ 本地时间", () => {
 });
 
 test("instanceSubtitleText：状态 · PID · 启动 · 最近使用（没有 pid 时省略）", () => {
-  const withPid = instanceSubtitleText({ server: "fake", state: "ready", startedAt: T0, lastUsedAt: T0 + 60_000, pid: 35984 });
+  const withPid = instanceSubtitleText({
+    server: "fake",
+    state: "ready",
+    startedAt: T0,
+    lastUsedAt: T0 + 60_000,
+    pid: 35984,
+  });
   assert.equal(withPid, "就绪 · PID 35984 · 启动 " + formatClock(T0) + " · 最近使用 " + formatClock(T0 + 60_000));
   const without = instanceSubtitleText({ server: "fake", state: "connecting", startedAt: T0, lastUsedAt: T0 });
   assert.equal(without.includes("PID"), false);
@@ -171,14 +180,16 @@ test("filterSessions：关掉开关时原样返回；打开时只留当前会话
 
 test("sortSessions：父会话排在子会话前面，且不打乱其余顺序", () => {
   const sessions = makeNestedStatus().sessions;
-  assert.deepEqual(sortSessions(sessions).map((session) => session.sessionId), [
-    "parent-session-0001",
-    "other-session-0003",
-    "child-session-0002",
-  ]);
+  assert.deepEqual(
+    sortSessions(sessions).map((session) => session.sessionId),
+    ["parent-session-0001", "other-session-0003", "child-session-0002"],
+  );
   // 父会话不在快照里时，子会话按原顺序留着（不会被丢掉）
   const orphan = [makeSession({ sessionId: "child", parentSessionId: "gone" })];
-  assert.deepEqual(sortSessions(orphan).map((session) => session.sessionId), ["child"]);
+  assert.deepEqual(
+    sortSessions(orphan).map((session) => session.sessionId),
+    ["child"],
+  );
 });
 
 test("shortSessionId：短 id 原样，长 id 省略中间", () => {
@@ -189,12 +200,21 @@ test("shortSessionId：短 id 原样，长 id 省略中间", () => {
 
 test("sessionGroups：父会话带上缩进显示的子代理会话", () => {
   const groups = sessionGroups(sortSessions(makeNestedStatus().sessions));
-  assert.deepEqual(groups.map((group) => group.parent.sessionId), ["parent-session-0001", "other-session-0003"]);
-  assert.deepEqual(groups[0].children.map((child) => child.sessionId), ["child-session-0002"]);
+  assert.deepEqual(
+    groups.map((group) => group.parent.sessionId),
+    ["parent-session-0001", "other-session-0003"],
+  );
+  assert.deepEqual(
+    groups[0].children.map((child) => child.sessionId),
+    ["child-session-0002"],
+  );
   assert.deepEqual(groups[1].children, []);
   // 父会话不在快照里时，子会话自己成为根（不会被丢掉）
   const orphan = sessionGroups([makeSession({ sessionId: "child", parentSessionId: "gone" })]);
-  assert.deepEqual(orphan.map((group) => group.parent.sessionId), ["child"]);
+  assert.deepEqual(
+    orphan.map((group) => group.parent.sessionId),
+    ["child"],
+  );
 });
 
 test("sessionTitleText / sessionIdText：有标题用标题，否则短 id；id 一律给完整值", () => {

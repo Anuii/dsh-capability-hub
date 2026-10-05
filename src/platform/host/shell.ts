@@ -93,7 +93,18 @@ function messageOf(error: unknown): string {
 const startedAt = new Date().toISOString();
 
 /** 平台层关心的服务名（启动报告里逐项探测，便于定位「服务不可见」类问题）。 */
-const SERVICE_PROBE = ["connection", "webServer", "tools", "loader", "profileContext", "credentials", "sessions", "attachments", "commands", "skills"];
+const SERVICE_PROBE = [
+  "connection",
+  "webServer",
+  "tools",
+  "loader",
+  "profileContext",
+  "credentials",
+  "sessions",
+  "attachments",
+  "commands",
+  "skills",
+];
 
 /** 逐项探测服务可见性（拿不到就是 false，绝不抛）。 */
 function probeServices(hostCtx: unknown): Record<string, boolean> {
@@ -184,37 +195,38 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     {
       name: "demo",
       // demo 的 health 要报 profileDir / packageRoot，用外壳自己的完整上下文。
-      load: () => createDemoModule({
-        ctx,
-        sdk: sdkState,
-        modules: () => registry.statuses(),
-        sessionEvents: () => bridge?.events() ?? [],
-        tool: () => ({
-          registered: toolState.current?.registered ?? false,
-          name: runtimeState.runtime?.toolName ?? "mcp",
-          description: toolState.current?.description() ?? runtimeState.runtime?.toolDescription() ?? "",
-          ...(toolState.error === undefined ? {} : { error: toolState.error }),
+      load: () =>
+        createDemoModule({
+          ctx,
+          sdk: sdkState,
+          modules: () => registry.statuses(),
+          sessionEvents: () => bridge?.events() ?? [],
+          tool: () => ({
+            registered: toolState.current?.registered ?? false,
+            name: runtimeState.runtime?.toolName ?? "mcp",
+            description: toolState.current?.description() ?? runtimeState.runtime?.toolDescription() ?? "",
+            ...(toolState.error === undefined ? {} : { error: toolState.error }),
+          }),
+          host: () => ({
+            ...(readDshVersion() === undefined ? {} : { dshVersion: readDshVersion() }),
+            pluginVersion: HUB_VERSION,
+            pid: process.pid,
+            nodeVersion: process.version,
+            startedAt,
+          }),
+          registration: () => ({
+            registered: registration?.paths ?? [],
+            ...(registrationError === undefined ? {} : { error: registrationError }),
+          }),
+          wiring: () => ({
+            runtimeSource: runtimeState.source,
+            ...(runtimeState.reason === undefined ? {} : { runtimeReason: runtimeState.reason }),
+            lockStashBound: state.lockStashBound,
+            runtimeStarted: state.runtimeStarted,
+            ...(state.runtimeStartError === undefined ? {} : { runtimeStartError: state.runtimeStartError }),
+            notes: [...state.notes],
+          }),
         }),
-        host: () => ({
-          ...(readDshVersion() === undefined ? {} : { dshVersion: readDshVersion() }),
-          pluginVersion: HUB_VERSION,
-          pid: process.pid,
-          nodeVersion: process.version,
-          startedAt,
-        }),
-        registration: () => ({
-          registered: registration?.paths ?? [],
-          ...(registrationError === undefined ? {} : { error: registrationError }),
-        }),
-        wiring: () => ({
-          runtimeSource: runtimeState.source,
-          ...(runtimeState.reason === undefined ? {} : { runtimeReason: runtimeState.reason }),
-          lockStashBound: state.lockStashBound,
-          runtimeStarted: state.runtimeStarted,
-          ...(state.runtimeStartError === undefined ? {} : { runtimeStartError: state.runtimeStartError }),
-          notes: [...state.notes],
-        }),
-      }),
     },
     ...createFeatureModuleEntries({
       ctx,
@@ -273,12 +285,17 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
   );
   let bridge: SessionBridge | undefined;
   try {
-    bridge = attachSessionBridge(hostCtx, {
-      sessionStarted: (info) => runtime.sessionStarted(info),
-      sessionEnded: (sessionId) => runtime.sessionEnded(sessionId),
-    }, logger, {
-      carrierKeyOf: (carrier) => carrierKeyOfImpl?.(carrier),
-    });
+    bridge = attachSessionBridge(
+      hostCtx,
+      {
+        sessionStarted: (info) => runtime.sessionStarted(info),
+        sessionEnded: (sessionId) => runtime.sessionEnded(sessionId),
+      },
+      logger,
+      {
+        carrierKeyOf: (carrier) => carrierKeyOfImpl?.(carrier),
+      },
+    );
   } catch (error) {
     logger.warn(`会话桥挂载失败（已降级）：${error instanceof Error ? error.message : error}`);
   }
@@ -332,30 +349,38 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     wiring: wiringSnapshot(),
   });
   const writeBootReport = async (): Promise<void> => {
-   try {
-    const bootPath = join(ctx.hubHome, "boot.json");
-    await mkdir(dirname(bootPath), { recursive: true });
-    await writeFile(bootPath, JSON.stringify({
-      plugin: "dsh-capability-hub",
-      packageRoot,
-      profileName: ctx.profileName,
-      homeDir: ctx.homeDir,
-      dshHome: ctx.dshHome,
-      hubHome: ctx.hubHome,
-      pid: process.pid,
-      nodeVersion: process.version,
-      startedAt,
-      writtenAt: new Date().toISOString(),
-      services: probeServices(hostCtx),
-      skillSources: probeSkillSources(hostCtx),
-      toolError: toolError ?? null,
-      hasInjectApi: typeof (hostCtx as { inject?: unknown })?.inject === "function",
-      ...snapshotOf(),
-    }, null, 2), "utf8");
-    logger.debug(`启动报告已写入 ${bootPath}`);
-   } catch (error) {
-    logger.warn(`启动报告写入失败（不影响运行）：${messageOf(error)}`);
-   }
+    try {
+      const bootPath = join(ctx.hubHome, "boot.json");
+      await mkdir(dirname(bootPath), { recursive: true });
+      await writeFile(
+        bootPath,
+        JSON.stringify(
+          {
+            plugin: "dsh-capability-hub",
+            packageRoot,
+            profileName: ctx.profileName,
+            homeDir: ctx.homeDir,
+            dshHome: ctx.dshHome,
+            hubHome: ctx.hubHome,
+            pid: process.pid,
+            nodeVersion: process.version,
+            startedAt,
+            writtenAt: new Date().toISOString(),
+            services: probeServices(hostCtx),
+            skillSources: probeSkillSources(hostCtx),
+            toolError: toolError ?? null,
+            hasInjectApi: typeof (hostCtx as { inject?: unknown })?.inject === "function",
+            ...snapshotOf(),
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      logger.debug(`启动报告已写入 ${bootPath}`);
+    } catch (error) {
+      logger.warn(`启动报告写入失败（不影响运行）：${messageOf(error)}`);
+    }
   };
 
   // 先试一次（connection 可能已经就绪），再挂 inject 等它。

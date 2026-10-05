@@ -296,11 +296,7 @@ export function attachSessionBridge(
    * @param kind 记账用的事件种类
    * @param reason 回收原因（仅 reclaimed 有）
    */
-  const endSession = (
-    sessionId: string,
-    kind: "disposed" | "subagent-end" | "reclaimed",
-    reason?: string,
-  ): boolean => {
+  const endSession = (sessionId: string, kind: "disposed" | "subagent-end" | "reclaimed", reason?: string): boolean => {
     if (ended.has(sessionId)) {
       identities.delete(sessionId);
       headerHints.delete(sessionId);
@@ -387,7 +383,8 @@ export function attachSessionBridge(
     try {
       const payload = args[0] as { agent?: unknown; sessionId?: unknown } | undefined;
       const agent = payload?.agent ?? payload;
-      const sessionId = readSessionId(agent) ?? (typeof payload?.sessionId === "string" ? payload.sessionId : undefined);
+      const sessionId =
+        readSessionId(agent) ?? (typeof payload?.sessionId === "string" ? payload.sessionId : undefined);
       if (sessionId === undefined) return;
       endSession(sessionId, "disposed");
     } catch (error) {
@@ -430,11 +427,12 @@ export function attachSessionBridge(
   on("subagent/start", function subagentStart(this: unknown, ...args: unknown[]) {
     try {
       const info = args[0] as { id?: unknown; sessionId?: unknown; agent?: unknown } | undefined;
-      const sessionId = typeof info?.id === "string" && info.id !== ""
-        ? info.id
-        : typeof info?.sessionId === "string" && info.sessionId !== ""
-          ? info.sessionId
-          : readSessionId(info?.agent);
+      const sessionId =
+        typeof info?.id === "string" && info.id !== ""
+          ? info.id
+          : typeof info?.sessionId === "string" && info.sessionId !== ""
+            ? info.sessionId
+            : readSessionId(info?.agent);
       if (sessionId === undefined) {
         logger.debug("subagent/start 未取到会话 id");
         return;
@@ -476,11 +474,12 @@ export function attachSessionBridge(
   on("subagent/end", (...args: unknown[]) => {
     try {
       const info = args[0] as { id?: unknown; sessionId?: unknown; agent?: unknown } | undefined;
-      const sessionId = typeof info?.id === "string" && info.id !== ""
-        ? info.id
-        : typeof info?.sessionId === "string" && info.sessionId !== ""
-          ? info.sessionId
-          : readSessionId(info?.agent);
+      const sessionId =
+        typeof info?.id === "string" && info.id !== ""
+          ? info.id
+          : typeof info?.sessionId === "string" && info.sessionId !== ""
+            ? info.sessionId
+            : readSessionId(info?.agent);
       if (sessionId === undefined) return;
       endSession(sessionId, "subagent-end");
     } catch (error) {

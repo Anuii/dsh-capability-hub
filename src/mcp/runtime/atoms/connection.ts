@@ -12,18 +12,18 @@
  * - **debug=false** 时 stdio stderr 用 'pipe' 并捕获尾部（否则任何诊断都不可能，F3-Q6）；
  *   **debug=true** 时用 'inherit' 把子进程日志实时透传给宿主终端。
  */
-import { getDefaultEnvironment } from './sdk-transport.ts';
-import { buildChildEnv } from './sandbox-env.ts';
-import { resolveEnvFrom } from './env-from.ts';
-import { StderrTail } from './stderr-tail.ts';
-import { errorText } from './errors.ts';
-import { CLOSE_TIMEOUT_MS, CONNECT_TIMEOUT_MS } from '../constants.ts';
-import type { EffectiveServer } from '../../contract/config.ts';
-import type { McpSdk } from '../../contract/runtime.ts';
-import type { Clock } from './clock.ts';
-import type { ProcessSupervisor } from './supervisor.ts';
+import { getDefaultEnvironment } from "./sdk-transport.ts";
+import { buildChildEnv } from "./sandbox-env.ts";
+import { resolveEnvFrom } from "./env-from.ts";
+import { StderrTail } from "./stderr-tail.ts";
+import { errorText } from "./errors.ts";
+import { CLOSE_TIMEOUT_MS, CONNECT_TIMEOUT_MS } from "../constants.ts";
+import type { EffectiveServer } from "../../contract/config.ts";
+import type { McpSdk } from "../../contract/runtime.ts";
+import type { Clock } from "./clock.ts";
+import type { ProcessSupervisor } from "./supervisor.ts";
 
-export type InstanceState = 'connecting' | 'ready' | 'failed' | 'closing' | 'closed';
+export type InstanceState = "connecting" | "ready" | "failed" | "closing" | "closed";
 
 /**
  * 建实例时需要的**会话**信息。
@@ -52,7 +52,7 @@ export class McpInstance {
   parentSessionId?: string;
   title?: string;
 
-  state: InstanceState = 'closed';
+  state: InstanceState = "closed";
   startedAt = 0;
   lastUsedAt = 0;
   pid?: number;
@@ -81,12 +81,12 @@ export class McpInstance {
       onUnexpectedClose: (instance: McpInstance, err: Error) => void;
     },
   ) {
-    if (!server || typeof server.serverName !== 'string' || server.serverName.length === 0) {
-      throw new Error('mcp-runtime 内部错误：建立连接实例时缺少 serverName');
+    if (!server || typeof server.serverName !== "string" || server.serverName.length === 0) {
+      throw new Error("mcp-runtime 内部错误：建立连接实例时缺少 serverName");
     }
     this.sessionId = options.sessionId;
     this.serverName = server.serverName;
-    this.key = this.sessionId + '\u0000' + this.serverName;
+    this.key = this.sessionId + "\u0000" + this.serverName;
     if (options.parentSessionId !== undefined) this.parentSessionId = options.parentSessionId;
     if (options.title !== undefined) this.title = options.title;
     this.#server = server;
@@ -106,14 +106,14 @@ export class McpInstance {
   }
 
   get isAlive(): boolean {
-    return this.state === 'ready' && this.#client !== undefined;
+    return this.state === "ready" && this.#client !== undefined;
   }
 
   /** 这个占位实例还能不能继续用（失败过或已经关掉的都不行）。 */
   get reusable(): boolean {
-    if (this.state === 'failed') return false;
-    if (this.state === 'closed' && this.#everConnected) return false;
-    if (this.state === 'closing') return false;
+    if (this.state === "failed") return false;
+    if (this.state === "closed" && this.#everConnected) return false;
+    if (this.state === "closing") return false;
     return true;
   }
 
@@ -128,7 +128,7 @@ export class McpInstance {
    */
   async ensureConnected(signal?: AbortSignal): Promise<void> {
     this.lastUsedAt = this.#clock.now();
-    if (this.state === 'ready' && this.#client) return;
+    if (this.state === "ready" && this.#client) return;
     if (this.#connectPromise) return this.#connectPromise;
     this.#connectPromise = this.#doConnect(signal).finally(() => {
       this.#connectPromise = undefined;
@@ -137,13 +137,13 @@ export class McpInstance {
   }
 
   async #doConnect(signal?: AbortSignal): Promise<void> {
-    this.state = 'connecting';
+    this.state = "connecting";
     this.startedAt = this.#clock.now();
     const childEnv = await this.#buildEnv();
     const transport = await this.#createTransport(childEnv);
     const client = new this.#sdk.Client(
-      { name: 'dsh-capability-hub', version: '1.0.0' },
-      { capabilities: {}, versionNegotiation: { mode: 'auto' } },
+      { name: "dsh-capability-hub", version: "1.0.0" },
+      { capabilities: {}, versionNegotiation: { mode: "auto" } },
     );
     this.#transport = transport;
     this.#client = client;
@@ -153,35 +153,35 @@ export class McpInstance {
     let timer: unknown;
     try {
       if (signal) {
-        if (signal.aborted) throw new Error('调用已被取消');
-        signal.addEventListener('abort', onAbort, { once: true });
+        if (signal.aborted) throw new Error("调用已被取消");
+        signal.addEventListener("abort", onAbort, { once: true });
       }
-      timer = this.#clock.setTimer(() => abortController.abort(new Error('连接超时')), CONNECT_TIMEOUT_MS);
+      timer = this.#clock.setTimer(() => abortController.abort(new Error("连接超时")), CONNECT_TIMEOUT_MS);
       await client.connect(transport);
       const pid = transport.pid;
-      if (typeof pid === 'number' && Number.isInteger(pid)) this.pid = pid;
+      if (typeof pid === "number" && Number.isInteger(pid)) this.pid = pid;
       client.onclose = () => {
-        if (this.state === 'ready' || this.state === 'connecting') {
-          this.state = 'closed';
-          this.#onUnexpectedClose(this, new Error('与服务器的连接已断开'));
+        if (this.state === "ready" || this.state === "connecting") {
+          this.state = "closed";
+          this.#onUnexpectedClose(this, new Error("与服务器的连接已断开"));
         }
       };
       this.#everConnected = true;
-      this.state = 'ready';
+      this.state = "ready";
       this.lastUsedAt = this.#clock.now();
     } catch (err) {
-      this.state = 'failed';
+      this.state = "failed";
       await this.#teardown();
       throw new Error(this.#stderrTail.withStderrTail('无法连接服务器 "' + this.serverName + '"：' + errorText(err)));
     } finally {
       if (timer !== undefined) this.#clock.clearTimer(timer);
-      if (signal) signal.removeEventListener('abort', onAbort);
+      if (signal) signal.removeEventListener("abort", onAbort);
     }
   }
 
   async #buildEnv(): Promise<Record<string, string>> {
     const server = this.#server;
-    if (server.transport !== 'stdio') return {};
+    if (server.transport !== "stdio") return {};
     const resolved = await resolveEnvFrom({
       envFrom: server.envFrom ?? {},
       allowEmpty: server.allowEmpty ?? [],
@@ -190,17 +190,22 @@ export class McpInstance {
     if (resolved.failures.length > 0) {
       // 拒绝启动，绝不注入空值（D-D8）。诊断里只有变量名 / 退出码 / stderr 尾部。
       throw new Error(
-        '服务器 "' + this.serverName + '" 的 envFrom 解析失败，已拒绝启动：' +
-          resolved.failures.map((failure) => failure.message).join('；'),
+        '服务器 "' +
+          this.serverName +
+          '" 的 envFrom 解析失败，已拒绝启动：' +
+          resolved.failures.map((failure) => failure.message).join("；"),
       );
     }
-    const base = typeof this.#sdk.getDefaultEnvironment === 'function' ? this.#sdk.getDefaultEnvironment() : getDefaultEnvironment();
+    const base =
+      typeof this.#sdk.getDefaultEnvironment === "function"
+        ? this.#sdk.getDefaultEnvironment()
+        : getDefaultEnvironment();
     return buildChildEnv({ base, extra: server.env ?? {}, fromCommands: resolved.values });
   }
 
   async #createTransport(env: Record<string, string>): Promise<any> {
     const server = this.#server;
-    if (server.transport === 'stdio') {
+    if (server.transport === "stdio") {
       if (!server.command) throw new Error('服务器 "' + server.serverName + '" 是 stdio 但没有配置 command');
       const transport = new this.#sdk.StdioClientTransport({
         command: server.command,
@@ -208,12 +213,12 @@ export class McpInstance {
         env,
         // 空串不是合法的 cwd；省略才是「不指定」。
         ...(server.cwd ? { cwd: server.cwd } : {}),
-        stderr: server.debug ? 'inherit' : 'pipe',
+        stderr: server.debug ? "inherit" : "pipe",
       });
       if (!server.debug) {
         const stream = transport.stderr;
         // FIX-4：传原始 chunk（Buffer）而不是 String(chunk) —— 解码在 StderrTail 内部按字节做
-        stream?.on?.('data', (chunk: unknown) => this.#stderrTail.push(chunk));
+        stream?.on?.("data", (chunk: unknown) => this.#stderrTail.push(chunk));
       }
       return transport;
     }
@@ -226,13 +231,13 @@ export class McpInstance {
   /** 列工具；cacheMode: 'refresh' 强制绕过 SDK 的响应缓存。 */
   async listTools(): Promise<any> {
     if (!this.#client) throw new Error('服务器 "' + this.serverName + '" 尚未连接');
-    return this.#client.listTools(undefined, { cacheMode: 'refresh' });
+    return this.#client.listTools(undefined, { cacheMode: "refresh" });
   }
 
   instructions(): string | undefined {
     try {
       const value = this.#client?.getInstructions?.();
-      return typeof value === 'string' ? value : undefined;
+      return typeof value === "string" ? value : undefined;
     } catch {
       return undefined;
     }
@@ -242,14 +247,18 @@ export class McpInstance {
    * 调用一个工具。inFlight 计数包住整个调用 —— 空闲巡检据此跳过，
    * 「正在调用的连接绝不被回收」。
    */
-  async callTool(name: string, args: unknown, options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<unknown> {
+  async callTool(
+    name: string,
+    args: unknown,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {},
+  ): Promise<unknown> {
     if (!this.#client) throw new Error('服务器 "' + this.serverName + '" 尚未连接');
     this.#inFlight += 1;
     this.lastUsedAt = this.#clock.now();
     try {
       const callOptions: Record<string, unknown> = {};
       if (options.signal) callOptions.signal = options.signal;
-      if (typeof options.timeoutMs === 'number' && options.timeoutMs > 0) callOptions.timeout = options.timeoutMs;
+      if (typeof options.timeoutMs === "number" && options.timeoutMs > 0) callOptions.timeout = options.timeoutMs;
       return await this.#client.callTool({ name, arguments: args ?? {} }, callOptions);
     } finally {
       this.#inFlight -= 1;
@@ -266,12 +275,12 @@ export class McpInstance {
 
   async #doClose(): Promise<void> {
     const previous = this.state;
-    this.state = 'closing';
-    if (previous === 'connecting' && this.#connectPromise) {
+    this.state = "closing";
+    if (previous === "connecting" && this.#connectPromise) {
       await this.#connectPromise.catch(() => undefined);
     }
     await this.#teardown();
-    this.state = 'closed';
+    this.state = "closed";
   }
 
   async #teardown(): Promise<void> {
@@ -296,7 +305,7 @@ export class McpInstance {
         }),
       ]);
     }
-    if (typeof pid === 'number' && Number.isInteger(pid) && pid > 0) {
+    if (typeof pid === "number" && Number.isInteger(pid) && pid > 0) {
       // SDK 的 close() 只杀直接子进程；npx 的孙进程必须由我们自己收。
       await this.#supervisor.killTree(pid).catch(() => undefined);
     }
@@ -331,7 +340,7 @@ export class ConnectionPool {
   }
 
   static key(sessionId: string, serverName: string): string {
-    return sessionId + '\u0000' + serverName;
+    return sessionId + "\u0000" + serverName;
   }
 
   get(sessionId: string, serverName: string): McpInstance | undefined {

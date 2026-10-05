@@ -148,7 +148,8 @@ export const zh = {
   "skills.trash.purgedOne": "已从回收站彻底删除 1 条。",
   "skills.trash.purgedAll": "已清空回收站（{count} 条）。",
   "skills.trash.conflict.title": "原路径已存在",
-  "skills.trash.conflict.body": "「{path}」已经存在同名内容。继续恢复会把现有内容移入回收站，再用回收站里的版本覆盖它。",
+  "skills.trash.conflict.body":
+    "「{path}」已经存在同名内容。继续恢复会把现有内容移入回收站，再用回收站里的版本覆盖它。",
   "skills.trash.conflict.confirm": "覆盖恢复",
 
   /* ---- 添加技能抽屉 ---- */
@@ -289,7 +290,7 @@ export const zh = {
   "skills.remote.menu.authUnknown": "GitHub：{mode} · 剩余配额 未知",
   "skills.remote.menu.workspaceNone": "没有当前会话工作区，不显示项目级技能",
   "skills.remote.quotaUnknownShort": "未知",
-  
+
   "skills.remote.bar.checkSummary": "检查完成：有更新 {available} · 最新 {upToDate} · 无来源 {noSource} · 出错 {error}",
   "skills.remote.bar.updateSummary": "更新完成：成功 {ok} · 失败 {failed}",
   "skills.remote.auth.env": "环境变量 GITHUB_TOKEN",

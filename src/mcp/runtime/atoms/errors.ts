@@ -9,7 +9,7 @@ export class HubError extends Error {
 
   constructor(status: number, code: string, message: string, details?: unknown) {
     super(message);
-    this.name = 'HubError';
+    this.name = "HubError";
     this.status = status;
     this.code = code;
     if (details !== undefined) this.details = details;
@@ -17,19 +17,19 @@ export class HubError extends Error {
 }
 
 export const BAD_REQUEST = (message: string, details?: unknown): HubError =>
-  new HubError(400, 'BAD_REQUEST', message, details);
+  new HubError(400, "BAD_REQUEST", message, details);
 export const VALIDATION = (message: string, details?: unknown): HubError =>
-  new HubError(422, 'VALIDATION', message, details);
-export const NOT_FOUND = (message: string): HubError => new HubError(404, 'NOT_FOUND', message);
+  new HubError(422, "VALIDATION", message, details);
+export const NOT_FOUND = (message: string): HubError => new HubError(404, "NOT_FOUND", message);
 export const UPSTREAM = (message: string, details?: unknown): HubError =>
-  new HubError(502, 'UPSTREAM', message, details);
+  new HubError(502, "UPSTREAM", message, details);
 export const INTERNAL = (message: string, details?: unknown): HubError =>
-  new HubError(500, 'INTERNAL', message, details);
+  new HubError(500, "INTERNAL", message, details);
 
 /** 把任意抛出物转成可读文本（绝不含 stdout / 令牌）。 */
 export function errorText(err: unknown): string {
   if (err instanceof Error) return err.message || err.name;
-  if (typeof err === 'string') return err;
+  if (typeof err === "string") return err;
   try {
     return JSON.stringify(err);
   } catch {

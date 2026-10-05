@@ -13,11 +13,11 @@
  * 判断（discover / register / check / apply 四处都依赖它）。
  */
 
-import fs from 'node:fs/promises';
+import fs from "node:fs/promises";
 
 /** 平铺技能的统一中文说明（要求 2/4/5 必须逐字一致） */
 export const FLAT_SKILL_UNSUPPORTED_MESSAGE =
-  '平铺 .md 技能不支持来源登记与更新，只有目录型技能（<名称>/SKILL.md）支持。';
+  "平铺 .md 技能不支持来源登记与更新，只有目录型技能（<名称>/SKILL.md）支持。";
 
 /** 判断形态所需的最小字段（SkillSummary 的子集） */
 export interface SkillShape {
@@ -27,18 +27,18 @@ export interface SkillShape {
 
 /** 命名形态兜底：dirName 以 .md 结尾（path 读不到时用它判断） */
 export function isFlatDirName(dirName: string): boolean {
-  return typeof dirName === 'string' && /\.md$/i.test(dirName.trim());
+  return typeof dirName === "string" && /\.md$/i.test(dirName.trim());
 }
 
-type PathKind = 'file' | 'dir' | 'missing';
+type PathKind = "file" | "dir" | "missing";
 
 async function pathKind(p: string): Promise<PathKind> {
-  if (typeof p !== 'string' || p.trim() === '') return 'missing';
+  if (typeof p !== "string" || p.trim() === "") return "missing";
   try {
     const stats = await fs.stat(p);
-    return stats.isDirectory() ? 'dir' : 'file';
+    return stats.isDirectory() ? "dir" : "file";
   } catch {
-    return 'missing';
+    return "missing";
   }
 }
 
@@ -50,7 +50,7 @@ async function pathKind(p: string): Promise<PathKind> {
  */
 export async function isFlatSkill(skill: SkillShape): Promise<boolean> {
   const kind = await pathKind(skill.path);
-  if (kind === 'file') return true;
-  if (kind === 'dir') return false;
+  if (kind === "file") return true;
+  if (kind === "dir") return false;
   return isFlatDirName(skill.dirName);
 }

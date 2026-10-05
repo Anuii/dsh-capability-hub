@@ -91,9 +91,7 @@ export function filterTestId(toolbarTestId: string | undefined, filterId: string
  * 这类键等于绕开 kit 的样式与交互约定（一行只由 kit 决定长什么样、能不能点）。
  * 走查脚本用 data-* 定位、无障碍用 aria-*，这两类才是真正需要的。
  */
-export function passthroughAttrs(
-  attrs: Readonly<Record<string, string>> | undefined,
-): Record<string, string> {
+export function passthroughAttrs(attrs: Readonly<Record<string, string>> | undefined): Record<string, string> {
   if (attrs === undefined) return {};
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(attrs)) {

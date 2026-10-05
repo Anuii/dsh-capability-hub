@@ -25,11 +25,11 @@
  *      与 npx 行为一致）。
  */
 
-import { describeUnsafePath } from './safepath.ts';
-import { hashFiles, hashTarDirectory, type FolderHash, type HashFile } from './hash.ts';
-import { filesUnderDirectory, type TarEntry } from './tar.ts';
-import { parseMiniFrontmatter } from './frontmatter.ts';
-import { upstream } from './errors.ts';
+import { describeUnsafePath } from "./safepath.ts";
+import { hashFiles, hashTarDirectory, type FolderHash, type HashFile } from "./hash.ts";
+import { filesUnderDirectory, type TarEntry } from "./tar.ts";
+import { parseMiniFrontmatter } from "./frontmatter.ts";
+import { upstream } from "./errors.ts";
 
 /**
  * 根级安装时**不写进技能目录**的目录名（任意层级；大小写不敏感）。
@@ -37,20 +37,20 @@ import { upstream } from './errors.ts';
  * 其余是仓库 / 编辑器元数据（`.github` 由 FIX-7 要求 1 点名）。
  */
 export const ROOT_SKILL_EXCLUDED_DIRS: readonly string[] = [
-  '.git',
-  '.github',
-  '.vscode',
-  '.idea',
-  'node_modules',
-  '__pycache__',
-  '__pypackages__',
+  ".git",
+  ".github",
+  ".vscode",
+  ".idea",
+  "node_modules",
+  "__pycache__",
+  "__pypackages__",
 ];
 
 const EXCLUDED_DIRS = new Set(ROOT_SKILL_EXCLUDED_DIRS.map((name) => name.toLowerCase()));
 
 /** 路径里是否有一段（不含最后一段文件名）落在排除清单里 */
 function underExcludedDirectory(rel: string): boolean {
-  const segments = rel.split('/');
+  const segments = rel.split("/");
   return segments.slice(0, -1).some((segment) => EXCLUDED_DIRS.has(segment.toLowerCase()));
 }
 
@@ -67,7 +67,7 @@ function underExcludedDirectory(rel: string): boolean {
 export function rootSkillFiles(entries: TarEntry[]): HashFile[] {
   const files: HashFile[] = [];
   for (const entry of entries) {
-    if (entry.type !== 'file' || entry.path === '') continue;
+    if (entry.type !== "file" || entry.path === "") continue;
     if (underExcludedDirectory(entry.path)) continue;
     const reason = describeUnsafePath(entry.path);
     if (reason !== undefined) {
@@ -82,7 +82,7 @@ export function rootSkillFiles(entries: TarEntry[]): HashFile[] {
  * npx skills 的**哈希口径**跳过清单（= hash.ts 的 `HASH_SKIP_DIRS`；CLI 的 collectFiles 1150–1165
  * 只跳过这两个目录，其余（含 `.github`）全部参与哈希）。
  */
-export const NPX_HASH_SKIP_DIRS: readonly string[] = ['.git', 'node_modules'];
+export const NPX_HASH_SKIP_DIRS: readonly string[] = [".git", "node_modules"];
 
 const HASH_SKIP_DIRS = new Set(NPX_HASH_SKIP_DIRS.map((name) => name.toLowerCase()));
 
@@ -98,8 +98,8 @@ const HASH_SKIP_DIRS = new Set(NPX_HASH_SKIP_DIRS.map((name) => name.toLowerCase
 export function upstreamRootFiles(entries: TarEntry[]): HashFile[] {
   const files: HashFile[] = [];
   for (const entry of entries) {
-    if (entry.type !== 'file' || entry.path === '') continue;
-    const segments = entry.path.split('/');
+    if (entry.type !== "file" || entry.path === "") continue;
+    const segments = entry.path.split("/");
     if (segments.slice(0, -1).some((segment) => HASH_SKIP_DIRS.has(segment.toLowerCase()))) continue;
     files.push({ rel: entry.path, data: entry.data });
   }
@@ -108,7 +108,7 @@ export function upstreamRootFiles(entries: TarEntry[]): HashFile[] {
 
 /** 上游技能的内容**文件**（写盘用）：根级（dirPath === ''）→ rootSkillFiles；普通技能 → 目录下全部文件 */
 export function upstreamSkillFiles(entries: TarEntry[], dirPath: string): HashFile[] {
-  return dirPath === '' ? rootSkillFiles(entries) : filesUnderDirectory(entries, dirPath);
+  return dirPath === "" ? rootSkillFiles(entries) : filesUnderDirectory(entries, dirPath);
 }
 
 /**
@@ -116,7 +116,7 @@ export function upstreamSkillFiles(entries: TarEntry[], dirPath: string): HashFi
  * 根级 → 仓库根（npx 口径，见 upstreamRootFiles）；普通技能 → 该目录（`hashTarDirectory`）。
  */
 export function upstreamSkillHash(entries: TarEntry[], dirPath: string): FolderHash {
-  return dirPath === '' ? hashFiles(upstreamRootFiles(entries)) : hashTarDirectory(entries, dirPath);
+  return dirPath === "" ? hashFiles(upstreamRootFiles(entries)) : hashTarDirectory(entries, dirPath);
 }
 
 /**
@@ -126,10 +126,10 @@ export function upstreamSkillHash(entries: TarEntry[], dirPath: string): FolderH
 export function sanitizeName(name: string): string {
   const sanitized = name
     .toLowerCase()
-    .replace(/[^a-z0-9._]+/g, '-')
-    .replace(/^[.-]+|[.-]+$/g, '')
+    .replace(/[^a-z0-9._]+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "")
     .substring(0, 255);
-  return sanitized === '' ? 'unnamed-skill' : sanitized;
+  return sanitized === "" ? "unnamed-skill" : sanitized;
 }
 
 export interface RootSkillName {
@@ -149,7 +149,7 @@ export interface RootSkillName {
  */
 export function rootSkillNameOf(skillMdText: string | undefined, repoBase: string): RootSkillName {
   const parsed = skillMdText === undefined ? undefined : parseMiniFrontmatter(skillMdText).name?.trim();
-  const usable = parsed !== undefined && parsed !== '' ? parsed : undefined;
+  const usable = parsed !== undefined && parsed !== "" ? parsed : undefined;
   const key = usable ?? repoBase;
   const out: RootSkillName = { key, dirName: sanitizeName(key) };
   if (usable !== undefined) out.raw = usable;
@@ -158,6 +158,6 @@ export function rootSkillNameOf(skillMdText: string | undefined, repoBase: strin
 
 /** 从内容文件里取 SKILL.md 的文本（根级技能必有 SKILL.md，取不到返回 undefined） */
 export function skillMdTextOf(files: HashFile[]): string | undefined {
-  const skillMd = files.find((file) => file.rel.toLowerCase() === 'skill.md');
-  return skillMd?.data.toString('utf8');
+  const skillMd = files.find((file) => file.rel.toLowerCase() === "skill.md");
+  return skillMd?.data.toString("utf8");
 }

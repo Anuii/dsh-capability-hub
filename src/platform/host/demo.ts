@@ -46,10 +46,19 @@ export function createDemoModule(deps: DemoDeps): HubModule {
     packageRoot: deps.ctx.packageRoot,
     customSkillDirs: deps.ctx.customSkillDirs,
     bundledSkillDir: deps.ctx.bundledSkillDir ?? null,
-    sdk: deps.sdk.status === "loaded"
-      ? { status: "loaded", ...deps.sdk.info }
-      : { status: "failed", message: deps.sdk.message },
-    modules: deps.modules().map((entry) => ({ name: entry.name, status: entry.status, routes: entry.routes, ...(entry.message === undefined ? {} : { message: entry.message }), ...(entry.loadMs === undefined ? {} : { loadMs: entry.loadMs }) })),
+    sdk:
+      deps.sdk.status === "loaded"
+        ? { status: "loaded", ...deps.sdk.info }
+        : { status: "failed", message: deps.sdk.message },
+    modules: deps
+      .modules()
+      .map((entry) => ({
+        name: entry.name,
+        status: entry.status,
+        routes: entry.routes,
+        ...(entry.message === undefined ? {} : { message: entry.message }),
+        ...(entry.loadMs === undefined ? {} : { loadMs: entry.loadMs }),
+      })),
     tool: deps.tool(),
     registration: deps.registration(),
     wiring: deps.wiring(),

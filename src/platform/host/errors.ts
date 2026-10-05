@@ -36,7 +36,10 @@ export function hubError(code: ErrorCode, message: string, details?: unknown): H
 }
 
 /** 校验失败（422），details = { path, message }[]。 */
-export function validationError(details: Array<{ path: string; message: string }>, message = "参数校验未通过"): HubError {
+export function validationError(
+  details: Array<{ path: string; message: string }>,
+  message = "参数校验未通过",
+): HubError {
   return hubError("VALIDATION", message, details);
 }
 

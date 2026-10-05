@@ -8,7 +8,13 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createFetchRoutes, parseRouteKey, registerRoutes, relativePath, routePath } from "../../../src/platform/host/router.ts";
+import {
+  createFetchRoutes,
+  parseRouteKey,
+  registerRoutes,
+  relativePath,
+  routePath,
+} from "../../../src/platform/host/router.ts";
 import type { RouterLogger } from "../../../src/platform/host/router.ts";
 import type { RouteTable } from "../../../src/platform/contract/host.ts";
 
@@ -41,7 +47,9 @@ test("Fetch 路由：路径/方法/buffered 声明", () => {
 
 test("Fetch 路由：成功走 { ok: true, data } 信封", async () => {
   const routes = createFetchRoutes({ "GET health": async () => ({ answer: 42 }) }, logger);
-  const response = await routes[0].fetch(new Request("http://dsh.invalid/api/dsh-capability-hub/health", { method: "GET" }));
+  const response = await routes[0].fetch(
+    new Request("http://dsh.invalid/api/dsh-capability-hub/health", { method: "GET" }),
+  );
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, data: { answer: 42 } });
 });
@@ -50,7 +58,14 @@ test("Fetch 路由：错误映射成 { ok: false, error }，保留 status/code",
   const failure = new Error("找不到技能") as Error & { status: number; code: string };
   failure.status = 404;
   failure.code = "NOT_FOUND";
-  const routes = createFetchRoutes({ "GET skills/get": async () => { throw failure; } }, logger);
+  const routes = createFetchRoutes(
+    {
+      "GET skills/get": async () => {
+        throw failure;
+      },
+    },
+    logger,
+  );
   const response = await routes[0].fetch(new Request("http://dsh.invalid/api/dsh-capability-hub/skills/get"));
   assert.equal(response.status, 404);
   assert.deepEqual(await response.json(), { ok: false, error: { code: "NOT_FOUND", message: "找不到技能" } });
@@ -58,10 +73,12 @@ test("Fetch 路由：错误映射成 { ok: false, error }，保留 status/code",
 
 test("Fetch 路由：POST 请求体不是 JSON → 400", async () => {
   const routes = createFetchRoutes({ "POST echo": async (req) => req.body }, logger);
-  const response = await routes[0].fetch(new Request("http://dsh.invalid/api/dsh-capability-hub/echo", {
-    method: "POST",
-    body: "not json",
-  }));
+  const response = await routes[0].fetch(
+    new Request("http://dsh.invalid/api/dsh-capability-hub/echo", {
+      method: "POST",
+      body: "not json",
+    }),
+  );
   assert.equal(response.status, 400);
   const payload = (await response.json()) as { ok: boolean; error: { code: string } };
   assert.equal(payload.ok, false);
@@ -74,7 +91,9 @@ test("registerRoutes：注册进 connection.fetch，dispose 会全部注销", ()
     fetch: {
       register(route: { path: string }): () => void {
         registered.push(route.path);
-        return () => { registered.splice(registered.indexOf(route.path), 1); };
+        return () => {
+          registered.splice(registered.indexOf(route.path), 1);
+        };
       },
     },
   };

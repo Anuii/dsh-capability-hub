@@ -14,21 +14,21 @@
  * 不做本地改动提醒，直接覆盖（与 CC Switch 一致）。
  */
 
-import path from 'node:path';
-import { mkdir, rename } from 'node:fs/promises';
-import { locateSkillDirectory } from './tar.ts';
-import { describeUnsafePath } from './safepath.ts';
-import { hashesEqual, recordedHash, type FolderHash } from './hash.ts';
-import { upstreamSkillFiles, upstreamSkillHash } from './rootskill.ts';
-import { pathExists, removePath, writeDirectoryFiles } from './fsx.ts';
-import { locateSkill, type LocatedSkill } from './install.ts';
-import { skillMdPathOf } from './sourceurl.ts';
-import { FLAT_SKILL_UNSUPPORTED_MESSAGE, isFlatSkill } from './skillshape.ts';
-import type { GitHubClient, TarballResult } from './github.ts';
-import type { AuthMode } from '../contract/remote.ts';
-import type { SkillsLocalPort } from './types.ts';
-import type { UpdateApplyItem, UpdateApplyResult, UpdateCheckItem, UpdateCheckResult } from '../contract/remote.ts';
-import type { SourceStore } from './lockstore.ts';
+import path from "node:path";
+import { mkdir, rename } from "node:fs/promises";
+import { locateSkillDirectory } from "./tar.ts";
+import { describeUnsafePath } from "./safepath.ts";
+import { hashesEqual, recordedHash, type FolderHash } from "./hash.ts";
+import { upstreamSkillFiles, upstreamSkillHash } from "./rootskill.ts";
+import { pathExists, removePath, writeDirectoryFiles } from "./fsx.ts";
+import { locateSkill, type LocatedSkill } from "./install.ts";
+import { skillMdPathOf } from "./sourceurl.ts";
+import { FLAT_SKILL_UNSUPPORTED_MESSAGE, isFlatSkill } from "./skillshape.ts";
+import type { GitHubClient, TarballResult } from "./github.ts";
+import type { AuthMode } from "../contract/remote.ts";
+import type { SkillsLocalPort } from "./types.ts";
+import type { UpdateApplyItem, UpdateApplyResult, UpdateCheckItem, UpdateCheckResult } from "../contract/remote.ts";
+import type { SourceStore } from "./lockstore.ts";
 
 export interface UpdateDeps {
   github: GitHubClient;
@@ -45,17 +45,17 @@ interface DownloadGroup {
 }
 
 function groupKey(repo: string, ref: string | undefined): string {
-  return `${repo.toLowerCase()}@${ref ?? ''}`;
+  return `${repo.toLowerCase()}@${ref ?? ""}`;
 }
 
 /** 上游技能目录路径为空串 = 技能就在仓库根（FIX-6 / D-1 的根级 skillPath）；消息里说人话 */
 function displayDir(dirPath: string): string {
-  return dirPath === '' ? '仓库根' : dirPath;
+  return dirPath === "" ? "仓库根" : dirPath;
 }
 
 export async function checkUpdates(
   deps: UpdateDeps,
-  options: { ids?: string[]; workspace?: string }
+  options: { ids?: string[]; workspace?: string },
 ): Promise<UpdateCheckResult> {
   const listed = await deps.skills.list({ workspace: options.workspace });
   const wanted = options.ids && options.ids.length > 0 ? new Set(options.ids) : undefined;
@@ -70,20 +70,20 @@ export async function checkUpdates(
     if (await isFlatSkill(skill)) {
       results.push({
         skillId: skill.id,
-        status: 'no-source',
+        status: "no-source",
         message: FLAT_SKILL_UNSUPPORTED_MESSAGE,
       });
       continue;
     }
     const record = await deps.sources.get(
       { rootId: skill.rootId, dirName: skill.dirName, path: skill.path },
-      skill.name ?? skill.dirName
+      skill.name ?? skill.dirName,
     );
-    if (record === undefined || record.entry.repo === '' || !record.entry.skillFolderHash) {
+    if (record === undefined || record.entry.repo === "" || !record.entry.skillFolderHash) {
       results.push({
         skillId: skill.id,
-        status: 'no-source',
-        message: '该技能没有来源记录，无法检查更新。可以先做「来源推测」或手动登记来源。',
+        status: "no-source",
+        message: "该技能没有来源记录，无法检查更新。可以先做「来源推测」或手动登记来源。",
       });
       continue;
     }
@@ -108,14 +108,14 @@ export async function checkUpdates(
     if (results.some((r) => r.skillId === skill.id)) continue;
     const record = await deps.sources.get(
       { rootId: skill.rootId, dirName: skill.dirName, path: skill.path },
-      skill.name ?? skill.dirName
+      skill.name ?? skill.dirName,
     );
     if (record === undefined) continue;
     const entry = record.entry;
     const downloaded = tarballs.get(groupKey(entry.repo, entry.ref));
     if (downloaded === undefined) continue;
     if (downloaded instanceof Error) {
-      results.push({ skillId: skill.id, status: 'error', message: downloaded.message });
+      results.push({ skillId: skill.id, status: "error", message: downloaded.message });
       continue;
     }
     // FIX-6（D-1）：lock 的 skillPath 可以是根级 "SKILL.md"（npx skills 就是这么写的），
@@ -124,7 +124,7 @@ export async function checkUpdates(
     if (located === undefined) {
       results.push({
         skillId: skill.id,
-        status: 'error',
+        status: "error",
         message: `在上游 ${entry.repo}@${downloaded.ref} 里找不到 ${entry.skillPath}（上游可能改名或删除了这个技能）。`,
       });
       continue;
@@ -138,17 +138,17 @@ export async function checkUpdates(
     } catch (error) {
       results.push({
         skillId: skill.id,
-        status: 'error',
+        status: "error",
         message: error instanceof Error ? error.message : String(error),
       });
       continue;
     }
     if (hashesEqual(upstreamHash, entry.skillFolderHash)) {
-      results.push({ skillId: skill.id, status: 'up-to-date' });
+      results.push({ skillId: skill.id, status: "up-to-date" });
     } else {
       results.push({
         skillId: skill.id,
-        status: 'update-available',
+        status: "update-available",
         message: `上游 ${entry.repo}@${downloaded.ref} 的 ${displayDir(located.path)} 与登记的内容哈希不一致，可以更新。`,
       });
     }
@@ -165,7 +165,7 @@ export async function checkUpdates(
 
 export async function applyUpdates(
   deps: UpdateDeps,
-  options: { ids: string[]; workspace?: string }
+  options: { ids: string[]; workspace?: string },
 ): Promise<UpdateApplyResult> {
   const ids = Array.isArray(options.ids) ? options.ids : [];
   const results: UpdateApplyItem[] = [];
@@ -184,7 +184,7 @@ export async function applyUpdates(
       continue;
     }
     if (located.source === undefined || !located.source.skillFolderHash) {
-      results.push({ skillId: id, ok: false, message: '该技能没有来源记录，无法更新。请先登记来源。' });
+      results.push({ skillId: id, ok: false, message: "该技能没有来源记录，无法更新。请先登记来源。" });
       continue;
     }
     locatedList.push(located);
@@ -212,7 +212,7 @@ export async function applyUpdates(
     const entry = located.source!;
     const downloaded = tarballs.get(groupKey(entry.repo, entry.ref));
     if (downloaded === undefined) {
-      results.push({ skillId: located.id, ok: false, message: '内部错误：没有对应的下载结果。' });
+      results.push({ skillId: located.id, ok: false, message: "内部错误：没有对应的下载结果。" });
       continue;
     }
     if (downloaded instanceof Error) {
@@ -231,7 +231,7 @@ export async function applyUpdates(
     // FIX-5（要求 B/C）：上游目录路径不安全（".." 段 / 反斜杠 / 盘符 …）→ 这一项直接拒绝，
     // 在 moveToTrash 之前返回，技能目录一个字节都不动。
     // FIX-6（D-1）：空串是「技能就在仓库根」的合法形态（没有路径可穿越），跳过这项判定。
-    const unsafeDir = locatedUpstream.path === '' ? undefined : describeUnsafePath(locatedUpstream.path);
+    const unsafeDir = locatedUpstream.path === "" ? undefined : describeUnsafePath(locatedUpstream.path);
     if (unsafeDir !== undefined) {
       results.push({
         skillId: located.id,
@@ -253,7 +253,11 @@ export async function applyUpdates(
       continue;
     }
     if (files.length === 0) {
-      results.push({ skillId: located.id, ok: false, message: `上游 ${displayDir(locatedUpstream.path)} 里没有任何文件，未做任何改动。` });
+      results.push({
+        skillId: located.id,
+        ok: false,
+        message: `上游 ${displayDir(locatedUpstream.path)} 里没有任何文件，未做任何改动。`,
+      });
       continue;
     }
 
@@ -270,7 +274,7 @@ async function applyOneUpdate(
   tarball: TarballResult,
   upstreamDir: string,
   files: { rel: string; data: Buffer }[],
-  workspace: string | undefined
+  workspace: string | undefined,
 ): Promise<UpdateApplyItem> {
   const entry = located.source!;
   const wasDisabled = located.modelInvocationDisabled;
@@ -281,7 +285,7 @@ async function applyOneUpdate(
   try {
     const trashed = await deps.skills.moveToTrash(located.id, {
       ...(workspace !== undefined ? { workspace } : {}),
-      reason: 'update',
+      reason: "update",
       lockEntry: entry,
     });
     trashId = trashed.trashId;
@@ -304,7 +308,7 @@ async function applyOneUpdate(
       await rename(staging, targetDir);
     } catch (renameError) {
       const code = (renameError as NodeJS.ErrnoException).code;
-      if (code !== 'EPERM' && code !== 'EACCES' && code !== 'ENOTEMPTY' && code !== 'EEXIST') throw renameError;
+      if (code !== "EPERM" && code !== "EACCES" && code !== "ENOTEMPTY" && code !== "EEXIST") throw renameError;
       await writeDirectoryFiles(targetDir, files);
       await removePath(staging).catch(() => {});
     }
@@ -350,7 +354,7 @@ async function applyOneUpdate(
         updatedAt: nowIso,
         skillFolderHash: newHash,
       },
-      located.name ?? located.dirName
+      located.name ?? located.dirName,
     );
   } catch (error) {
     const rollback = await rollbackFromTrash(deps, trashId, targetDir, workspace);
@@ -362,7 +366,7 @@ async function applyOneUpdate(
     };
   }
 
-  const suffix = wasDisabled ? '（已保持停用状态）' : '';
+  const suffix = wasDisabled ? "（已保持停用状态）" : "";
   return {
     skillId: located.id,
     ok: true,
@@ -376,20 +380,18 @@ async function rollbackFromTrash(
   deps: UpdateDeps,
   trashId: string | undefined,
   targetDir: string,
-  workspace: string | undefined
+  workspace: string | undefined,
 ): Promise<string> {
   try {
     if (await pathExists(targetDir)) await removePath(targetDir);
   } catch (error) {
     return `另外：清理未完成的新目录也失败了（${error instanceof Error ? error.message : String(error)}），请手动检查 ${targetDir}。`;
   }
-  if (trashId === undefined) return '原目录已移入回收站，请到回收站手动恢复。';
+  if (trashId === undefined) return "原目录已移入回收站，请到回收站手动恢复。";
   try {
     await deps.skills.restore(trashId, { replace: true, ...(workspace !== undefined ? { workspace } : {}) });
-    return '已从回收站恢复原目录。';
+    return "已从回收站恢复原目录。";
   } catch (error) {
     return `原目录仍在回收站（${trashId}），自动恢复失败（${error instanceof Error ? error.message : String(error)}），请到回收站手动恢复。`;
   }
 }
-
-

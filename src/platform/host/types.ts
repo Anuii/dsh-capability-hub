@@ -2,7 +2,7 @@
  * 外壳自己的类型。功能模块看到的 HubContext 在 ../contract/host.ts；外壳额外知道 profile 目录与安装目录。
  */
 
-import type { HubContext } from '../contract/host.ts';
+import type { HubContext } from "../contract/host.ts";
 
 /** 外壳解析出的完整上下文：功能模块看到的 HubContext + 只有外壳用得到的两项。 */
 export interface PlatformContext extends HubContext {

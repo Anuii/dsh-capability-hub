@@ -23,8 +23,14 @@ export function makeStatus(servers: RuntimeServerView[], sessions: RuntimeSessio
 /** 一个有两层会话（父 + 子代理）的快照，用于「只看当前会话」与排序的测试。 */
 export function makeNestedStatus(): RuntimeStatus {
   return makeStatus(
-    [makeServer({ name: "fake", cache: { toolCount: 4, updatedAt: T0, stale: false, tools: [] } }),
-      makeServer({ name: "broken", disabled: false, lastFailure: { message: "启动失败", at: T0, cooldownUntil: T0 + 60_000 } })],
+    [
+      makeServer({ name: "fake", cache: { toolCount: 4, updatedAt: T0, stale: false, tools: [] } }),
+      makeServer({
+        name: "broken",
+        disabled: false,
+        lastFailure: { message: "启动失败", at: T0, cooldownUntil: T0 + 60_000 },
+      }),
+    ],
     [
       makeSession({
         sessionId: "parent-session-0001",

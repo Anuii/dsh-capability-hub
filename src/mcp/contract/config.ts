@@ -138,7 +138,6 @@ export interface ConfigPayload {
   warnings: string[];
 }
 
-
 /** POST mcp/servers/upsert 的 data。 */
 export interface UpsertResult {
   server: ServerView;

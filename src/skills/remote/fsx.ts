@@ -3,9 +3,9 @@
  * 只依赖 node: 内置模块。
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { assertPathInsideDirectory, safeRelativePath } from './safepath.ts';
+import fs from "node:fs/promises";
+import path from "node:path";
+import { assertPathInsideDirectory, safeRelativePath } from "./safepath.ts";
 
 export async function pathExists(p: string): Promise<boolean> {
   try {
@@ -18,7 +18,7 @@ export async function pathExists(p: string): Promise<boolean> {
 
 export async function readTextFile(p: string): Promise<string | undefined> {
   try {
-    return await fs.readFile(p, 'utf8');
+    return await fs.readFile(p, "utf8");
   } catch {
     return undefined;
   }
@@ -31,7 +31,7 @@ export async function atomicWriteFile(file: string, data: string | Buffer): Prom
   const suffix = `${process.pid.toString(36)}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
   const tmp = path.join(dir, `.${base}.${suffix}.tmp`);
   await fs.mkdir(dir, { recursive: true });
-  const handle = await fs.open(tmp, 'wx');
+  const handle = await fs.open(tmp, "wx");
   try {
     await handle.writeFile(data);
     await handle.sync();
@@ -75,19 +75,19 @@ export interface WalkedFile {
   abs: string;
 }
 
-export async function walkFiles(root: string, skipDirs: string[] = ['.git', 'node_modules']): Promise<WalkedFile[]> {
+export async function walkFiles(root: string, skipDirs: string[] = [".git", "node_modules"]): Promise<WalkedFile[]> {
   const skip = new Set(skipDirs);
   const out: WalkedFile[] = [];
 
   async function visit(dir: string, prefix: string): Promise<void> {
-    let entries: import('node:fs').Dirent[];
+    let entries: import("node:fs").Dirent[];
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
     for (const entry of entries) {
-      const childRel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+      const childRel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
       const childAbs = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (skip.has(entry.name)) continue;
@@ -98,7 +98,7 @@ export async function walkFiles(root: string, skipDirs: string[] = ['.git', 'nod
     }
   }
 
-  await visit(root, '');
+  await visit(root, "");
   return out;
 }
 
@@ -109,17 +109,14 @@ export async function walkFiles(root: string, skipDirs: string[] = ['.git', 'nod
  * 只有全部合格才开始创建目录与写文件。任何一条不合格就抛 UPSTREAM，此时**一个文件都不写**、
  * 一个目录都不建（避免留下半成品目录）。安装的 destDir 与更新的 staging/targetDir 都走这里。
  */
-export async function writeDirectoryFiles(
-  targetDir: string,
-  files: { rel: string; data: Buffer }[]
-): Promise<void> {
+export async function writeDirectoryFiles(targetDir: string, files: { rel: string; data: Buffer }[]): Promise<void> {
   const root = path.resolve(targetDir);
   // 第一遍：只校验，不落盘
   const planned: { abs: string; data: Buffer }[] = [];
   for (const file of files) {
-    safeRelativePath(file.rel, '待写入的文件路径');
-    const abs = path.join(root, ...file.rel.split('/'));
-    assertPathInsideDirectory(root, abs, '待写入的文件路径');
+    safeRelativePath(file.rel, "待写入的文件路径");
+    const abs = path.join(root, ...file.rel.split("/"));
+    assertPathInsideDirectory(root, abs, "待写入的文件路径");
     planned.push({ abs, data: file.data });
   }
   // 第二遍：全部合格才写

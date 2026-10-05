@@ -12,7 +12,7 @@
  *   2. 截尾按**字节**截，并跳过被切掉一半的字符的头；
  *   3. 解码顺序：严格 UTF-8（fatal，成功即用）→ win32 上回退 GBK → 非 fatal UTF-8。
  */
-import { MAX_STDERR_CAPTURE, STDERR_SUMMARY_LINES } from '../constants.ts';
+import { MAX_STDERR_CAPTURE, STDERR_SUMMARY_LINES } from "../constants.ts";
 
 /* ---------- 字节 → 文本（FIX-4） ---------- */
 
@@ -21,7 +21,7 @@ let gbkUnavailable = false;
 /** 严格 UTF-8：失败返回 undefined（不抛）。 */
 function decodeUtf8Strict(bytes: Uint8Array): string | undefined {
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
     return undefined;
   }
@@ -31,9 +31,9 @@ function decodeUtf8Strict(bytes: Uint8Array): string | undefined {
 function decodeGbk(bytes: Uint8Array): string | undefined {
   if (gbkUnavailable) return undefined;
   try {
-    const text = new TextDecoder('gbk').decode(bytes);
+    const text = new TextDecoder("gbk").decode(bytes);
     // 非 fatal 的 GBK 解码器会把「被切掉一半的字符」变成一个替换字符，去掉它
-    return text.replace(/^\uFFFD+/, '');
+    return text.replace(/^\uFFFD+/, "");
   } catch {
     gbkUnavailable = true;
     return undefined;
@@ -52,7 +52,7 @@ function trimLeadingContinuationBytes(bytes: Buffer): Buffer {
  * 调用方必须先攒够字节（或攒好尾部字节）再调用它，不要逐块调用。
  */
 export function decodeStderrBytes(bytes: Uint8Array | undefined): string {
-  if (bytes === undefined || bytes.length === 0) return '';
+  if (bytes === undefined || bytes.length === 0) return "";
   const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   // 1) 严格 UTF-8 成功即用：合法的 UTF-8 文本绝不受影响
   const strict = decodeUtf8Strict(buffer);
@@ -66,20 +66,20 @@ export function decodeStderrBytes(bytes: Uint8Array | undefined): string {
   }
   // 2) Windows 中文系统的 stderr 常是 GBK（cmd.exe 的代码页 936）。
   //    这里用**原始字节**（不用上面那份为 UTF-8 准备的裁剪结果），避免误伤 GBK 的前导字节。
-  if (process.platform === 'win32') {
+  if (process.platform === "win32") {
     const gbk = decodeGbk(buffer);
     if (gbk !== undefined) return gbk;
   }
   // 3) 最后才用非 fatal 的 UTF-8（坏字节变 U+FFFD，至少不抛错）
-  return new TextDecoder('utf-8', { fatal: false }).decode(trimmed).replace(/^\uFFFD+/, '');
+  return new TextDecoder("utf-8", { fatal: false }).decode(trimmed).replace(/^\uFFFD+/, "");
 }
 
 /** 任意 chunk（Buffer / Uint8Array / string）→ 字节。 */
 export function stderrChunkToBytes(chunk: unknown): Buffer {
   if (Buffer.isBuffer(chunk)) return chunk;
   if (chunk instanceof Uint8Array) return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
-  if (typeof chunk === 'string') return Buffer.from(chunk, 'utf8');
-  return Buffer.from(String(chunk), 'utf8');
+  if (typeof chunk === "string") return Buffer.from(chunk, "utf8");
+  return Buffer.from(String(chunk), "utf8");
 }
 
 /** 追加并只保留**尾部**的 limit 个字节（先追加再切，避免单个超大 chunk 冲破上限）。 */
@@ -111,7 +111,7 @@ export class StderrTail {
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
-    return lines.slice(-STDERR_SUMMARY_LINES).join(' — ');
+    return lines.slice(-STDERR_SUMMARY_LINES).join(" — ");
   }
 
   /** 把 stderr 摘要拼进错误消息，格式与参考实现一致：<msg> (stderr: a — b — c)。 */

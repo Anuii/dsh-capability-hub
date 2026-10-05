@@ -9,7 +9,11 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { attachSessionBridge, type SessionBridgeClock, type SessionBridgeOptions } from "../../../src/platform/host/session-bridge.ts";
+import {
+  attachSessionBridge,
+  type SessionBridgeClock,
+  type SessionBridgeOptions,
+} from "../../../src/platform/host/session-bridge.ts";
 import type { HubLogger } from "../../../src/platform/contract/host.ts";
 import type { McpSessionInfo } from "../../../src/mcp/contract/runtime.ts";
 
@@ -114,7 +118,15 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 
 /** 子代理会话的真实 header 形态（dsh-session:1699-1710）。 */
 function childHeader(id: string, parent: string): Record<string, unknown> {
-  return { version: 4, id, createdAt: 1, isSeeded: false, parentSession: parent, origin: "subagent", delegationDepth: 1 };
+  return {
+    version: 4,
+    id,
+    createdAt: 1,
+    isSeeded: false,
+    parentSession: parent,
+    origin: "subagent",
+    delegationDepth: 1,
+  };
 }
 
 /** subagent/start 的真实 info（dsh-subagent:261-266 / 294-299）。 */
@@ -128,7 +140,10 @@ test("实测形状：subagent/start 只传一个 info 参数，父会话来自 a
   const { sink, started } = makeSink();
   const bridge = attachSessionBridge(world.ctx, sink, log, { sweepIntervalMs: 0 });
 
-  world.emit("agent/created", { agent: { session: { id: "child-1", header: childHeader("child-1", "parent-1") } }, source: "startup" });
+  world.emit("agent/created", {
+    agent: { session: { id: "child-1", header: childHeader("child-1", "parent-1") } },
+    source: "startup",
+  });
   await flush();
   assert.deepEqual(started, [{ sessionId: "child-1", parentSessionId: "parent-1" }]);
 
@@ -176,7 +191,8 @@ test("回归（FIX-8）：agent/created 的会话同时有 header 与 requestHea
 test("subagent/start：注册表里能解析到子 agent 时，用它的 session.header.parentSession", async () => {
   const world = makeCtx();
   world.service("agents", {
-    get: (id: string) => (id === "child-2" ? { session: { id: "child-2", header: childHeader("child-2", "parent-2") } } : undefined),
+    get: (id: string) =>
+      id === "child-2" ? { session: { id: "child-2", header: childHeader("child-2", "parent-2") } } : undefined,
     list: () => [],
   });
   const { sink, started } = makeSink();
@@ -225,7 +241,9 @@ test("session/created 提前给出的 header 线索会被 agent/created 采纳",
 
   world.emit("session/created", { id: "child-5", header: childHeader("child-5", "parent-5") });
   // agent/created 那一刻的 header 只有公共字段（没有 origin/parentSession）。
-  world.emit("agent/created", { agent: { session: { id: "child-5", header: { version: 4, id: "child-5", isSeeded: false } } } });
+  world.emit("agent/created", {
+    agent: { session: { id: "child-5", header: { version: 4, id: "child-5", isSeeded: false } } },
+  });
   await flush();
 
   assert.equal(started[0].parentSessionId, "parent-5");

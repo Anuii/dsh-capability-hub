@@ -49,7 +49,9 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --test \"test/**/*.test.ts\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"test/**/*.{ts,mjs}\" \"scripts/**/*.mjs\" build.mjs",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"test/**/*.{ts,mjs}\" \"scripts/**/*.mjs\" build.mjs"
   },
   "author": "anuii <anuii@proton.me>",
   "license": "MIT"

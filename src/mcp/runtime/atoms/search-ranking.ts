@@ -6,7 +6,7 @@
  * 收尾：覆盖率加成 + 首 token 命中限定名加成 + 整字段精确加成。
  * 排序：分数降序，并列按 qualifiedName 的 localeCompare —— 保证同一查询永远同一顺序。
  */
-import { MAX_REGEX_QUERY_LENGTH } from '../constants.ts';
+import { MAX_REGEX_QUERY_LENGTH } from "../constants.ts";
 
 export interface RankDocument {
   qualifiedName: string;
@@ -17,25 +17,25 @@ export interface RankDocument {
 }
 
 const FIELD_WEIGHTS = [
-  ['qualifiedName', 12],
-  ['originalName', 10],
-  ['server', 8],
-  ['description', 5],
-  ['keywords', 5],
+  ["qualifiedName", 12],
+  ["originalName", 10],
+  ["server", 8],
+  ["description", 5],
+  ["keywords", 5],
 ] as const;
 
 /** camelCase 先切（必须在 toLowerCase 之前，否则边界被毁），再小写，再把非字母数字折成单空格。 */
 export function normalize(text: string): string {
   return text
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
 export function tokenize(text: string): string[] {
   const normalized = normalize(text);
-  return normalized.length === 0 ? [] : normalized.split(' ').filter(Boolean);
+  return normalized.length === 0 ? [] : normalized.split(" ").filter(Boolean);
 }
 
 const MIN_STEM_LENGTH = 4;
@@ -47,7 +47,13 @@ interface FieldScore {
   matchedTokens: Set<string>;
 }
 
-function scoreField(field: string, query: string, queryTokens: string[], queryNormalized: string, weight: number): FieldScore {
+function scoreField(
+  field: string,
+  query: string,
+  queryTokens: string[],
+  queryNormalized: string,
+  weight: number,
+): FieldScore {
   const result: FieldScore = { score: 0, phraseMatched: false, wholeFieldExact: false, matchedTokens: new Set() };
   if (field.length === 0) return result;
   const normalized = normalize(field);
@@ -64,7 +70,7 @@ function scoreField(field: string, query: string, queryTokens: string[], queryNo
     result.phraseMatched = true;
   }
 
-  const fieldTokens = normalized.length === 0 ? [] : normalized.split(' ');
+  const fieldTokens = normalized.length === 0 ? [] : normalized.split(" ");
   for (const token of queryTokens) {
     if (fieldTokens.includes(token)) {
       result.score += weight * 4;
@@ -108,7 +114,7 @@ export function scoreDocument(doc: RankDocument, query: string): RankedMatch | u
   const matchedTokens = new Set<string>();
 
   for (const [field, weight] of FIELD_WEIGHTS) {
-    if (field === 'keywords') {
+    if (field === "keywords") {
       // keywords 特殊：逐短语算短语奖励取 max（绝不拼成一个长串，否则短语会跨两个无关关键词匹配）。
       let best = 0;
       let bestPhrase = false;
@@ -126,7 +132,13 @@ export function scoreDocument(doc: RankDocument, query: string): RankedMatch | u
       continue;
     }
     const value =
-      field === 'qualifiedName' ? doc.qualifiedName : field === 'originalName' ? doc.originalName : field === 'server' ? doc.server : doc.description;
+      field === "qualifiedName"
+        ? doc.qualifiedName
+        : field === "originalName"
+          ? doc.originalName
+          : field === "server"
+            ? doc.server
+            : doc.description;
     const scored = scoreField(value, query, queryTokens, queryNormalized, weight);
     total += scored.score;
     if (scored.phraseMatched) phraseMatched = true;
@@ -153,7 +165,7 @@ export function rankDocuments(docs: RankDocument[], query: string): RankedMatch[
     const scored = scoreDocument(doc, query);
     if (scored) matches.push(scored);
   }
-  matches.sort((a, b) => (b.score - a.score) || a.doc.qualifiedName.localeCompare(b.doc.qualifiedName));
+  matches.sort((a, b) => b.score - a.score || a.doc.qualifiedName.localeCompare(b.doc.qualifiedName));
   return matches;
 }
 
@@ -169,17 +181,17 @@ export interface RegexSearchResult {
  */
 export function searchByRegex(docs: RankDocument[], pattern: string, maxMatches: number): RegexSearchResult {
   if (pattern.length > MAX_REGEX_QUERY_LENGTH) {
-    return { ok: false, matches: [], error: '正则太长（上限 ' + MAX_REGEX_QUERY_LENGTH + ' 个字符）' };
+    return { ok: false, matches: [], error: "正则太长（上限 " + MAX_REGEX_QUERY_LENGTH + " 个字符）" };
   }
   let regexp: RegExp;
   try {
-    regexp = new RegExp(pattern, 'i');
+    regexp = new RegExp(pattern, "i");
   } catch (err) {
     return { ok: false, matches: [], error: (err as Error).message };
   }
   const matches: RankDocument[] = [];
   for (const doc of docs) {
-    const haystack = doc.qualifiedName + '\n' + doc.description + '\n' + doc.keywords.join('\n');
+    const haystack = doc.qualifiedName + "\n" + doc.description + "\n" + doc.keywords.join("\n");
     regexp.lastIndex = 0;
     if (regexp.test(haystack)) {
       matches.push(doc);

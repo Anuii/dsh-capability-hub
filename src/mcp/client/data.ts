@@ -7,7 +7,21 @@
  */
 
 import { api } from "../../platform/client/api.ts";
-import type { CommandCheckResult, ConfigPayload, ImportApplyResponse, ImportSourceView, ImportSourcesPayload, PresetView, McpSettings, ParseResult, PresetsPayload, RevealResult, ServerView, UpsertResult, ValidateResult } from "../contract/config.ts";
+import type {
+  CommandCheckResult,
+  ConfigPayload,
+  ImportApplyResponse,
+  ImportSourceView,
+  ImportSourcesPayload,
+  PresetView,
+  McpSettings,
+  ParseResult,
+  PresetsPayload,
+  RevealResult,
+  ServerView,
+  UpsertResult,
+  ValidateResult,
+} from "../contract/config.ts";
 import type { RuntimeStatus } from "../contract/runtime.ts";
 
 /** GET mcp/config → { settings, settingsSet, servers, warnings }。 */
@@ -31,7 +45,9 @@ export async function fetchRuntime(): Promise<RuntimeStatus> {
           ...session,
           sessionId: typeof session?.sessionId === "string" ? session.sessionId : "",
           instances: Array.isArray(session?.instances)
-            ? session.instances.filter((instance) => instance !== null && typeof instance === "object" && typeof instance.server === "string")
+            ? session.instances.filter(
+                (instance) => instance !== null && typeof instance === "object" && typeof instance.server === "string",
+              )
             : [],
         }))
       : [],
@@ -79,10 +95,7 @@ export async function revealServer(name: string): Promise<ServerView> {
 }
 
 /** POST mcp/validate { server, originalName? } → { errors }。 */
-export async function validateServer(
-  server: Record<string, unknown>,
-  originalName?: string,
-): Promise<ValidateResult> {
+export async function validateServer(server: Record<string, unknown>, originalName?: string): Promise<ValidateResult> {
   const body: Record<string, unknown> = { server };
   if (originalName !== undefined) body.originalName = originalName;
   const data = await api.post<ValidateResult>("mcp/validate", body);

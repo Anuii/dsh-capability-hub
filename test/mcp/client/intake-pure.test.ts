@@ -32,25 +32,29 @@ function stdio(name: string, command = "node"): ParsedServer {
 
 test("rawSummary：stdio 显示命令与参数，http 显示地址", () => {
   assert.equal(rawSummary(stdio("a", "node")), "stdio · node " + FAKE);
-  assert.equal(rawSummary({ serverName: "b", transport: "streamable-http", url: "https://x/mcp" }), "streamable-http · https://x/mcp");
+  assert.equal(
+    rawSummary({ serverName: "b", transport: "streamable-http", url: "https://x/mcp" }),
+    "streamable-http · https://x/mcp",
+  );
   assert.equal(rawSummary({ serverName: "c", transport: "stdio" }), "stdio · （未设置启动命令）");
 });
 
 test("planPasteRows：干净的名字是 new，重名是 conflict，非法名是 invalid", () => {
-  const rows = planPasteRows([
-    stdio("alpha"),
-    stdio("alpha2"),
-    stdio("坏名字"),
-    stdio("beta"),
-  ], ["beta"]);
-  assert.deepEqual(rows.map((row) => row.status), ["new", "new", "invalid", "conflict"]);
+  const rows = planPasteRows([stdio("alpha"), stdio("alpha2"), stdio("坏名字"), stdio("beta")], ["beta"]);
+  assert.deepEqual(
+    rows.map((row) => row.status),
+    ["new", "new", "invalid", "conflict"],
+  );
   assert.equal(rows[0].name, "alpha");
   assert.equal(rows[3].originalName, "beta");
 });
 
 test("planPasteRows：同一批里重名算冲突（不能一次提交两个同名）", () => {
   const rows = planPasteRows([stdio("alpha"), stdio("alpha")], []);
-  assert.deepEqual(rows.map((row) => row.status), ["conflict", "conflict"]);
+  assert.deepEqual(
+    rows.map((row) => row.status),
+    ["conflict", "conflict"],
+  );
 });
 
 test("planPasteRows：冲突行给出可用建议名（避开现有配置与同批名字）", () => {
@@ -117,7 +121,12 @@ test("rawToSubmit：不把 undefined 写进去（默认值不落盘）", () => {
 });
 
 test("hiddenKeys / placeholderNames / secretSummary：只认遮罩占位符与键数", () => {
-  const withHidden: ParsedServer = { serverName: "a", transport: "stdio", env: { TOKEN: "***hidden***" }, headers: { Authorization: "***hidden***" } };
+  const withHidden: ParsedServer = {
+    serverName: "a",
+    transport: "stdio",
+    env: { TOKEN: "***hidden***" },
+    headers: { Authorization: "***hidden***" },
+  };
   const plain: ParsedServer = { serverName: "b", transport: "stdio", env: { TOKEN: "real" } };
   assert.deepEqual(hiddenKeys(withHidden).sort(), ["env.TOKEN", "headers.Authorization"]);
   assert.deepEqual(hiddenKeys(plain), []);

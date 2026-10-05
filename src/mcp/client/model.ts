@@ -274,7 +274,11 @@ export function draftToJsonText(draft: ServerDraft): string {
 }
 
 /** JSON 文本 → 草稿（只解析，不做业务校验）。 */
-export function parseJsonServer(text: string): { draft?: ServerDraft; values?: Record<string, unknown>; error?: string } {
+export function parseJsonServer(text: string): {
+  draft?: ServerDraft;
+  values?: Record<string, unknown>;
+  error?: string;
+} {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -339,7 +343,10 @@ export function validateDraft(draft: ServerDraft, opts: ValidateDraftOptions = {
       continue;
     }
     if (!ENV_NAME_RE.test(key)) {
-      errors.push({ path: "server.envFrom." + key, message: "环境变量名「" + key + "」不合法（字母、数字、下划线，不能以数字开头）。" });
+      errors.push({
+        path: "server.envFrom." + key,
+        message: "环境变量名「" + key + "」不合法（字母、数字、下划线，不能以数字开头）。",
+      });
     }
     if (typeof value !== "string" || value.trim() === "") {
       errors.push({ path: "server.envFrom." + key, message: "取值命令不能为空。" });
@@ -350,7 +357,10 @@ export function validateDraft(draft: ServerDraft, opts: ValidateDraftOptions = {
   for (const key of Object.keys(env)) {
     if (key.trim() === "") errors.push({ path: "server.env", message: "变量名不能为空。" });
     if (Object.prototype.hasOwnProperty.call(envFrom, key)) {
-      errors.push({ path: "server.envFrom." + key, message: "变量「" + key + "」同时出现在 env 与 envFrom 中，只能二选一。" });
+      errors.push({
+        path: "server.envFrom." + key,
+        message: "变量「" + key + "」同时出现在 env 与 envFrom 中，只能二选一。",
+      });
     }
   }
 
@@ -358,11 +368,17 @@ export function validateDraft(draft: ServerDraft, opts: ValidateDraftOptions = {
   allowEmpty.forEach((item, index) => {
     const name = typeof item === "string" ? item : "";
     if (!ENV_NAME_RE.test(name)) {
-      errors.push({ path: "server.allowEmpty[" + String(index) + "]", message: "「" + String(item) + "」不是合法的环境变量名。" });
+      errors.push({
+        path: "server.allowEmpty[" + String(index) + "]",
+        message: "「" + String(item) + "」不是合法的环境变量名。",
+      });
       return;
     }
     if (!Object.prototype.hasOwnProperty.call(envFrom, name)) {
-      errors.push({ path: "server.allowEmpty[" + String(index) + "]", message: "「" + name + "」没有在 envFrom 里声明。" });
+      errors.push({
+        path: "server.allowEmpty[" + String(index) + "]",
+        message: "「" + name + "」没有在 envFrom 里声明。",
+      });
     }
   });
 
@@ -375,7 +391,10 @@ export function validateDraft(draft: ServerDraft, opts: ValidateDraftOptions = {
     }
     list.forEach((item, index) => {
       if (typeof item !== "string" || item.trim() === "") {
-        errors.push({ path: "server." + field + "[" + String(index) + "]", message: "第 " + String(index + 1) + " 项不能为空。" });
+        errors.push({
+          path: "server." + field + "[" + String(index) + "]",
+          message: "第 " + String(index + 1) + " 项不能为空。",
+        });
       }
     });
   }
@@ -500,7 +519,11 @@ export function isPathLike(part: string): boolean {
 export function shortPart(part: string, executable = false): string {
   let out = part;
   if (isPathLike(part)) {
-    const base = part.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
+    const base =
+      part
+        .replace(/[\\/]+$/, "")
+        .split(/[\\/]/)
+        .pop() ?? "";
     if (base !== "") out = base;
   }
   return executable ? out.replace(/\.(exe|cmd|bat)$/i, "") : out;
@@ -701,12 +724,9 @@ export function matchesQuery(view: ServerView, query: string): boolean {
   const text = query.trim().toLowerCase();
   if (text === "") return true;
   const meta = view.meta ?? {};
-  const haystack = [
-    view.serverName,
-    viewSummaryText(view),
-    meta.description ?? "",
-    (meta.tags ?? []).join(" "),
-  ].join(" ").toLowerCase();
+  const haystack = [view.serverName, viewSummaryText(view), meta.description ?? "", (meta.tags ?? []).join(" ")]
+    .join(" ")
+    .toLowerCase();
   return haystack.includes(text);
 }
 
@@ -755,7 +775,11 @@ export function activeInstanceCount(runtime: RuntimeStatus | undefined, name: st
 }
 
 /** 状态点：冷却中（琥珀）> 最近失败（红）> 有活跃实例（强调色）> 空闲（灰）。 */
-export function serverStatusTone(row: RuntimeRow, instances: number, now: number): "idle" | "active" | "failed" | "cooling" {
+export function serverStatusTone(
+  row: RuntimeRow,
+  instances: number,
+  now: number,
+): "idle" | "active" | "failed" | "cooling" {
   if (isCooling(row, now)) return "cooling";
   if (isFailing(row)) return "failed";
   if (instances > 0) return "active";

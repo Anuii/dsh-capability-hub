@@ -7,10 +7,10 @@
  * 包成 cmd.exe /d /s /c "…"（npx.cmd 就是这种），被杀的只是 cmd.exe，
  * 真正的 node 服务器可能作为孤儿存活。所以关闭时必须自己收整棵树。
  */
-import { execFile } from 'node:child_process';
-import { IS_WINDOWS, parseTasklistCsv } from './win-proc.ts';
-import { KILL_WAIT_MS } from '../constants.ts';
-import type { Clock } from './clock.ts';
+import { execFile } from "node:child_process";
+import { IS_WINDOWS, parseTasklistCsv } from "./win-proc.ts";
+import { KILL_WAIT_MS } from "../constants.ts";
+import type { Clock } from "./clock.ts";
 
 export interface ProcessSupervisor {
   /** pid 是否仍然存在。 */
@@ -43,13 +43,14 @@ function runExec(
           ...(opts.env !== undefined ? { env: opts.env } : {}),
         },
         (err, stdout, stderr) => {
-          const code = err && typeof (err as { code?: unknown }).code === 'number' ? (err as { code: number }).code : err ? 1 : 0;
+          const code =
+            err && typeof (err as { code?: unknown }).code === "number" ? (err as { code: number }).code : err ? 1 : 0;
           done({ code, stdout: String(stdout), stderr: String(stderr) });
         },
       );
-      child.on('error', (err) => done({ code: -1, stdout: '', stderr: String(err.message) }));
+      child.on("error", (err) => done({ code: -1, stdout: "", stderr: String(err.message) }));
     } catch (err) {
-      done({ code: -1, stdout: '', stderr: String((err as Error).message) });
+      done({ code: -1, stdout: "", stderr: String((err as Error).message) });
     }
   });
 }
@@ -65,14 +66,14 @@ export function createProcessSupervisor(clock: Clock): ProcessSupervisor {
   async function isAlive(pid: number): Promise<boolean> {
     if (!Number.isInteger(pid) || pid <= 0) return false;
     if (IS_WINDOWS) {
-      const res = await runExec('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], { timeout: 10_000 });
+      const res = await runExec("tasklist", ["/FI", `PID eq ${pid}`, "/NH", "/FO", "CSV"], { timeout: 10_000 });
       return parseTasklistCsv(res.stdout).some((row) => row.pid === pid);
     }
     try {
       process.kill(pid, 0);
       return true;
     } catch (err) {
-      return (err as { code?: string }).code === 'EPERM';
+      return (err as { code?: string }).code === "EPERM";
     }
   }
 
@@ -80,24 +81,24 @@ export function createProcessSupervisor(clock: Clock): ProcessSupervisor {
     if (!Number.isInteger(pid) || pid <= 0) return;
     if (IS_WINDOWS) {
       // /T 连子孙一起杀，/F 强制。先把树杀掉，再按 pid 确认是否真的消失。
-      await runExec('taskkill', ['/PID', String(pid), '/T', '/F'], { timeout: 15_000 });
+      await runExec("taskkill", ["/PID", String(pid), "/T", "/F"], { timeout: 15_000 });
     } else {
       // POSIX：进程组（detached 时 pid 即组长）。杀不到再退化到单进程。
       try {
-        process.kill(-pid, 'SIGTERM');
+        process.kill(-pid, "SIGTERM");
       } catch {
         try {
-          process.kill(pid, 'SIGTERM');
+          process.kill(pid, "SIGTERM");
         } catch {
           /* 已经不在了 */
         }
       }
       await sleep(opts.graceMs ?? 500);
       try {
-        process.kill(-pid, 'SIGKILL');
+        process.kill(-pid, "SIGKILL");
       } catch {
         try {
-          process.kill(pid, 'SIGKILL');
+          process.kill(pid, "SIGKILL");
         } catch {
           /* 已经不在了 */
         }

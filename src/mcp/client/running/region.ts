@@ -76,9 +76,7 @@ export function runningPreviewStatus(now: number): RuntimeStatus {
       {
         sessionId: "preview-child-0002",
         parentSessionId: "preview-parent-0001",
-        instances: [
-          { server: "fetch", state: "connecting", startedAt: now - 5_000, lastUsedAt: now - 5_000 },
-        ],
+        instances: [{ server: "fetch", state: "connecting", startedAt: now - 5_000, lastUsedAt: now - 5_000 }],
       },
     ],
   };

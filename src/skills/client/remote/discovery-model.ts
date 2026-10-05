@@ -20,7 +20,9 @@ export function discoveredKey(skill: { repo: string; skillPath: string }): strin
 function matchesText(skill: DiscoveredSkill, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (q === "") return true;
-  return [skill.name, skill.dirName, skill.description, skill.repo].some((value) => typeof value === "string" && value.toLowerCase().includes(q));
+  return [skill.name, skill.dirName, skill.description, skill.repo].some(
+    (value) => typeof value === "string" && value.toLowerCase().includes(q),
+  );
 }
 
 export interface DiscoveryFilter {
@@ -39,14 +41,20 @@ export function filterDiscovered(skills: readonly DiscoveredSkill[], filter: Dis
   return skills
     .filter((skill) => matchesText(skill, filter.query) && matchesRepo(skill, filter.repo))
     .filter((skill) => filter.installed === "all" || (filter.installed === "yes") === (skill.installedId !== undefined))
-    .sort((left, right) =>
-      Number(left.installedId !== undefined) - Number(right.installedId !== undefined) ||
-      (left.name ?? left.dirName).localeCompare(right.name ?? right.dirName) ||
-      left.repo.localeCompare(right.repo));
+    .sort(
+      (left, right) =>
+        Number(left.installedId !== undefined) - Number(right.installedId !== undefined) ||
+        (left.name ?? left.dirName).localeCompare(right.name ?? right.dirName) ||
+        left.repo.localeCompare(right.repo),
+    );
 }
 
 /** 分段上的计数（受搜索与仓库筛选影响，不受已安装筛选影响）。 */
-export function installedCounts(skills: readonly DiscoveredSkill[], query: string, repo: string): Record<InstalledFilter, number> {
+export function installedCounts(
+  skills: readonly DiscoveredSkill[],
+  query: string,
+  repo: string,
+): Record<InstalledFilter, number> {
   const base = skills.filter((skill) => matchesText(skill, query) && matchesRepo(skill, repo));
   const yes = base.filter((skill) => skill.installedId !== undefined).length;
   return { all: base.length, not: base.length - yes, yes };
@@ -63,7 +71,11 @@ export function installPlan(picked: Iterable<{ repo: string; ref?: string; skill
   const groups = new Map<string, InstallGroup>();
   for (const item of picked) {
     const key = item.repo.toLowerCase() + "@" + (item.ref ?? "");
-    const group = groups.get(key) ?? { repo: item.repo, ...(item.ref === undefined ? {} : { ref: item.ref }), skillPaths: [] };
+    const group = groups.get(key) ?? {
+      repo: item.repo,
+      ...(item.ref === undefined ? {} : { ref: item.ref }),
+      skillPaths: [],
+    };
     if (!group.skillPaths.includes(item.skillPath)) group.skillPaths.push(item.skillPath);
     groups.set(key, group);
   }
@@ -146,7 +158,11 @@ export interface DiscoveryGroup {
 }
 
 /** 把筛选后的技能按仓库分组：顺序跟仓库列表一致，列表里没有的仓库排在后面（按名称）；没有技能的组不出现。 */
-export function groupDiscovered(all: readonly DiscoveredSkill[], filtered: readonly DiscoveredSkill[], repoOrder: readonly string[]): DiscoveryGroup[] {
+export function groupDiscovered(
+  all: readonly DiscoveredSkill[],
+  filtered: readonly DiscoveredSkill[],
+  repoOrder: readonly string[],
+): DiscoveryGroup[] {
   const totals = new Map<string, number>();
   for (const skill of all) totals.set(skill.repo.toLowerCase(), (totals.get(skill.repo.toLowerCase()) ?? 0) + 1);
   const groups = new Map<string, DiscoveryGroup>();
@@ -161,7 +177,9 @@ export function groupDiscovered(all: readonly DiscoveredSkill[], filtered: reado
     const index = order.indexOf(repo.toLowerCase());
     return index === -1 ? order.length : index;
   };
-  return [...groups.values()].sort((left, right) => rank(left.repo) - rank(right.repo) || left.repo.localeCompare(right.repo));
+  return [...groups.values()].sort(
+    (left, right) => rank(left.repo) - rank(right.repo) || left.repo.localeCompare(right.repo),
+  );
 }
 
 /** 这一次筛选的标识；不筛选时是 ""。 */
@@ -189,13 +207,21 @@ function filteredOpen(fold: RepoFold, filterKey: string): ReadonlyMap<string, bo
   return fold.filtered.filterKey === filterKey ? fold.filtered.open : new Map();
 }
 
-export function repoExpanded(fold: RepoFold, filterKey: string, group: Pick<DiscoveryGroup, "repo" | "total">): boolean {
+export function repoExpanded(
+  fold: RepoFold,
+  filterKey: string,
+  group: Pick<DiscoveryGroup, "repo" | "total">,
+): boolean {
   const key = group.repo.toLowerCase();
   if (filterKey === "") return fold.normal.get(key) ?? group.total <= LARGE_REPO;
   return filteredOpen(fold, filterKey).get(key) ?? true;
 }
 
-export function toggleRepoFold(fold: RepoFold, filterKey: string, group: Pick<DiscoveryGroup, "repo" | "total">): RepoFold {
+export function toggleRepoFold(
+  fold: RepoFold,
+  filterKey: string,
+  group: Pick<DiscoveryGroup, "repo" | "total">,
+): RepoFold {
   const key = group.repo.toLowerCase();
   const next = !repoExpanded(fold, filterKey, group);
   if (filterKey === "") return { ...fold, normal: new Map(fold.normal).set(key, next) };

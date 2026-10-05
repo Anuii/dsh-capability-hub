@@ -27,8 +27,18 @@ import { fileURLToPath } from "node:url";
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "src");
 
 type Zone =
-  | "host:skills-local" | "host:skills-remote" | "host:mcp-config" | "host:mcp-runtime" | "host:platform"
-  | "client:skills" | "client:mcp" | "client:platform" | "kit" | "contract" | "shared" | "unknown";
+  | "host:skills-local"
+  | "host:skills-remote"
+  | "host:mcp-config"
+  | "host:mcp-runtime"
+  | "host:platform"
+  | "client:skills"
+  | "client:mcp"
+  | "client:platform"
+  | "kit"
+  | "contract"
+  | "shared"
+  | "unknown";
 
 const ZONES: Array<[RegExp, Zone]> = [
   [/^skills\/local\//, "host:skills-local"],
@@ -48,13 +58,22 @@ function zoneOf(rel: string): Zone {
   return ZONES.find(([pattern]) => pattern.test(rel))?.[1] ?? "unknown";
 }
 
-const isHostFeature = (zone: Zone): boolean => zone === "host:skills-local" || zone === "host:skills-remote" || zone === "host:mcp-config" || zone === "host:mcp-runtime";
+const isHostFeature = (zone: Zone): boolean =>
+  zone === "host:skills-local" ||
+  zone === "host:skills-remote" ||
+  zone === "host:mcp-config" ||
+  zone === "host:mcp-runtime";
 const isHost = (zone: Zone): boolean => isHostFeature(zone) || zone === "host:platform";
-const isClient = (zone: Zone): boolean => zone === "client:skills" || zone === "client:mcp" || zone === "client:platform" || zone === "kit";
+const isClient = (zone: Zone): boolean =>
+  zone === "client:skills" || zone === "client:mcp" || zone === "client:platform" || zone === "kit";
 /** 客户端外壳对功能公开的文件。 */
 const PLATFORM_CLIENT_PUBLIC = new Set(["platform/client/api.ts", "platform/client/tab-props.ts"]);
 
-interface Edge { from: string; to: string; typeOnly: boolean }
+interface Edge {
+  from: string;
+  to: string;
+  typeOnly: boolean;
+}
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -69,7 +88,8 @@ const rel = (full: string): string => path.relative(SRC, full).split(path.sep).j
 
 function edges(): Edge[] {
   const out: Edge[] = [];
-  const pattern = /(?:^|\n)\s*(?:import|export)\s+(type\s+)?(?:[^'";]*?\s+from\s+)?["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/g;
+  const pattern =
+    /(?:^|\n)\s*(?:import|export)\s+(type\s+)?(?:[^'";]*?\s+from\s+)?["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/g;
   for (const file of sourceFiles(SRC)) {
     const text = fs.readFileSync(file, "utf8");
     for (const match of text.matchAll(pattern)) {
@@ -97,14 +117,17 @@ function violation(edge: Edge): string | undefined {
   if (a === "kit") return "kit 只引用 kit（规则 4）";
   if (b === "kit") return undefined;
   if (a === "client:platform") return undefined;
-  if (b === "client:platform") return PLATFORM_CLIENT_PUBLIC.has(edge.to) ? undefined : "功能只能用客户端外壳的 api.ts / tab-props.ts（规则 5）";
+  if (b === "client:platform")
+    return PLATFORM_CLIENT_PUBLIC.has(edge.to) ? undefined : "功能只能用客户端外壳的 api.ts / tab-props.ts（规则 5）";
   return "客户端功能之间互不 import（规则 5）";
 }
 
 test("架构规则：没有越界的 import", () => {
   const all = edges();
   assert.ok(all.length > 300, "应当扫描到足够多的 import（实际 " + all.length + "）");
-  const bad = all.map((edge) => ({ edge, why: violation(edge) })).filter((item) => item.why !== undefined)
+  const bad = all
+    .map((edge) => ({ edge, why: violation(edge) }))
+    .filter((item) => item.why !== undefined)
     .map((item) => item.edge.from + " → " + item.edge.to + "：" + item.why);
   assert.deepEqual(bad, []);
 });

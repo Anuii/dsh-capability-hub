@@ -10,22 +10,22 @@
 
 /** 构造限定名。 */
 export function qualify(serverName: string, toolName: string): string {
-  return serverName + '__' + toolName;
+  return serverName + "__" + toolName;
 }
 
-const STAR = '\u0000STAR\u0000';
+const STAR = "\u0000STAR\u0000";
 
 /** glob → 正则（只有 * 是元字符，其余字面量）。 */
 export function globToRegExp(pattern: string): RegExp {
-  const parts = pattern.split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, (ch) => '\\' + ch));
-  return new RegExp('^(?:' + parts.join('.*') + ')$', 'i');
+  const parts = pattern.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, (ch) => "\\" + ch));
+  return new RegExp("^(?:" + parts.join(".*") + ")$", "i");
 }
 
 const globCache = new Map<string, RegExp>();
 
 export function matchesPattern(pattern: string, candidate: string): boolean {
   if (pattern === candidate) return true;
-  if (!pattern.includes('*')) return pattern.toLowerCase() === candidate.toLowerCase();
+  if (!pattern.includes("*")) return pattern.toLowerCase() === candidate.toLowerCase();
   let regexp = globCache.get(pattern);
   if (regexp === undefined) {
     regexp = globToRegExp(pattern);
@@ -38,7 +38,7 @@ export function matchesPattern(pattern: string, candidate: string): boolean {
 /** 一个工具可以被三种拼写寻址。 */
 export function toolCandidates(serverName: string, originalName: string): string[] {
   const qualified = qualify(serverName, originalName);
-  const tail = qualified.slice(qualified.indexOf('__') + 2);
+  const tail = qualified.slice(qualified.indexOf("__") + 2);
   const list = [originalName, qualified];
   if (tail !== originalName) list.push(tail);
   return list;
@@ -78,7 +78,7 @@ export function keywordsFor(
     if (!Array.isArray(values)) continue;
     if (!matchesAny([key], server.serverName, originalName)) continue;
     for (const value of values) {
-      if (typeof value === 'string' && value.length > 0 && !seen.has(value)) {
+      if (typeof value === "string" && value.length > 0 && !seen.has(value)) {
         seen.add(value);
         out.push(value);
       }

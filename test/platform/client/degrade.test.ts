@@ -27,9 +27,11 @@ function health(overrides: {
     tool: { registered: overrides.registered ?? true, name: "mcp", description: "" },
     host: { pid: 1, nodeVersion: "24", startedAt: "" },
     sessionEvents: [],
-    ...(overrides.runtimeSource === undefined ? {} : {
-      wiring: { runtimeSource: overrides.runtimeSource, lockStashBound: true, runtimeStarted: true, notes: [] },
-    }),
+    ...(overrides.runtimeSource === undefined
+      ? {}
+      : {
+          wiring: { runtimeSource: overrides.runtimeSource, lockStashBound: true, runtimeStarted: true, notes: [] },
+        }),
     serverTime: "",
   } as HealthPayload;
 }
@@ -44,10 +46,15 @@ test("一切正常时不显示横幅（首屏常驻元素只有页头 / 标签 /
 });
 
 test("有模块降级时列出模块名", () => {
-  const info = degradeInfo(health({
-    modules: [{ name: "demo", status: "ok" }, { name: "mcp-runtime", status: "degraded" }],
-    runtimeSource: "real",
-  }));
+  const info = degradeInfo(
+    health({
+      modules: [
+        { name: "demo", status: "ok" },
+        { name: "mcp-runtime", status: "degraded" },
+      ],
+      runtimeSource: "real",
+    }),
+  );
   assert.deepEqual(info, { degraded: ["mcp-runtime"], stubTool: false });
   assert.deepEqual(degradeNames(info!, "mcp 工具"), ["mcp-runtime"]);
 });
@@ -64,16 +71,24 @@ test("mcp 工具没注册也算降级", () => {
 });
 
 test("模块降级 + 工具退回桩：两个名字都进横幅", () => {
-  const info = degradeInfo(health({
-    modules: [{ name: "mcp-config", status: "degraded" }, { name: "mcp-runtime", status: "degraded" }],
-    runtimeSource: "stub",
-  }));
+  const info = degradeInfo(
+    health({
+      modules: [
+        { name: "mcp-config", status: "degraded" },
+        { name: "mcp-runtime", status: "degraded" },
+      ],
+      runtimeSource: "stub",
+    }),
+  );
   assert.deepEqual(degradeNames(info!, "mcp 工具"), ["mcp-config", "mcp-runtime", "mcp 工具"]);
 });
 
 test("升级后没重启：宿主与浏览器半版本不一致时给出提示；一致、开发构建或没有 health 时不提示", () => {
   const base = health({});
-  const withHost = (pluginVersion?: string): HealthPayload => ({ ...base, host: { ...base.host, ...(pluginVersion === undefined ? {} : { pluginVersion }) } });
+  const withHost = (pluginVersion?: string): HealthPayload => ({
+    ...base,
+    host: { ...base.host, ...(pluginVersion === undefined ? {} : { pluginVersion }) },
+  });
   assert.equal(hostVersionMismatch(undefined, "0.3.1"), undefined);
   assert.equal(hostVersionMismatch(withHost("0.3.1"), "0.3.1"), undefined);
   assert.equal(hostVersionMismatch(withHost("0.3.0"), "0.3.1"), "0.3.0");

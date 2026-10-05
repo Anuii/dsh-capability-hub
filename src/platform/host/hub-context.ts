@@ -122,7 +122,11 @@ function collectChildren(container: unknown, out: LoaderEntryLike[]): void {
         const produced = (value as () => unknown).call(container);
         if (Array.isArray(produced)) {
           for (const item of produced) if (isEntryLike(item)) out.push(item);
-        } else if (produced !== undefined && produced !== null && typeof (produced as Iterable<unknown>)[Symbol.iterator] === "function") {
+        } else if (
+          produced !== undefined &&
+          produced !== null &&
+          typeof (produced as Iterable<unknown>)[Symbol.iterator] === "function"
+        ) {
           for (const item of produced as Iterable<unknown>) if (isEntryLike(item)) out.push(item);
         }
       } catch {
@@ -203,7 +207,11 @@ function resolveAgentPresetSkillsDir(): string | undefined {
   const attempts: AgentPresetResolveAttempt[] = [];
   agentPresetAttempts = attempts;
   const finish = (dir: string | undefined): string | undefined => {
-    attempts.push({ via: "结果", ...(dir === undefined ? {} : { skillsDir: dir }), exists: dir !== undefined && existsSync(dir) });
+    attempts.push({
+      via: "结果",
+      ...(dir === undefined ? {} : { skillsDir: dir }),
+      exists: dir !== undefined && existsSync(dir),
+    });
     return dir;
   };
 
@@ -306,12 +314,16 @@ interface PluginSpecLike {
 function pluginSpecsOf(container: unknown): PluginSpecLike[] {
   if (container === undefined || container === null) return [];
   if (Array.isArray(container)) {
-    return container.filter((item): item is PluginSpecLike => typeof item === "object" && item !== null) as PluginSpecLike[];
+    return container.filter(
+      (item): item is PluginSpecLike => typeof item === "object" && item !== null,
+    ) as PluginSpecLike[];
   }
   if (typeof container === "object") {
     const record = container as PluginSpecLike;
     if (Array.isArray(record.plugins)) {
-      return record.plugins.filter((item): item is PluginSpecLike => typeof item === "object" && item !== null) as PluginSpecLike[];
+      return record.plugins.filter(
+        (item): item is PluginSpecLike => typeof item === "object" && item !== null,
+      ) as PluginSpecLike[];
     }
     if (typeof record.name === "string") return [record];
   }
@@ -431,7 +443,12 @@ export function readSkillProviderConfig(ctx: unknown): SkillProviderScan {
       ...(unresolved.length === 0 ? {} : { unresolvedDirs: unresolved }),
       ...(viaExpr ? { viaExpr: true } : {}),
       ...(added.length === 0 && bundled === undefined
-        ? { note: unresolved.length > 0 ? "customSkillDirs 是未解析的 !!js 表达式，且本进程推不出等价路径" : "该来源没有配置 customSkillDirs" }
+        ? {
+            note:
+              unresolved.length > 0
+                ? "customSkillDirs 是未解析的 !!js 表达式，且本进程推不出等价路径"
+                : "该来源没有配置 customSkillDirs",
+          }
         : {}),
     });
   };
@@ -479,7 +496,9 @@ export function readSkillProviderConfig(ctx: unknown): SkillProviderScan {
       const fiberConfig = entry.fiber?.config;
       const rawConfig = entry.options?.config;
       const source: SkillProviderContribution["source"] = fiberConfig !== undefined ? "fiber" : "options";
-      const config = (source === "fiber" ? fiberConfig : rawConfig) as { customSkillDirs?: unknown; bundledSkillDir?: unknown } | undefined;
+      const config = (source === "fiber" ? fiberConfig : rawConfig) as
+        | { customSkillDirs?: unknown; bundledSkillDir?: unknown }
+        | undefined;
       absorb("entry", id, name, disabled, config, source);
     }
 
@@ -589,7 +608,10 @@ export function probeSkillSources(ctx: unknown): {
    * agent 预设里声明的插件清单（截断）。用途：证明 `!!js` 表达式在**插件声明里**
    * 的保留形态（{\__jsExpr: "..."}）—— desktop 的 customSkillDirs 就是一条 !!js 表达式。
    */
-  presetSpecs: Array<{ entry: string; specs: Array<{ id: string; name: string; disabled: boolean; configKeys: string[]; configPreview: string }> }>;
+  presetSpecs: Array<{
+    entry: string;
+    specs: Array<{ id: string; name: string; disabled: boolean; configKeys: string[]; configPreview: string }>;
+  }>;
   /** `!!js` 等价路径推导的逐步记录。 */
   agentPresetResolve: AgentPresetResolveAttempt[];
   /** skills 服务自身的形状探测（找运行期已解析的技能根）。 */
@@ -640,7 +662,18 @@ export function probeSkillSources(ctx: unknown): {
               const own = Object.keys(entry).join("|");
               const optionKeys = Object.keys(options as object).join("|");
               const direct = Object.keys(entry)
-                .map((key) => key + "=" + (() => { try { return JSON.stringify(entry[key])?.slice(0, 120); } catch { return "?"; } })())
+                .map(
+                  (key) =>
+                    key +
+                    "=" +
+                    (() => {
+                      try {
+                        return JSON.stringify(entry[key])?.slice(0, 120);
+                      } catch {
+                        return "?";
+                      }
+                    })(),
+                )
                 .join(" ; ");
               entryShape = "own[" + own + "] options[" + optionKeys + "] " + direct;
             } catch {
@@ -650,7 +683,8 @@ export function probeSkillSources(ctx: unknown): {
             try {
               const fiber = entry.fiber;
               const fiberConfig = fiber?.config;
-              fiberShape = "fiber?=" + (fiber !== undefined) + " fiberCfg=" + JSON.stringify(fiberConfig ?? null).slice(0, 400);
+              fiberShape =
+                "fiber?=" + (fiber !== undefined) + " fiberCfg=" + JSON.stringify(fiberConfig ?? null).slice(0, 400);
             } catch {
               fiberShape = "fiber=(循环)";
             }
@@ -689,7 +723,11 @@ export function probeSkillSources(ctx: unknown): {
           }
           skillsProbe[key] = { kind: "Map", size: value.size, items };
         } else if (Array.isArray(value)) {
-          skillsProbe[key] = { kind: "Array", size: value.length, items: value.slice(0, 8).map((item) => previewOf(item).slice(0, 300)) };
+          skillsProbe[key] = {
+            kind: "Array",
+            size: value.length,
+            items: value.slice(0, 8).map((item) => previewOf(item).slice(0, 300)),
+          };
         } else if (value !== null && typeof value === "object") {
           // layers.global / layers.scoped 里可能藏着「运行期已解析」的技能根，深挖一层。
           const deep: Record<string, unknown> = {};
@@ -706,7 +744,11 @@ export function probeSkillSources(ctx: unknown): {
                 }
                 deep[sub] = { kind: "Map", size: inner.size, items };
               } else if (Array.isArray(inner)) {
-                deep[sub] = { kind: "Array", size: inner.length, items: inner.slice(0, 10).map((item) => previewOf(item).slice(0, 400)) };
+                deep[sub] = {
+                  kind: "Array",
+                  size: inner.length,
+                  items: inner.slice(0, 10).map((item) => previewOf(item).slice(0, 400)),
+                };
               } else {
                 deep[sub] = { kind: typeof inner, value: previewOf(inner).slice(0, 300) };
               }
@@ -732,20 +774,26 @@ export function probeSkillSources(ctx: unknown): {
     skillProviders: readSkillProviderConfig(ctx),
     tree: dumpEntryTree(ctx),
     presetSpecs: (() => {
-      const out: Array<{ entry: string; specs: Array<{ id: string; name: string; disabled: boolean; configKeys: string[]; configPreview: string }> }> = [];
+      const out: Array<{
+        entry: string;
+        specs: Array<{ id: string; name: string; disabled: boolean; configKeys: string[]; configPreview: string }>;
+      }> = [];
       try {
         const loader2 = safeGet(ctx, "loader") as { entries?(): Iterable<unknown> } | undefined;
         for (const raw of loader2?.entries?.() ?? []) {
           if (!isEntryLike(raw)) continue;
           const entryName = typeof raw.options?.name === "string" ? raw.options.name : "";
           if (!entryName.endsWith("dsh-agent-preset")) continue;
-          const specs = pluginSpecsOf(raw.options?.config).slice(0, 40).map((spec) => ({
-            id: typeof spec.id === "string" ? spec.id : "",
-            name: typeof spec.name === "string" ? spec.name : "",
-            disabled: spec.disabled === true,
-            configKeys: spec.config !== null && typeof spec.config === "object" ? Object.keys(spec.config as object) : [],
-            configPreview: previewOf(spec.config),
-          }));
+          const specs = pluginSpecsOf(raw.options?.config)
+            .slice(0, 40)
+            .map((spec) => ({
+              id: typeof spec.id === "string" ? spec.id : "",
+              name: typeof spec.name === "string" ? spec.name : "",
+              disabled: spec.disabled === true,
+              configKeys:
+                spec.config !== null && typeof spec.config === "object" ? Object.keys(spec.config as object) : [],
+              configPreview: previewOf(spec.config),
+            }));
           out.push({ entry: typeof raw.options?.id === "string" ? raw.options.id : entryName, specs });
         }
       } catch {
@@ -765,7 +813,9 @@ export function probeSkillSources(ctx: unknown): {
           if (!entryName.endsWith("dsh-agent-preset")) continue;
           const fiberConfig = raw.fiber?.config as { plugins?: unknown } | undefined;
           const specs = pluginSpecsOf(fiberConfig?.plugins);
-          const skill = specs.find((spec) => typeof spec.name === "string" && spec.name.endsWith("dsh-skill-filesystem"));
+          const skill = specs.find(
+            (spec) => typeof spec.name === "string" && spec.name.endsWith("dsh-skill-filesystem"),
+          );
           out.push({
             entry: typeof raw.options?.id === "string" ? raw.options.id : entryName,
             count: specs.length,
@@ -777,9 +827,10 @@ export function probeSkillSources(ctx: unknown): {
       }
       return out;
     })(),
-    bundledEnv: typeof process.env.DSH_BUNDLED_SKILL_DIR === "string" && process.env.DSH_BUNDLED_SKILL_DIR !== ""
-      ? process.env.DSH_BUNDLED_SKILL_DIR
-      : null,
+    bundledEnv:
+      typeof process.env.DSH_BUNDLED_SKILL_DIR === "string" && process.env.DSH_BUNDLED_SKILL_DIR !== ""
+        ? process.env.DSH_BUNDLED_SKILL_DIR
+        : null,
   };
 }
 
@@ -814,9 +865,10 @@ export function resolveHubContext(
 ): PlatformContext {
   const log = logger ?? makeLogger(ctx);
   const overrides = config?.devOverrides;
-  const overrideHome = overrides?.enabled === true && typeof overrides.homeDir === "string" && overrides.homeDir.trim() !== ""
-    ? resolve(overrides.homeDir)
-    : undefined;
+  const overrideHome =
+    overrides?.enabled === true && typeof overrides.homeDir === "string" && overrides.homeDir.trim() !== ""
+      ? resolve(overrides.homeDir)
+      : undefined;
   const homeDir = overrideHome ?? homedir();
   const dshHome = resolveDshHome(homeDir);
   const hubHome = join(dshHome, "storages", "dsh-capability-hub");
@@ -839,8 +891,10 @@ export function resolveHubContext(
   };
   log.info(
     `技能根来源：遍历 ${skills.scannedEntries} 个条目，命中 skill-filesystem ${skills.matched} 个（未停用 ${skills.active} 个）` +
-    `，customSkillDirs ${skills.customSkillDirs.length} 个` +
-    (skills.bundledSkillDir === undefined ? "，bundledSkillDir 未取到" : `，bundledSkillDir（${skills.bundledSource}）=${skills.bundledSkillDir}`),
+      `，customSkillDirs ${skills.customSkillDirs.length} 个` +
+      (skills.bundledSkillDir === undefined
+        ? "，bundledSkillDir 未取到"
+        : `，bundledSkillDir（${skills.bundledSource}）=${skills.bundledSkillDir}`),
   );
   for (const note of skills.contributions.filter((c) => c.disabled || c.note !== undefined)) {
     log.debug(`skill-filesystem 来源 ${note.kind}/${note.id}：${note.disabled ? "已停用" : (note.note ?? "已采用")}`);

@@ -5,30 +5,30 @@
  * - 否则：在 PATH 的每个目录里依次尝试原命令名与 PATHEXT 后缀，返回第一个命中项。
  */
 
-import { constants } from 'node:fs';
-import { access, stat } from 'node:fs/promises';
-import { delimiter, isAbsolute, join, resolve, sep } from 'node:path';
+import { constants } from "node:fs";
+import { access, stat } from "node:fs/promises";
+import { delimiter, isAbsolute, join, resolve, sep } from "node:path";
 
-import type { CommandCheckOptions } from './types.ts';
-import type { CommandCheckResult } from '../contract/config.ts';
+import type { CommandCheckOptions } from "./types.ts";
+import type { CommandCheckResult } from "../contract/config.ts";
 
-export type { CommandCheckOptions } from './types.ts';
+export type { CommandCheckOptions } from "./types.ts";
 export type CheckCommandOptions = CommandCheckOptions;
 
 function splitPathEnv(pathEnv: string | undefined, platform: NodeJS.Platform): string[] {
-  if (pathEnv === undefined || pathEnv === '') return [];
-  const parts = pathEnv.split(delimiter).filter((p) => p !== '');
-  if (platform === 'win32') return parts.map((p) => p.replace(/^"|"$/g, ''));
+  if (pathEnv === undefined || pathEnv === "") return [];
+  const parts = pathEnv.split(delimiter).filter((p) => p !== "");
+  if (platform === "win32") return parts.map((p) => p.replace(/^"|"$/g, ""));
   return parts;
 }
 
 function extensions(raw: string | undefined, platform: NodeJS.Platform): string[] {
-  const source = raw === undefined || raw === '' ? (platform === 'win32' ? '.COM;.EXE;.BAT;.CMD' : '') : raw;
+  const source = raw === undefined || raw === "" ? (platform === "win32" ? ".COM;.EXE;.BAT;.CMD" : "") : raw;
   return source
-    .split(';')
+    .split(";")
     .map((e) => e.trim())
-    .filter((e) => e !== '')
-    .map((e) => (e.startsWith('.') ? e : '.' + e));
+    .filter((e) => e !== "")
+    .map((e) => (e.startsWith(".") ? e : "." + e));
 }
 
 async function isFile(target: string): Promise<boolean> {
@@ -46,9 +46,10 @@ export async function checkCommandCandidates(command: string, opts: CheckCommand
   const platform = opts.platform ?? process.platform;
   const cwd = opts.cwd ?? process.cwd();
   const trimmed = command.trim();
-  if (trimmed === '') return [];
+  if (trimmed === "") return [];
 
-  const hasSeparator = trimmed.includes('/') || trimmed.includes('\\') || isAbsolute(trimmed) || /^[A-Za-z]:/.test(trimmed);
+  const hasSeparator =
+    trimmed.includes("/") || trimmed.includes("\\") || isAbsolute(trimmed) || /^[A-Za-z]:/.test(trimmed);
   const candidates: string[] = [];
   if (hasSeparator) {
     candidates.push(isAbsolute(trimmed) ? trimmed : resolve(cwd, trimmed));

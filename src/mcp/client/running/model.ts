@@ -8,7 +8,12 @@
  */
 
 import { t } from "./strings.ts";
-import type { RuntimeFailureView, RuntimeInstanceView, RuntimeServerView, RuntimeSessionView } from "../../contract/runtime.ts";
+import type {
+  RuntimeFailureView,
+  RuntimeInstanceView,
+  RuntimeServerView,
+  RuntimeSessionView,
+} from "../../contract/runtime.ts";
 
 /** 自动刷新间隔（任务书：可见时每 5 秒一次）。 */
 export const POLL_INTERVAL_MS = 5000;
@@ -26,8 +31,17 @@ export function formatTime(value: unknown): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return (
-    String(date.getFullYear()) + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
-    " " + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds())
+    String(date.getFullYear()) +
+    "-" +
+    pad(date.getMonth() + 1) +
+    "-" +
+    pad(date.getDate()) +
+    " " +
+    pad(date.getHours()) +
+    ":" +
+    pad(date.getMinutes()) +
+    ":" +
+    pad(date.getSeconds())
   );
 }
 
@@ -133,7 +147,9 @@ export function filterSessions(
   currentSessionId: string | undefined,
 ): RuntimeSessionView[] {
   if (!onlyCurrent || currentSessionId === undefined || currentSessionId === "") return [...sessions];
-  return sessions.filter((session) => session.sessionId === currentSessionId || session.parentSessionId === currentSessionId);
+  return sessions.filter(
+    (session) => session.sessionId === currentSessionId || session.parentSessionId === currentSessionId,
+  );
 }
 
 /** 父会话排在子会话前面（其余保持服务端给的顺序，稳定排序）。 */
@@ -230,8 +246,12 @@ export interface SessionGroupView {
 /** 把（已经过滤过的）会话按父子关系收成若干组，父会话按原顺序。 */
 export function sessionGroups(sessions: readonly RuntimeSessionView[]): SessionGroupView[] {
   const ids = new Set(sessions.map((session) => session.sessionId));
-  const roots = sessions.filter((session) => session.parentSessionId === undefined || !ids.has(session.parentSessionId));
-  const childs = sessions.filter((session) => session.parentSessionId !== undefined && ids.has(session.parentSessionId));
+  const roots = sessions.filter(
+    (session) => session.parentSessionId === undefined || !ids.has(session.parentSessionId),
+  );
+  const childs = sessions.filter(
+    (session) => session.parentSessionId !== undefined && ids.has(session.parentSessionId),
+  );
   return roots.map((parent) => ({
     parent,
     children: childs.filter((child) => child.parentSessionId === parent.sessionId),

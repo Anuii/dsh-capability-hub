@@ -14,12 +14,12 @@
  *    lifecycle、debug、toolCallTimeoutMs、meta）刻意不进哈希 —— 改「怎么展示」不该丢掉好不容易拉到的目录，
  *    改「怎么到达」必须丢掉。envFrom **只在非空时**才进哈希：否则一个空对象默认值会给所有既有条目换 digest。
  */
-import { createHash } from 'node:crypto';
-import { join } from 'node:path';
-import { CACHE_FILE_NAME, CACHE_MAX_AGE_MS, CACHE_VERSION, MCP_DIR_NAME } from '../constants.ts';
-import { atomicWriteFile, readTextFile } from './fsx.ts';
-import type { EffectiveServer } from '../../contract/config.ts';
-import type { Clock } from './clock.ts';
+import { createHash } from "node:crypto";
+import { join } from "node:path";
+import { CACHE_FILE_NAME, CACHE_MAX_AGE_MS, CACHE_VERSION, MCP_DIR_NAME } from "../constants.ts";
+import { atomicWriteFile, readTextFile } from "./fsx.ts";
+import type { EffectiveServer } from "../../contract/config.ts";
+import type { Clock } from "./clock.ts";
 
 export interface CachedTool {
   name: string;
@@ -41,12 +41,12 @@ export interface MetadataCacheFile {
 
 /** 稳定的字符串化（键排序），保证同样的配置永远得到同样的哈希。 */
 function canonical(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
-  if (Array.isArray(value)) return '[' + value.map((item) => canonical(item)).join(',') + ']';
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return "[" + value.map((item) => canonical(item)).join(",") + "]";
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(([, v]) => v !== undefined)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + canonical(v)).join(',') + '}';
+  return "{" + entries.map(([k, v]) => JSON.stringify(k) + ":" + canonical(v)).join(",") + "}";
 }
 
 /** configHash 只覆盖传输相关字段（F3-Q3 computeConfigHash）。 */
@@ -62,7 +62,7 @@ export function computeConfigHash(server: EffectiveServer): string {
     headers: server.headers ?? {},
   };
   if (Object.keys(envFrom).length > 0) payload.envFrom = envFrom;
-  return createHash('sha256').update(canonical(payload)).digest('hex');
+  return createHash("sha256").update(canonical(payload)).digest("hex");
 }
 
 export function isEntryValid(entry: CacheEntry | undefined, server: EffectiveServer, now: number): boolean {
@@ -77,29 +77,30 @@ export function isEntryStale(entry: CacheEntry | undefined, now: number): boolea
 }
 
 function sanitizeTool(value: unknown): CachedTool | undefined {
-  if (value === null || typeof value !== 'object') return undefined;
+  if (value === null || typeof value !== "object") return undefined;
   const tool = value as Record<string, unknown>;
-  if (typeof tool.name !== 'string' || tool.name.length === 0) return undefined;
+  if (typeof tool.name !== "string" || tool.name.length === 0) return undefined;
   return {
     name: tool.name,
-    description: typeof tool.description === 'string' ? tool.description : '',
-    inputSchema: tool.inputSchema ?? { type: 'object' },
+    description: typeof tool.description === "string" ? tool.description : "",
+    inputSchema: tool.inputSchema ?? { type: "object" },
   };
 }
 
 function sanitizeEntry(value: unknown): CacheEntry | undefined {
-  if (value === null || typeof value !== 'object') return undefined;
+  if (value === null || typeof value !== "object") return undefined;
   const entry = value as Record<string, unknown>;
-  if (typeof entry.configHash !== 'string') return undefined;
+  if (typeof entry.configHash !== "string") return undefined;
   if (!Array.isArray(entry.tools)) return undefined;
   const tools: CachedTool[] = [];
   for (const item of entry.tools) {
     const tool = sanitizeTool(item);
     if (tool) tools.push(tool);
   }
-  const updatedAt = typeof entry.updatedAt === 'number' ? entry.updatedAt : typeof entry.cachedAt === 'number' ? entry.cachedAt : 0;
+  const updatedAt =
+    typeof entry.updatedAt === "number" ? entry.updatedAt : typeof entry.cachedAt === "number" ? entry.cachedAt : 0;
   const result: CacheEntry = { configHash: entry.configHash, tools, updatedAt };
-  if (typeof entry.instructions === 'string') result.instructions = entry.instructions;
+  if (typeof entry.instructions === "string") result.instructions = entry.instructions;
   return result;
 }
 
@@ -108,11 +109,11 @@ function sanitizeEntry(value: unknown): CacheEntry | undefined {
  * （F3 CHANGELOG 0.3.0：畸形缓存不再阻止加载）。
  */
 export function sanitizeCacheFile(value: unknown): Record<string, CacheEntry> {
-  if (value === null || typeof value !== 'object') return {};
+  if (value === null || typeof value !== "object") return {};
   const file = value as Record<string, unknown>;
   if (file.version !== CACHE_VERSION) return {};
   const servers = file.servers;
-  if (servers === null || typeof servers !== 'object' || Array.isArray(servers)) return {};
+  if (servers === null || typeof servers !== "object" || Array.isArray(servers)) return {};
   const out: Record<string, CacheEntry> = {};
   for (const [name, raw] of Object.entries(servers as Record<string, unknown>)) {
     const entry = sanitizeEntry(raw);
@@ -134,7 +135,7 @@ export class MetadataCache {
 
   constructor(hubHome: string, clock: Clock, warn: (message: string) => void = () => undefined) {
     this.filePath = join(hubHome, MCP_DIR_NAME, CACHE_FILE_NAME);
-    this.spillDir = join(hubHome, MCP_DIR_NAME, 'spill');
+    this.spillDir = join(hubHome, MCP_DIR_NAME, "spill");
     this.#clock = clock;
     this.#warn = warn;
   }
@@ -158,7 +159,7 @@ export class MetadataCache {
     try {
       parsed = JSON.parse(text);
     } catch {
-      this.#warn('MCP 元数据缓存文件无法解析，已忽略：' + this.filePath);
+      this.#warn("MCP 元数据缓存文件无法解析，已忽略：" + this.filePath);
       this.#entries = {};
       this.#loaded = true;
       return;

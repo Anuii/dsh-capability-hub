@@ -88,11 +88,11 @@ test("分组 meta：项目级显示工作区下的相对路径，其余显示绝
   assert.equal(rootMetaPath(user, "C:\\work\\demo"), "C:\\home\\.agents\\skills");
 });
 
-
 /* ---------------- UI-C：路径缩写与分组顺序 ---------------- */
 
 const HOME = "C:\\Users\\you";
-const ASAR = "C:\\Users\\you\\AppData\\Local\\Programs\\DeepSeek Harness\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-preset\\skills";
+const ASAR =
+  "C:\\Users\\you\\AppData\\Local\\Programs\\DeepSeek Harness\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-preset\\skills";
 
 test("normalizePath：正反斜杠统一、去掉末尾分隔符与空白", () => {
   assert.equal(normalizePath("C:/Users/you\\.agents\\skills\\"), "C:\\Users\\you\\.agents\\skills");
@@ -110,12 +110,29 @@ test("isDshInstallPath：只认 app.asar 这一段", () => {
 });
 
 test("homeDirFromRoots：从 user-agents / user-dsh 的契约路径反推家目录", () => {
-  const both = [root("user-dsh", { path: HOME + "\\.dsh\\skills" }), root("user-agents", { path: HOME + "\\.agents\\skills" })];
+  const both = [
+    root("user-dsh", { path: HOME + "\\.dsh\\skills" }),
+    root("user-agents", { path: HOME + "\\.agents\\skills" }),
+  ];
   assert.equal(homeDirFromRoots(both), HOME);
-  assert.equal(homeDirFromRoots([root("user-agents", { path: "C:/Users/you/.agents/skills" })]), "C:\\Users\\you", "正反斜杠混用也能反推");
-  assert.equal(homeDirFromRoots([root("user-dsh", { path: HOME.toUpperCase() + "\\.dsh\\skills" })]), HOME.toUpperCase(), "盘符大小写不敏感");
+  assert.equal(
+    homeDirFromRoots([root("user-agents", { path: "C:/Users/you/.agents/skills" })]),
+    "C:\\Users\\you",
+    "正反斜杠混用也能反推",
+  );
+  assert.equal(
+    homeDirFromRoots([root("user-dsh", { path: HOME.toUpperCase() + "\\.dsh\\skills" })]),
+    HOME.toUpperCase(),
+    "盘符大小写不敏感",
+  );
   // 两条都给时取更短的那条（更靠近家目录）
-  assert.equal(homeDirFromRoots([root("user-agents", { path: HOME + "\\.agents\\skills" }), root("user-dsh", { path: HOME + "\\.dsh\\skills" })]), HOME);
+  assert.equal(
+    homeDirFromRoots([
+      root("user-agents", { path: HOME + "\\.agents\\skills" }),
+      root("user-dsh", { path: HOME + "\\.dsh\\skills" }),
+    ]),
+    HOME,
+  );
   assert.equal(homeDirFromRoots([root("project-agents", { path: "C:\\work\\demo\\.agents\\skills" })]), undefined);
   assert.equal(homeDirFromRoots([]), undefined);
 });
@@ -130,7 +147,10 @@ test("abbreviateHomePath：家目录下缩写为 ~\\…，其余原样", () => {
   // 家目录之外的路径一律原样返回（DSH 内置根就是这么躲过缩写的）
   assert.equal(abbreviateHomePath(ASAR, "C:\\Users\\you\\work\\project\\.dev\\home"), ASAR);
   // 家目录之下的路径照样缩写
-  assert.equal(abbreviateHomePath(ASAR, HOME), "~\\AppData\\Local\\Programs\\DeepSeek Harness\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-preset\\skills");
+  assert.equal(
+    abbreviateHomePath(ASAR, HOME),
+    "~\\AppData\\Local\\Programs\\DeepSeek Harness\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-preset\\skills",
+  );
   assert.equal(abbreviateHomePath("C:\\other\\x", undefined), "C:\\other\\x", "推不出家目录时原样返回");
   assert.equal(abbreviateHomePath("", HOME), "");
 });
@@ -163,14 +183,10 @@ test("分组顺序：项目级 → 用户级 → 只读根；同档保持接口�
     root("project-dsh", { path: "C:\\work\\demo\\.dsh\\skills", precedence: 100 }),
     root("project-agents", { path: "C:\\work\\demo\\.agents\\skills", precedence: 200 }),
   ];
-  assert.deepEqual(orderRoots(roots).map((item) => item.rootId), [
-    "project-dsh",
-    "project-agents",
-    "user-dsh",
-    "user-agents",
-    "custom-0",
-    "bundled",
-  ]);
+  assert.deepEqual(
+    orderRoots(roots).map((item) => item.rootId),
+    ["project-dsh", "project-agents", "user-dsh", "user-agents", "custom-0", "bundled"],
+  );
   assert.equal(rootRank("project-dsh"), 0);
   assert.equal(rootRank("user-agents"), 1);
   assert.equal(rootRank("custom-0"), 2);
@@ -207,8 +223,14 @@ test("排序与分组：组内按名称、根顺序不变、未知根兜底", ()
   assert.deepEqual(sorted, ["alpha", "beta", "only", "zeta"]);
 
   const groups = groupByRoot(roots, skills);
-  assert.deepEqual(groups.map((group) => group.root.rootId), ["user-dsh", "user-agents", "ghost-root"]);
-  assert.deepEqual(groups[0]!.skills.map((skill) => skill.name), ["alpha", "beta"]);
+  assert.deepEqual(
+    groups.map((group) => group.root.rootId),
+    ["user-dsh", "user-agents", "ghost-root"],
+  );
+  assert.deepEqual(
+    groups[0]!.skills.map((skill) => skill.name),
+    ["alpha", "beta"],
+  );
   assert.equal(groups[1]!.missing, true);
   assert.equal(groups[2]!.missing, false);
 });
@@ -225,14 +247,20 @@ test("搜索：命中名称 / 目录名 / id / 描述，空串不过滤", () => 
 
 test("四段筛选（UI-DESIGN §4）：全部 / 已启用 / 已停用 / 需关注", () => {
   const visible = makeSkill({ id: "a:visible", name: "visible" });
-  const disabled = makeSkill({ id: "a:disabled", name: "disabled", modelInvocationDisabled: true, modelVisible: false });
+  const disabled = makeSkill({
+    id: "a:disabled",
+    name: "disabled",
+    modelInvocationDisabled: true,
+    modelVisible: false,
+  });
   const broken = makeSkill({ id: "a:broken", name: "broken", loadable: false, modelVisible: false });
   const shadowed = makeSkill({ id: "a:shadowed", name: "shadowed", modelVisible: false, shadowedBy: "b:shadowed" });
   const updatable = makeSkill({ id: "a:updatable", name: "updatable" });
   const context: MatchContext = { updatable: new Set<string>(["a:updatable"]) };
 
   const all = [visible, disabled, broken, shadowed, updatable];
-  const ids = (filter: FilterId): string[] => all.filter((skill) => matchesFilter(skill, filter, context)).map((skill) => skill.id);
+  const ids = (filter: FilterId): string[] =>
+    all.filter((skill) => matchesFilter(skill, filter, context)).map((skill) => skill.id);
 
   assert.deepEqual(FILTERS, ["all", "enabled", "disabled", "attention"]);
   assert.equal(filterLabel("enabled"), "已启用");
@@ -257,13 +285,23 @@ test("分段计数", () => {
     makeSkill({ id: "a:3", name: "3", loadable: false, modelVisible: false }),
   ];
   assert.deepEqual(filterCounts(skills), { all: 3, enabled: 2, disabled: 1, attention: 1 });
-  assert.deepEqual(filterCounts(skills, { updatable: new Set<string>(["a:1"]) }), { all: 3, enabled: 2, disabled: 1, attention: 2 });
+  assert.deepEqual(filterCounts(skills, { updatable: new Set<string>(["a:1"]) }), {
+    all: 3,
+    enabled: 2,
+    disabled: 1,
+    attention: 2,
+  });
 });
 
 test("诊断计数、级别文案与色调", () => {
   const skill = makeSkill({
     id: "a:x",
-    diagnostics: [diag("error", "BOM_PRESENT"), diag("warning", "MIXED_EOL"), diag("info", "EXTRA_KEY"), diag("info", "YAML_L1_FEATURE")],
+    diagnostics: [
+      diag("error", "BOM_PRESENT"),
+      diag("warning", "MIXED_EOL"),
+      diag("info", "EXTRA_KEY"),
+      diag("info", "YAML_L1_FEATURE"),
+    ],
   });
   assert.deepEqual(diagnosticCounts(skill), { error: 1, warning: 1, info: 2, total: 4 });
   assert.equal(hasProblems(skill), true, "error/warning 算有问题");
@@ -326,13 +364,19 @@ test("局部更新：启停替换单行、删除摘掉单行", () => {
   const updated = replaceSkill(list, after);
   assert.equal(updated.skills.length, 2);
   assert.equal(updated.skills.find((skill) => skill.id === "user-agents:a")?.modelVisible, false);
-  assert.equal(updated.skills.find((skill) => skill.id === "user-agents:b"), other);
+  assert.equal(
+    updated.skills.find((skill) => skill.id === "user-agents:b"),
+    other,
+  );
 
   const appended = replaceSkill(list, makeSkill({ id: "user-agents:c", name: "c" }));
   assert.equal(appended.skills.length, 3);
 
   const removed = removeSkill(list, "user-agents:a");
-  assert.deepEqual(removed.skills.map((skill) => skill.id), ["user-agents:b"]);
+  assert.deepEqual(
+    removed.skills.map((skill) => skill.id),
+    ["user-agents:b"],
+  );
 });
 
 test("文件清单：目录在前、按层级与名字排序、深度与文件名", () => {
@@ -342,12 +386,10 @@ test("文件清单：目录在前、按层级与名字排序、深度与文件�
     { path: "assets", size: 0, isDir: true },
     { path: "assets/logo.png", size: 4096, isDir: false },
   ];
-  assert.deepEqual(sortFiles(files).map((file) => file.path), [
-    "assets",
-    "SKILL.md",
-    "assets/logo.png",
-    "references/guide.md",
-  ]);
+  assert.deepEqual(
+    sortFiles(files).map((file) => file.path),
+    ["assets", "SKILL.md", "assets/logo.png", "references/guide.md"],
+  );
   assert.equal(fileDepth("SKILL.md"), 0);
   assert.equal(fileDepth("a/b/c.md"), 2);
   assert.equal(fileName("a/b/c.md"), "c.md");
@@ -360,7 +402,10 @@ test("回收站排序：时间倒序，坏时间排最后", () => {
     makeTrashItem({ trashId: "t3", deletedAt: "2026-10-03T00:00:00.000Z" }),
     makeTrashItem({ trashId: "t2", deletedAt: "坏时间" }),
   ];
-  assert.deepEqual(sortTrash(items).map((item) => item.trashId), ["t3", "t1", "t2"]);
+  assert.deepEqual(
+    sortTrash(items).map((item) => item.trashId),
+    ["t3", "t1", "t2"],
+  );
 });
 
 test("错误映射：message / code / 逐字段 details / 冲突判定", () => {

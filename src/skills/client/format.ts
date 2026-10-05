@@ -12,7 +12,15 @@
  *   - 一行的标记只剩三种：不可加载 / 可更新 / 被遮蔽（外加「无名称」兜底），最多 2 个。
  */
 
-import type { DiagnosticLevel, ListResult, RootInfo, SkillSummary, SkillViewFile, TrashItem, TrashReason } from "../contract/local.ts";
+import type {
+  DiagnosticLevel,
+  ListResult,
+  RootInfo,
+  SkillSummary,
+  SkillViewFile,
+  TrashItem,
+  TrashReason,
+} from "../contract/local.ts";
 import { t } from "./strings.ts";
 import type { BadgeTone } from "../../kit/index.ts";
 import type { FieldError } from "../../platform/contract/host.ts";
@@ -52,7 +60,10 @@ export function isProjectRoot(rootId: string): boolean {
 
 /** 路径统一成反斜杠分隔（Windows 展示口径），并去掉末尾多余的分隔符。 */
 export function normalizePath(path: string): string {
-  return path.trim().replace(/[\\/]+/g, "\\").replace(/\\+$/, "");
+  return path
+    .trim()
+    .replace(/[\\/]+/g, "\\")
+    .replace(/\\+$/, "");
 }
 
 /**
@@ -86,11 +97,12 @@ function stripSegments(path: string, segments: readonly string[]): string | unde
 export function homeDirFromRoots(roots: readonly RootInfo[]): string | undefined {
   const candidates: string[] = [];
   for (const root of roots) {
-    const segments = root.rootId === "user-agents"
-      ? [".agents", "skills"]
-      : root.rootId === "user-dsh"
-        ? [".dsh", "skills"]
-        : undefined;
+    const segments =
+      root.rootId === "user-agents"
+        ? [".agents", "skills"]
+        : root.rootId === "user-dsh"
+          ? [".dsh", "skills"]
+          : undefined;
     if (segments === undefined) continue;
     const home = stripSegments(root.path, segments);
     if (home !== undefined && home !== "") candidates.push(home);
@@ -311,13 +323,7 @@ export function needsAttention(skill: SkillSummary, context?: MatchContext): boo
 export function matchesQuery(skill: SkillSummary, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (needle === "") return true;
-  const haystack = [
-    skill.name ?? "",
-    skill.dirName,
-    skill.id,
-    skill.description ?? "",
-    skill.rootId,
-  ]
+  const haystack = [skill.name ?? "", skill.dirName, skill.id, skill.description ?? "", skill.rootId]
     .join("\n")
     .toLowerCase();
   return haystack.includes(needle);
@@ -349,7 +355,6 @@ export function filterCounts(skills: readonly SkillSummary[], context?: MatchCon
 
 /* ---------------- 行标记与启停 ---------------- */
 
-
 export interface RowBadge {
   key: string;
   label: string;
@@ -365,13 +370,28 @@ export interface RowBadge {
 export function rowBadges(skill: SkillSummary, context?: MatchContext): RowBadge[] {
   const badges: RowBadge[] = [];
   if (!skill.loadable) {
-    badges.push({ key: "notLoadable", label: t("skills.tag.notLoadable"), tone: "danger", title: t("skills.tag.notLoadableTitle") });
+    badges.push({
+      key: "notLoadable",
+      label: t("skills.tag.notLoadable"),
+      tone: "danger",
+      title: t("skills.tag.notLoadableTitle"),
+    });
   }
   if (context?.updatable?.has(skill.id) === true) {
-    badges.push({ key: "updatable", label: t("skills.tag.updatable"), tone: "accent", title: t("skills.tag.updatableTitle") });
+    badges.push({
+      key: "updatable",
+      label: t("skills.tag.updatable"),
+      tone: "accent",
+      title: t("skills.tag.updatableTitle"),
+    });
   }
   if (skill.shadowedBy !== undefined) {
-    badges.push({ key: "shadowed", label: t("skills.tag.shadowed"), tone: "neutral", title: t("skills.tag.shadowedTitle", { id: skill.shadowedBy }) });
+    badges.push({
+      key: "shadowed",
+      label: t("skills.tag.shadowed"),
+      tone: "neutral",
+      title: t("skills.tag.shadowedTitle", { id: skill.shadowedBy }),
+    });
   }
   if (displayName(skill).fromDir) {
     badges.push({ key: "noName", label: t("skills.tag.noName"), tone: "neutral", title: t("skills.name.hint") });
@@ -410,9 +430,7 @@ export function toggleBlockReason(skill: SkillSummary): string | undefined {
 /** 启停开关的无障碍名 / 悬停文案。 */
 export function toggleLabel(skill: SkillSummary): string {
   const name = displayName(skill).text;
-  return skill.modelInvocationDisabled
-    ? t("skills.toggle.enable", { name })
-    : t("skills.toggle.disable", { name });
+  return skill.modelInvocationDisabled ? t("skills.toggle.enable", { name }) : t("skills.toggle.disable", { name });
 }
 
 /* ---------------- 调用权限（D-B17） ---------------- */
@@ -431,7 +449,9 @@ export interface InvocationAccess {
   editable: boolean;
 }
 
-export function invocationAccess(skill: Pick<SkillSummary, "modelInvocationDisabled" | "userInvocable"> & { writable?: boolean }): InvocationAccess {
+export function invocationAccess(
+  skill: Pick<SkillSummary, "modelInvocationDisabled" | "userInvocable"> & { writable?: boolean },
+): InvocationAccess {
   return {
     model: !skill.modelInvocationDisabled,
     user: skill.userInvocable !== false,
@@ -450,7 +470,8 @@ export function invocationLabel(access: InvocationAccess): string {
 
 /** 模型调用的说明（详情与悬停提示共用）。 */
 export function modelAccessText(access: InvocationAccess): string {
-  if (!access.editable) return access.model ? t("skills.access.modelAllowedReadonly") : t("skills.access.modelDeniedReadonly");
+  if (!access.editable)
+    return access.model ? t("skills.access.modelAllowedReadonly") : t("skills.access.modelDeniedReadonly");
   return access.model ? t("skills.access.modelAllowed") : t("skills.access.modelDenied");
 }
 
@@ -462,9 +483,17 @@ export function userAccessText(access: InvocationAccess): string {
 
 /** 行尾文字的悬停提示：两种调用各一行。 */
 export function invocationTitle(access: InvocationAccess): string {
-  return t("skills.access.title") + "\n" +
-    t("skills.access.model") + "：" + modelAccessText(access) + "\n" +
-    t("skills.access.user") + "：" + userAccessText(access);
+  return (
+    t("skills.access.title") +
+    "\n" +
+    t("skills.access.model") +
+    "：" +
+    modelAccessText(access) +
+    "\n" +
+    t("skills.access.user") +
+    "：" +
+    userAccessText(access)
+  );
 }
 
 /* ---------------- 格式化 ---------------- */
@@ -584,7 +613,8 @@ export function fieldErrors(error: unknown): FieldError[] {
   for (const entry of details) {
     if (entry === null || typeof entry !== "object") continue;
     const record = entry as Record<string, unknown>;
-    const field = typeof record.path === "string" ? record.path : typeof record.field === "string" ? record.field : undefined;
+    const field =
+      typeof record.path === "string" ? record.path : typeof record.field === "string" ? record.field : undefined;
     const message = typeof record.message === "string" ? record.message : undefined;
     if (field === undefined || message === undefined) continue;
     out.push({ path: field, message });

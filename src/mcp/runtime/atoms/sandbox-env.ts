@@ -10,36 +10,36 @@
  *
  * 注意：**绝不**把整个 process.env 铺进去（会漏令牌与内部变量）。
  */
-import { PROXY_ENV_KEYS } from '../constants.ts';
+import { PROXY_ENV_KEYS } from "../constants.ts";
 
 /**
  * 内置的 getDefaultEnvironment() 等价实现（Windows 白名单）。
  * 平台层若注入 sdk.getDefaultEnvironment（推荐），则以注入的为准。
  */
 const DEFAULT_INHERITED_ENV_VARS_WIN32 = [
-  'APPDATA',
-  'HOMEDRIVE',
-  'HOMEPATH',
-  'LOCALAPPDATA',
-  'PATH',
-  'PROCESSOR_ARCHITECTURE',
-  'SYSTEMDRIVE',
-  'SYSTEMROOT',
-  'TEMP',
-  'USERNAME',
-  'USERPROFILE',
-  'PROGRAMFILES',
+  "APPDATA",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "LOCALAPPDATA",
+  "PATH",
+  "PROCESSOR_ARCHITECTURE",
+  "SYSTEMDRIVE",
+  "SYSTEMROOT",
+  "TEMP",
+  "USERNAME",
+  "USERPROFILE",
+  "PROGRAMFILES",
 ];
 
-const DEFAULT_INHERITED_ENV_VARS_POSIX = ['HOME', 'LOGNAME', 'PATH', 'SHELL', 'TERM', 'USER'];
+const DEFAULT_INHERITED_ENV_VARS_POSIX = ["HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER"];
 
 export function fallbackDefaultEnvironment(): Record<string, string> {
-  const keys = process.platform === 'win32' ? DEFAULT_INHERITED_ENV_VARS_WIN32 : DEFAULT_INHERITED_ENV_VARS_POSIX;
+  const keys = process.platform === "win32" ? DEFAULT_INHERITED_ENV_VARS_WIN32 : DEFAULT_INHERITED_ENV_VARS_POSIX;
   const env: Record<string, string> = {};
   for (const key of keys) {
     const value = process.env[key];
     // 跳过 cmd.exe 的 command-processor hack：以 "()" 开头的值会在子进程里执行命令。
-    if (typeof value === 'string' && !value.startsWith('()')) env[key] = value;
+    if (typeof value === "string" && !value.startsWith("()")) env[key] = value;
   }
   return env;
 }
@@ -49,7 +49,7 @@ export function proxyEnvironment(source: NodeJS.ProcessEnv = process.env): Recor
   const env: Record<string, string> = {};
   for (const key of PROXY_ENV_KEYS) {
     const value = source[key];
-    if (typeof value === 'string' && value.length > 0) env[key] = value;
+    if (typeof value === "string" && value.length > 0) env[key] = value;
   }
   return env;
 }

@@ -3,8 +3,8 @@
  * 只依赖 node: 内置模块。
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import fs from "node:fs/promises";
+import path from "node:path";
 
 export async function pathExists(p: string): Promise<boolean> {
   try {
@@ -24,7 +24,7 @@ export async function isDirectory(p: string): Promise<boolean> {
   }
 }
 
-export async function lstatOrUndefined(p: string): Promise<import('node:fs').Stats | undefined> {
+export async function lstatOrUndefined(p: string): Promise<import("node:fs").Stats | undefined> {
   try {
     return await fs.lstat(p);
   } catch {
@@ -32,7 +32,7 @@ export async function lstatOrUndefined(p: string): Promise<import('node:fs').Sta
   }
 }
 
-export async function statOrUndefined(p: string): Promise<import('node:fs').Stats | undefined> {
+export async function statOrUndefined(p: string): Promise<import("node:fs").Stats | undefined> {
   try {
     return await fs.stat(p);
   } catch {
@@ -52,7 +52,7 @@ export interface ReadTextResult {
 
 export async function readFileText(p: string): Promise<ReadTextResult | undefined> {
   let buffer: Buffer;
-  let st: import('node:fs').Stats;
+  let st: import("node:fs").Stats;
   try {
     buffer = await fs.readFile(p);
     st = await fs.stat(p);
@@ -62,10 +62,10 @@ export async function readFileText(p: string): Promise<ReadTextResult | undefine
   let validUtf8 = true;
   let text: string;
   try {
-    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buffer);
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buffer);
   } catch {
     validUtf8 = false;
-    text = buffer.toString('utf8');
+    text = buffer.toString("utf8");
   }
   return { buffer, text, validUtf8, mtimeMs: st.mtimeMs };
 }
@@ -76,7 +76,7 @@ export async function atomicWriteFile(file: string, data: string | Buffer): Prom
   const base = path.basename(file);
   const suffix = `${process.pid.toString(36)}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
   const tmp = path.join(dir, `.${base}.${suffix}.tmp`);
-  const handle = await fs.open(tmp, 'wx');
+  const handle = await fs.open(tmp, "wx");
   try {
     await handle.writeFile(data);
     await handle.sync();
@@ -123,7 +123,7 @@ export async function movePath(src: string, dest: string): Promise<{ copied: boo
     return { copied: false };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code !== 'EXDEV') throw error;
+    if (code !== "EXDEV") throw error;
     await copyPath(src, dest);
     await removePath(src);
     return { copied: true };
@@ -131,7 +131,7 @@ export async function movePath(src: string, dest: string): Promise<{ copied: boo
 }
 
 export function toPosix(p: string): string {
-  return p.split(path.sep).join('/');
+  return p.split(path.sep).join("/");
 }
 
 export interface WalkEntry {
@@ -158,7 +158,7 @@ export async function walkEntries(root: string, options: WalkOptions): Promise<W
 
   async function visit(dir: string, prefix: string, depth: number): Promise<void> {
     if (out.length >= options.max || depth > maxDepth) return;
-    let entries: import('node:fs').Dirent[];
+    let entries: import("node:fs").Dirent[];
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch {
@@ -168,7 +168,7 @@ export async function walkEntries(root: string, options: WalkOptions): Promise<W
     for (const entry of entries) {
       if (out.length >= options.max) return;
       if (skip.has(entry.name)) continue;
-      const childRel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+      const childRel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
       const childAbs = path.join(dir, entry.name);
       let isDir = entry.isDirectory();
       let isLink = entry.isSymbolicLink();
@@ -186,6 +186,6 @@ export async function walkEntries(root: string, options: WalkOptions): Promise<W
     }
   }
 
-  await visit(root, '', 1);
+  await visit(root, "", 1);
   return out;
 }

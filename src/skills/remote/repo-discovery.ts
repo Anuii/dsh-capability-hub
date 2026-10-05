@@ -9,23 +9,23 @@
  * 缓存写入是「读 - 合并 - 写」，同一进程内用一条 Promise 链串行化，避免并发刷新互相覆盖。
  */
 
-import path from 'node:path';
-import { readJsonFile, writeJsonFile } from './fsx.ts';
-import { notFound } from './errors.ts';
-import { installedIdOf, loadInstalledIndex, scanRepoSkills } from './browse.ts';
-import type { GitHubClient } from './github.ts';
-import type { Redactor } from './redact.ts';
-import type { RepoStore } from './repos.ts';
-import type { DiscoveryCacheEntry, DiscoveryCacheFile, SkillsLocalPort } from './types.ts';
-import type { DiscoveredSkill, DiscoveryRepoView, DiscoveryView, RepoRecord } from '../contract/remote.ts';
-import type { HubContext } from '../../platform/contract/host.ts';
+import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./fsx.ts";
+import { notFound } from "./errors.ts";
+import { installedIdOf, loadInstalledIndex, scanRepoSkills } from "./browse.ts";
+import type { GitHubClient } from "./github.ts";
+import type { Redactor } from "./redact.ts";
+import type { RepoStore } from "./repos.ts";
+import type { DiscoveryCacheEntry, DiscoveryCacheFile, SkillsLocalPort } from "./types.ts";
+import type { DiscoveredSkill, DiscoveryRepoView, DiscoveryView, RepoRecord } from "../contract/remote.ts";
+import type { HubContext } from "../../platform/contract/host.ts";
 
 const DISCOVERY_VERSION = 1;
 /** 同时扫描的仓库数上限（每个仓库要下载一次 tarball） */
 export const DISCOVERY_CONCURRENCY = 2;
 
 export function discoveryFilePath(ctx: HubContext): string {
-  return path.join(ctx.hubHome, 'skills', 'discovery.json');
+  return path.join(ctx.hubHome, "skills", "discovery.json");
 }
 
 const keyOf = (repo: string): string => repo.toLowerCase();
@@ -41,13 +41,18 @@ export function createDiscoveryStore(ctx: HubContext): DiscoveryStore {
 
   async function read(): Promise<DiscoveryCacheFile> {
     const raw = await readJsonFile<DiscoveryCacheFile>(discoveryFilePath(ctx));
-    if (!raw || typeof raw.repos !== 'object' || raw.repos === null || Array.isArray(raw.repos)) {
+    if (!raw || typeof raw.repos !== "object" || raw.repos === null || Array.isArray(raw.repos)) {
       return { version: DISCOVERY_VERSION, repos: {} };
     }
     const repos: Record<string, DiscoveryCacheEntry> = {};
     for (const [key, entry] of Object.entries(raw.repos)) {
-      if (!entry || typeof entry.repo !== 'string' || typeof entry.scannedAt !== 'string') continue;
-      repos[key] = { ...entry, skills: Array.isArray(entry.skills) ? entry.skills.filter((s) => s && typeof s.skillPath === 'string' && typeof s.dirName === 'string') : [] };
+      if (!entry || typeof entry.repo !== "string" || typeof entry.scannedAt !== "string") continue;
+      repos[key] = {
+        ...entry,
+        skills: Array.isArray(entry.skills)
+          ? entry.skills.filter((s) => s && typeof s.skillPath === "string" && typeof s.dirName === "string")
+          : [],
+      };
     }
     return { version: DISCOVERY_VERSION, repos };
   }
@@ -69,7 +74,7 @@ export function createDiscoveryStore(ctx: HubContext): DiscoveryStore {
 
 /** 缓存条目是否按仓库当前的分支 / 子目录扫的 */
 export function isStale(entry: DiscoveryCacheEntry, record: RepoRecord): boolean {
-  return (entry.ref ?? '') !== (record.ref ?? '') || (entry.subPath ?? '') !== (record.subPath ?? '');
+  return (entry.ref ?? "") !== (record.ref ?? "") || (entry.subPath ?? "") !== (record.subPath ?? "");
 }
 
 /**
@@ -79,7 +84,7 @@ export function isStale(entry: DiscoveryCacheEntry, record: RepoRecord): boolean
 export function composeDiscoveryView(
   records: readonly RepoRecord[],
   cache: DiscoveryCacheFile,
-  installedOf: (skill: DiscoveredSkill) => string | undefined
+  installedOf: (skill: DiscoveredSkill) => string | undefined,
 ): DiscoveryView {
   const repos: DiscoveryRepoView[] = [];
   const skills: DiscoveredSkill[] = [];
@@ -125,8 +130,8 @@ export interface DiscoveryDeps {
 
 /** 只读视图（不联网） */
 export async function readDiscovery(
-  deps: Pick<DiscoveryDeps, 'skills' | 'repos' | 'store'>,
-  options: { workspace?: string } = {}
+  deps: Pick<DiscoveryDeps, "skills" | "repos" | "store">,
+  options: { workspace?: string } = {},
 ): Promise<DiscoveryView> {
   const [records, cache, index] = await Promise.all([
     deps.repos.list(),
@@ -137,22 +142,27 @@ export async function readDiscovery(
 }
 
 function errorText(error: unknown): string {
-  if (error instanceof Error && error.message !== '') return error.message;
+  if (error instanceof Error && error.message !== "") return error.message;
   return String(error);
 }
 
 /** 扫一个仓库，成功失败都变成一条缓存条目（不抛错，取消除外） */
 export async function scanOne(
-  deps: Pick<DiscoveryDeps, 'github' | 'redactor' | 'now'>,
+  deps: Pick<DiscoveryDeps, "github" | "redactor" | "now">,
   record: RepoRecord,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<DiscoveryCacheEntry> {
   const scannedAt = (deps.now?.() ?? new Date()).toISOString();
   const base: DiscoveryCacheEntry = { repo: record.repo, scannedAt, skills: [] };
   if (record.ref !== undefined) base.ref = record.ref;
   if (record.subPath !== undefined) base.subPath = record.subPath;
   try {
-    const scanned = await scanRepoSkills(deps.github, { repo: record.repo, ref: record.ref, subPath: record.subPath, signal });
+    const scanned = await scanRepoSkills(deps.github, {
+      repo: record.repo,
+      ref: record.ref,
+      subPath: record.subPath,
+      signal,
+    });
     return { ...base, resolvedRef: scanned.ref, skills: scanned.skills };
   } catch (error) {
     if (signal?.aborted) throw error;
@@ -180,7 +190,7 @@ async function mapLimited<T, R>(items: readonly T[], limit: number, run: (item: 
  */
 export async function refreshDiscovery(
   deps: DiscoveryDeps,
-  options: { repos?: string[]; workspace?: string; signal?: AbortSignal } = {}
+  options: { repos?: string[]; workspace?: string; signal?: AbortSignal } = {},
 ): Promise<DiscoveryView> {
   const records = await deps.repos.list();
   let targets = records;

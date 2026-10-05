@@ -41,7 +41,13 @@ const SKILLS = [
   makeSkill({ id: "user-dsh:notes.md", dirName: "notes.md", name: "notes", rootId: "user-dsh" }),
   makeSkill({ id: "custom-0:team", name: "team", rootId: "custom-0", writable: false }),
   makeSkill({ id: "custom-1:builtin-a", name: "builtin-a", rootId: "custom-1", writable: false }),
-  makeSkill({ id: "project-dsh:local", name: "local", rootId: "project-dsh", modelInvocationDisabled: true, modelVisible: false }),
+  makeSkill({
+    id: "project-dsh:local",
+    name: "local",
+    rootId: "project-dsh",
+    modelInvocationDisabled: true,
+    modelVisible: false,
+  }),
 ];
 
 const SOURCES: Record<string, SourceEntry> = {
@@ -70,28 +76,45 @@ test("目录标签：skills 前一段；没有 skills 段取最后一段；盘�
 
 test("目录筛选选项：按层级分段、含空目录、带技能数；不存在且没有技能的目录不列", () => {
   const options = dirOptions(LIST);
-  assert.deepEqual(options.map((o) => [o.level, o.tag, o.count]), [
-    ["builtin", "dsh-agent-preset", 1],
-    ["user", ".agents", 3],
-    ["user", ".dsh", 1],
-    ["user", "team-skills", 1],
-    ["project", ".dsh", 1],
-  ]);
+  assert.deepEqual(
+    options.map((o) => [o.level, o.tag, o.count]),
+    [
+      ["builtin", "dsh-agent-preset", 1],
+      ["user", ".agents", 3],
+      ["user", ".dsh", 1],
+      ["user", "team-skills", 1],
+      ["project", ".dsh", 1],
+    ],
+  );
   assert.equal(options.find((o) => o.rootId === "user-agents")!.title, "C:\\Users\\me\\.agents\\skills");
 });
 
 test("默认视图：三个层级按 DSH 内置 / 用户级 / 项目级排列，DSH 内置不细分", () => {
   const tree = buildSkillTree({ list: LIST, query: "", filter: "all", sources: SOURCES, hasWorkspace: true });
   assert.equal(tree.filtering, false);
-  assert.deepEqual(tree.levels.map((l) => l.level), ["builtin", "user", "project"]);
+  assert.deepEqual(
+    tree.levels.map((l) => l.level),
+    ["builtin", "user", "project"],
+  );
   const builtin = tree.levels[0]!;
   assert.equal(builtin.flat, true, "DSH 内置不按来源细分");
-  assert.deepEqual(builtin.skills.map((s) => s.id), ["custom-1:builtin-a"]);
+  assert.deepEqual(
+    builtin.skills.map((s) => s.id),
+    ["custom-1:builtin-a"],
+  );
   const user = tree.levels[1]!;
   assert.equal(user.total, 5);
   assert.equal(user.flat, false);
-  assert.deepEqual(user.repos.map((r) => r.label), ["anthropics/skills", "mattpocock/skills", "无来源"], "按仓库名排序，无来源最后");
-  assert.deepEqual(user.repos[2]!.skills.map((s) => s.id).sort(), ["custom-0:team", "user-agents:mine", "user-dsh:notes.md"], "平铺技能与自定义目录的技能都归无来源");
+  assert.deepEqual(
+    user.repos.map((r) => r.label),
+    ["anthropics/skills", "mattpocock/skills", "无来源"],
+    "按仓库名排序，无来源最后",
+  );
+  assert.deepEqual(
+    user.repos[2]!.skills.map((s) => s.id).sort(),
+    ["custom-0:team", "user-agents:mine", "user-dsh:notes.md"],
+    "平铺技能与自定义目录的技能都归无来源",
+  );
   assert.equal(user.repos[0]!.key, repoKey("user", "anthropics/skills"));
   assert.equal(user.repos[2]!.key, repoKey("user", undefined));
 });
@@ -100,7 +123,10 @@ test("某层级全是无来源：不显示孤零零的「无来源」二级头",
   const tree = buildSkillTree({ list: LIST, query: "", filter: "all", sources: SOURCES, hasWorkspace: true });
   const project = tree.levels.find((l) => l.level === "project")!;
   assert.equal(project.flat, true);
-  assert.deepEqual(project.skills.map((s) => s.id), ["project-dsh:local"]);
+  assert.deepEqual(
+    project.skills.map((s) => s.id),
+    ["project-dsh:local"],
+  );
 });
 
 test("来源数据不可用：层级内直接列技能，不报错", () => {
@@ -110,10 +136,15 @@ test("来源数据不可用：层级内直接列技能，不报错", () => {
 });
 
 test("没有工作区：项目级只给一行说明；没有 DSH 内置技能时不出现该层级", () => {
-  const list = makeList(ROOTS.filter((r) => !r.rootId.startsWith("project") && r.rootId !== "custom-1"),
-    SKILLS.filter((s) => !s.rootId.startsWith("project") && s.rootId !== "custom-1"));
+  const list = makeList(
+    ROOTS.filter((r) => !r.rootId.startsWith("project") && r.rootId !== "custom-1"),
+    SKILLS.filter((s) => !s.rootId.startsWith("project") && s.rootId !== "custom-1"),
+  );
   const tree = buildSkillTree({ list, query: "", filter: "all", sources: SOURCES, hasWorkspace: false });
-  assert.deepEqual(tree.levels.map((l) => l.level), ["user", "project"]);
+  assert.deepEqual(
+    tree.levels.map((l) => l.level),
+    ["user", "project"],
+  );
   const project = tree.levels[1]!;
   assert.equal(project.noWorkspace, true);
   assert.equal(project.total, 0);
@@ -122,21 +153,50 @@ test("没有工作区：项目级只给一行说明；没有 DSH 内置技能时
 test("搜索 / 筛选 / 目录筛选：只留有匹配的层级与仓库，计数按匹配数", () => {
   const searched = buildSkillTree({ list: LIST, query: "tdd", filter: "all", sources: SOURCES, hasWorkspace: true });
   assert.equal(searched.filtering, true);
-  assert.deepEqual(searched.levels.map((l) => l.level), ["user"]);
-  assert.deepEqual(searched.levels[0]!.repos.map((r) => r.label), ["mattpocock/skills"]);
+  assert.deepEqual(
+    searched.levels.map((l) => l.level),
+    ["user"],
+  );
+  assert.deepEqual(
+    searched.levels[0]!.repos.map((r) => r.label),
+    ["mattpocock/skills"],
+  );
   assert.equal(searched.levels[0]!.shown, 1);
   assert.equal(searched.levels[0]!.total, 5);
 
-  const builtinHit = buildSkillTree({ list: LIST, query: "builtin", filter: "all", sources: SOURCES, hasWorkspace: true });
-  assert.deepEqual(builtinHit.levels.map((l) => l.level), ["builtin"], "默认折叠的 DSH 内置在有匹配时也会出现");
+  const builtinHit = buildSkillTree({
+    list: LIST,
+    query: "builtin",
+    filter: "all",
+    sources: SOURCES,
+    hasWorkspace: true,
+  });
+  assert.deepEqual(
+    builtinHit.levels.map((l) => l.level),
+    ["builtin"],
+    "默认折叠的 DSH 内置在有匹配时也会出现",
+  );
 
   const disabled = buildSkillTree({ list: LIST, query: "", filter: "disabled", sources: SOURCES, hasWorkspace: true });
-  assert.deepEqual(disabled.levels.map((l) => l.level), ["project"]);
+  assert.deepEqual(
+    disabled.levels.map((l) => l.level),
+    ["project"],
+  );
 
-  const byDir = buildSkillTree({ list: LIST, query: "", filter: "all", dir: "user-dsh", sources: SOURCES, hasWorkspace: true });
+  const byDir = buildSkillTree({
+    list: LIST,
+    query: "",
+    filter: "all",
+    dir: "user-dsh",
+    sources: SOURCES,
+    hasWorkspace: true,
+  });
   assert.equal(byDir.filtering, true);
   assert.equal(byDir.shown, 1);
-  assert.deepEqual(byDir.levels.map((l) => l.level), ["user"]);
+  assert.deepEqual(
+    byDir.levels.map((l) => l.level),
+    ["user"],
+  );
 
   const none = buildSkillTree({ list: LIST, query: "不存在的词", filter: "all", sources: SOURCES, hasWorkspace: true });
   assert.equal(none.shown, 0);
@@ -178,6 +238,14 @@ test("目录标签只在层级里有不止一个技能目录时显示", () => {
   assert.equal(tree.levels.find((l) => l.level === "user")!.multiDir, true, "用户级有 .agents、.dsh、team-skills");
   assert.equal(tree.levels.find((l) => l.level === "builtin")!.multiDir, false);
   assert.equal(tree.levels.find((l) => l.level === "project")!.multiDir, false);
-  const onlyAgents = makeList(ROOTS, SKILLS.filter((s) => s.rootId === "user-agents"));
-  assert.equal(buildSkillTree({ list: onlyAgents, query: "", filter: "all", hasWorkspace: true }).levels.find((l) => l.level === "user")!.multiDir, false);
+  const onlyAgents = makeList(
+    ROOTS,
+    SKILLS.filter((s) => s.rootId === "user-agents"),
+  );
+  assert.equal(
+    buildSkillTree({ list: onlyAgents, query: "", filter: "all", hasWorkspace: true }).levels.find(
+      (l) => l.level === "user",
+    )!.multiDir,
+    false,
+  );
 });

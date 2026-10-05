@@ -2,15 +2,15 @@
  * 测试公共脚手架：临时目录、假配置源、构造运行时。
  * **所有测试数据只落 os.tmpdir() 下的自建目录**（任务书 E4 / PLAN §4）。
  */
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { createMcpRuntime } from '../../../src/mcp/runtime/runtime.ts';
-import { FakeClock } from './fakes/fake-clock.ts';
-import { FakeMcpRegistry, createFakeSdk, createFakeSupervisor } from './fakes/fake-sdk.ts';
-import type { McpRuntimeInternal } from '../../../src/mcp/runtime/runtime.ts';
-import type { EffectiveMcpConfig, EffectiveServer, McpConfigSource } from '../../../src/mcp/contract/config.ts';
-import type { HubContext } from '../../../src/platform/contract/host.ts';
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createMcpRuntime } from "../../../src/mcp/runtime/runtime.ts";
+import { FakeClock } from "./fakes/fake-clock.ts";
+import { FakeMcpRegistry, createFakeSdk, createFakeSupervisor } from "./fakes/fake-sdk.ts";
+import type { McpRuntimeInternal } from "../../../src/mcp/runtime/runtime.ts";
+import type { EffectiveMcpConfig, EffectiveServer, McpConfigSource } from "../../../src/mcp/contract/config.ts";
+import type { HubContext } from "../../../src/platform/contract/host.ts";
 
 export interface TempHome {
   dir: string;
@@ -20,10 +20,10 @@ export interface TempHome {
 
 const created: string[] = [];
 
-export async function makeTempHome(label = 'mcp-runtime'): Promise<TempHome> {
-  const dir = await mkdtemp(join(tmpdir(), 'dsh-capability-hub-' + label + '-'));
+export async function makeTempHome(label = "mcp-runtime"): Promise<TempHome> {
+  const dir = await mkdtemp(join(tmpdir(), "dsh-capability-hub-" + label + "-"));
   created.push(dir);
-  const hubHome = join(dir, 'storages', 'dsh-capability-hub');
+  const hubHome = join(dir, "storages", "dsh-capability-hub");
   return {
     dir,
     hubHome,
@@ -43,15 +43,15 @@ export function makeContext(hubHome: string, workspaceDir: string): HubContext {
   const messages: string[] = [];
   return {
     homeDir: workspaceDir,
-    dshHome: join(workspaceDir, '.dsh'),
+    dshHome: join(workspaceDir, ".dsh"),
     hubHome,
-    profileName: 'test',
+    profileName: "test",
     customSkillDirs: [],
     logger: {
-      debug: (...args: unknown[]) => messages.push('debug ' + args.join(' ')),
-      info: (...args: unknown[]) => messages.push('info ' + args.join(' ')),
-      warn: (...args: unknown[]) => messages.push('warn ' + args.join(' ')),
-      error: (...args: unknown[]) => messages.push('error ' + args.join(' ')),
+      debug: (...args: unknown[]) => messages.push("debug " + args.join(" ")),
+      info: (...args: unknown[]) => messages.push("info " + args.join(" ")),
+      warn: (...args: unknown[]) => messages.push("warn " + args.join(" ")),
+      error: (...args: unknown[]) => messages.push("error " + args.join(" ")),
     },
   };
 }
@@ -62,7 +62,7 @@ export class FakeConfigSource implements McpConfigSource {
   #listeners = new Set<(next: EffectiveMcpConfig, prev: EffectiveMcpConfig) => void>();
   changeCount = 0;
 
-  constructor(servers: EffectiveServer[] = [], settings?: Partial<EffectiveMcpConfig['settings']>) {
+  constructor(servers: EffectiveServer[] = [], settings?: Partial<EffectiveMcpConfig["settings"]>) {
     this.#config = {
       settings: {
         idleTimeoutMin: settings?.idleTimeoutMin ?? 10,
@@ -91,7 +91,7 @@ export class FakeConfigSource implements McpConfigSource {
     for (const listener of [...this.#listeners]) listener(config, prev);
   }
 
-  setSettings(settings: Partial<EffectiveMcpConfig['settings']>): void {
+  setSettings(settings: Partial<EffectiveMcpConfig["settings"]>): void {
     this.set({ settings: { ...this.#config.settings, ...settings }, servers: this.#config.servers });
   }
 
@@ -103,7 +103,7 @@ export class FakeConfigSource implements McpConfigSource {
 /** 造一个 EffectiveServer（全部字段都有默认值）。 */
 export function makeServer(overrides: Partial<EffectiveServer> & { serverName: string }): EffectiveServer {
   return {
-    transport: 'stdio',
+    transport: "stdio",
     args: [],
     env: {},
     envFrom: {},
@@ -111,7 +111,7 @@ export function makeServer(overrides: Partial<EffectiveServer> & { serverName: s
     envFromTimeoutMs: 10_000,
     headers: {},
     toolCallTimeoutMs: 60_000,
-    lifecycle: 'lazy',
+    lifecycle: "lazy",
     idleTimeoutMin: 10,
     searchKeywords: {},
     disabled: false,
@@ -135,14 +135,16 @@ export interface Harness {
  * 造一个完整运行时。
  * @param opts.autoStart 是否调用 start()（默认 true，模拟平台层接线后的状态）
  */
-export async function makeHarness(opts: {
-  servers?: EffectiveServer[];
-  settings?: Partial<EffectiveMcpConfig['settings']>;
-  behaviors?: Parameters<FakeMcpRegistry['register']>[0][];
-  autoStart?: boolean;
-  sweepIntervalMs?: number;
-  cacheWatchIntervalMs?: number;
-} = {}): Promise<Harness> {
+export async function makeHarness(
+  opts: {
+    servers?: EffectiveServer[];
+    settings?: Partial<EffectiveMcpConfig["settings"]>;
+    behaviors?: Parameters<FakeMcpRegistry["register"]>[0][];
+    autoStart?: boolean;
+    sweepIntervalMs?: number;
+    cacheWatchIntervalMs?: number;
+  } = {},
+): Promise<Harness> {
   const home = await makeTempHome();
   const ctx = makeContext(home.hubHome, home.dir);
   const registry = new FakeMcpRegistry();

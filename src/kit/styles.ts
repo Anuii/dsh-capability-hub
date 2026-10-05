@@ -52,7 +52,7 @@ const CSS = [
   //     "Liberation Mono",Menlo,Courier,"PingFang SC","Microsoft YaHei"
   // 变量名是 --ds- 前缀而不是 --dsw-。早先用 var(--dsw-font-family-mono,monospace)
   // 会落到泛型 monospace，在中文系统上落到中文等宽字体，字距松散、显旧。
-  "--chk-mono:var(--ds-font-family-code,\"Cascadia Mono\",\"Cascadia Code\",\"JetBrains Mono\",Consolas,\"SFMono-Regular\",Menlo,ui-monospace,monospace);",
+  '--chk-mono:var(--ds-font-family-code,"Cascadia Mono","Cascadia Code","JetBrains Mono",Consolas,"SFMono-Regular",Menlo,ui-monospace,monospace);',
   "--chk-focus:var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));",
   "}",
 

@@ -9,12 +9,12 @@
  *  - 根不存在不报错。
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import type { Diagnostic, RootId, RootInfo, SkillSummary } from '../contract/local.ts';
-import type { HubContext } from '../../platform/contract/host.ts';
-import { evaluateFrontmatter } from './frontmatter.ts';
-import { isDirectory, pathExists, readFileText, statOrUndefined } from './fsx.ts';
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { Diagnostic, RootId, RootInfo, SkillSummary } from "../contract/local.ts";
+import type { HubContext } from "../../platform/contract/host.ts";
+import { evaluateFrontmatter } from "./frontmatter.ts";
+import { isDirectory, pathExists, readFileText, statOrUndefined } from "./fsx.ts";
 
 export interface RootSpec {
   rootId: RootId;
@@ -23,12 +23,12 @@ export interface RootSpec {
   precedence: number;
 }
 
-export const PROJECT_DSH_ROOT: RootId = 'project-dsh';
-export const PROJECT_AGENTS_ROOT: RootId = 'project-agents';
-export const USER_DSH_ROOT: RootId = 'user-dsh';
-export const USER_AGENTS_ROOT: RootId = 'user-agents';
-export const BUNDLED_ROOT: RootId = 'bundled';
-export const CUSTOM_ROOT_PREFIX = 'custom-';
+export const PROJECT_DSH_ROOT: RootId = "project-dsh";
+export const PROJECT_AGENTS_ROOT: RootId = "project-agents";
+export const USER_DSH_ROOT: RootId = "user-dsh";
+export const USER_AGENTS_ROOT: RootId = "user-agents";
+export const BUNDLED_ROOT: RootId = "bundled";
+export const CUSTOM_ROOT_PREFIX = "custom-";
 
 export function customRootId(index: number): RootId {
   return CUSTOM_ROOT_PREFIX + String(index);
@@ -38,7 +38,7 @@ export function customRootId(index: number): RootId {
 export async function findProjectRoot(workspace: string): Promise<string> {
   let current = path.resolve(workspace);
   for (;;) {
-    if (await pathExists(path.join(current, '.git'))) return current;
+    if (await pathExists(path.join(current, ".git"))) return current;
     const parent = path.dirname(current);
     if (parent === current) return path.resolve(workspace);
     current = parent;
@@ -47,19 +47,34 @@ export async function findProjectRoot(workspace: string): Promise<string> {
 
 export async function resolveRoots(ctx: HubContext, workspace?: string): Promise<RootSpec[]> {
   const roots: RootSpec[] = [];
-  if (typeof workspace === 'string' && workspace.trim() !== '') {
+  if (typeof workspace === "string" && workspace.trim() !== "") {
     const projectRoot = await findProjectRoot(workspace);
-    roots.push({ rootId: PROJECT_DSH_ROOT, path: path.join(projectRoot, '.dsh', 'skills'), writable: true, precedence: 100 });
-    roots.push({ rootId: PROJECT_AGENTS_ROOT, path: path.join(projectRoot, '.agents', 'skills'), writable: true, precedence: 200 });
+    roots.push({
+      rootId: PROJECT_DSH_ROOT,
+      path: path.join(projectRoot, ".dsh", "skills"),
+      writable: true,
+      precedence: 100,
+    });
+    roots.push({
+      rootId: PROJECT_AGENTS_ROOT,
+      path: path.join(projectRoot, ".agents", "skills"),
+      writable: true,
+      precedence: 200,
+    });
   }
   const custom = Array.isArray(ctx.customSkillDirs) ? ctx.customSkillDirs : [];
   custom.forEach((dir, index) => {
-    if (typeof dir !== 'string' || dir.trim() === '') return;
+    if (typeof dir !== "string" || dir.trim() === "") return;
     roots.push({ rootId: customRootId(index), path: dir, writable: false, precedence: 300 });
   });
-  roots.push({ rootId: USER_DSH_ROOT, path: path.join(ctx.dshHome, 'skills'), writable: true, precedence: 400 });
-  roots.push({ rootId: USER_AGENTS_ROOT, path: path.join(ctx.homeDir, '.agents', 'skills'), writable: true, precedence: 500 });
-  if (typeof ctx.bundledSkillDir === 'string' && ctx.bundledSkillDir.trim() !== '') {
+  roots.push({ rootId: USER_DSH_ROOT, path: path.join(ctx.dshHome, "skills"), writable: true, precedence: 400 });
+  roots.push({
+    rootId: USER_AGENTS_ROOT,
+    path: path.join(ctx.homeDir, ".agents", "skills"),
+    writable: true,
+    precedence: 500,
+  });
+  if (typeof ctx.bundledSkillDir === "string" && ctx.bundledSkillDir.trim() !== "") {
     roots.push({ rootId: BUNDLED_ROOT, path: ctx.bundledSkillDir, writable: false, precedence: 600 });
   }
   return roots;
@@ -70,7 +85,7 @@ export function rootSpecOf(roots: RootSpec[], rootId: RootId): RootSpec | undefi
 }
 
 export function skillId(rootId: RootId, dirName: string): string {
-  return rootId + ':' + dirName;
+  return rootId + ":" + dirName;
 }
 
 export interface ParsedSkillId {
@@ -80,19 +95,19 @@ export interface ParsedSkillId {
 
 /** 解析 "<rootId>:<dirName>"；rootId 自身不含冒号，故按第一个冒号切分。 */
 export function parseSkillId(id: string): ParsedSkillId | undefined {
-  const at = id.indexOf(':');
+  const at = id.indexOf(":");
   if (at <= 0) return undefined;
   const rootId = id.slice(0, at);
   const dirName = id.slice(at + 1);
-  if (dirName === '') return undefined;
+  if (dirName === "") return undefined;
   return { rootId, dirName };
 }
 
 /** 校验目录名（即 id 的右半段）不含路径穿越。 */
 export function isSafeDirName(dirName: string): boolean {
-  if (dirName === '' || dirName === '.' || dirName === '..') return false;
-  if (dirName.includes('/') || dirName.includes('\\')) return false;
-  if (dirName.includes(':')) return false;
+  if (dirName === "" || dirName === "." || dirName === "..") return false;
+  if (dirName.includes("/") || dirName.includes("\\")) return false;
+  if (dirName.includes(":")) return false;
   return true;
 }
 
@@ -112,7 +127,7 @@ export interface ScanEnv {
   /** skillId -> SKILL.md（或平铺 .md）的绝对路径 */
   skillFiles: Map<string, string>;
   /** skillId -> 该技能的文件形态 */
-  skillKinds: Map<string, 'dir' | 'file'>;
+  skillKinds: Map<string, "dir" | "file">;
 }
 
 export function newScanEnv(): ScanEnv {
@@ -137,28 +152,28 @@ async function readCandidates(spec: RootSpec, problems: string[], env: ScanEnv):
   const rootLink = await fs.lstat(spec.path).catch(() => undefined);
   if (rootLink !== undefined && rootLink.isSymbolicLink()) env.linkedRoots.add(spec.rootId);
 
-  let entries: import('node:fs').Dirent[];
+  let entries: import("node:fs").Dirent[];
   try {
     entries = await fs.readdir(spec.path, { withFileTypes: true });
   } catch (error) {
-    problems.push('技能根「' + spec.path + '」无法读取：' + String((error as Error).message));
+    problems.push("技能根「" + spec.path + "」无法读取：" + String((error as Error).message));
     return [];
   }
   entries.sort((a, b) => a.name.localeCompare(b.name));
 
   const candidates: Candidate[] = [];
   for (const entry of entries) {
-    if (spec.rootId === USER_DSH_ROOT && entry.name === '.system') continue;
+    if (spec.rootId === USER_DSH_ROOT && entry.name === ".system") continue;
     const abs = path.join(spec.path, entry.name);
     const linkStat = entry.isSymbolicLink() ? await statOrUndefined(abs) : undefined;
     const isDir = entry.isDirectory() || (linkStat?.isDirectory() ?? false);
     const isFile = entry.isFile() || (linkStat?.isFile() ?? false);
     if (isDir) {
-      const file = path.join(abs, 'SKILL.md');
+      const file = path.join(abs, "SKILL.md");
       const fileStat = await statOrUndefined(file);
       if (fileStat === undefined || !fileStat.isFile()) {
         // 隐藏目录（如 .trash）没有 SKILL.md 时不列出来，避免噪音
-        if (entry.name.startsWith('.')) continue;
+        if (entry.name.startsWith(".")) continue;
         candidates.push({ dirName: entry.name, path: abs, file, isFlatFile: false });
         continue;
       }
@@ -166,7 +181,7 @@ async function readCandidates(spec: RootSpec, problems: string[], env: ScanEnv):
       candidates.push({ dirName: entry.name, path: abs, file, isFlatFile: false });
       continue;
     }
-    if (isFile && entry.name.endsWith('.md')) {
+    if (isFile && entry.name.endsWith(".md")) {
       if (entry.isSymbolicLink()) env.linkedSkills.set(skillId(spec.rootId, entry.name), abs);
       // 平铺技能：path 必须是这个 .md 文件本身，绝不能是 spec.path（根目录），
       // 否则 moveToTrash 会把整个技能根移入回收站（FIX-1）。
@@ -179,17 +194,17 @@ async function readCandidates(spec: RootSpec, problems: string[], env: ScanEnv):
 async function summarize(spec: RootSpec, candidate: Candidate, env: ScanEnv): Promise<SkillSummary> {
   const id = skillId(spec.rootId, candidate.dirName);
   env.skillFiles.set(id, candidate.file);
-  env.skillKinds.set(id, candidate.isFlatFile ? 'file' : 'dir');
+  env.skillKinds.set(id, candidate.isFlatFile ? "file" : "dir");
   const read = await readFileText(candidate.file);
   const diagnostics: Diagnostic[] = [];
   if (read === undefined) {
     const targetStat = await statOrUndefined(candidate.path);
     diagnostics.push({
-      level: 'error',
-      code: 'SKILL_FILE_MISSING',
+      level: "error",
+      code: "SKILL_FILE_MISSING",
       message: candidate.isFlatFile
-        ? '平铺技能文件「' + candidate.dirName + '」不存在或无法读取，DSH 会忽略它。'
-        : '该技能目录下没有可读取的 SKILL.md，DSH 会忽略它。',
+        ? "平铺技能文件「" + candidate.dirName + "」不存在或无法读取，DSH 会忽略它。"
+        : "该技能目录下没有可读取的 SKILL.md，DSH 会忽略它。",
     });
     return {
       id,
@@ -202,7 +217,7 @@ async function summarize(spec: RootSpec, candidate: Candidate, env: ScanEnv): Pr
       loadable: false,
       modelVisible: false,
       diagnostics,
-      format: { eol: 'lf', bom: false, safeToToggle: false },
+      format: { eol: "lf", bom: false, safeToToggle: false },
       extraKeys: [],
       mtimeMs: targetStat?.mtimeMs ?? 0,
     };
@@ -211,26 +226,32 @@ async function summarize(spec: RootSpec, candidate: Candidate, env: ScanEnv): Pr
   const evaluated = evaluateFrontmatter(read.buffer);
   diagnostics.push(...evaluated.diagnostics);
 
-  if (evaluated.doc !== undefined && evaluated.doc.eol === 'mixed') {
+  if (evaluated.doc !== undefined && evaluated.doc.eol === "mixed") {
     diagnostics.push({
-      level: 'warning',
-      code: 'MIXED_EOL',
-      message: '文件混用了 LF 与 CRLF 行尾（可能是历史改写工具留下的），本插件不会改写该文件。',
+      level: "warning",
+      code: "MIXED_EOL",
+      message: "文件混用了 LF 与 CRLF 行尾（可能是历史改写工具留下的），本插件不会改写该文件。",
     });
   }
   if (evaluated.name !== undefined && evaluated.name !== candidate.dirName && !candidate.isFlatFile) {
     diagnostics.push({
-      level: 'info',
-      code: 'NAME_MISMATCH_DIR',
-      message: '目录名「' + candidate.dirName + '」与 frontmatter 里的 name「' + evaluated.name + '」不同；DSH 以 frontmatter 的 name 为准。',
+      level: "info",
+      code: "NAME_MISMATCH_DIR",
+      message:
+        "目录名「" +
+        candidate.dirName +
+        "」与 frontmatter 里的 name「" +
+        evaluated.name +
+        "」不同；DSH 以 frontmatter 的 name 为准。",
     });
   }
   const linked = env.linkedSkills.get(id);
   if (linked !== undefined) {
     diagnostics.push({
-      level: 'warning',
-      code: 'SYMLINKED_SKILL',
-      message: '该技能目录是符号链接/目录联接（指向 ' + linked + '）；本插件会跟随链接写入真实文件，改动可能影响链接另一侧。',
+      level: "warning",
+      code: "SYMLINKED_SKILL",
+      message:
+        "该技能目录是符号链接/目录联接（指向 " + linked + "）；本插件会跟随链接写入真实文件，改动可能影响链接另一侧。",
     });
   }
 
@@ -246,7 +267,7 @@ async function summarize(spec: RootSpec, candidate: Candidate, env: ScanEnv): Pr
     loadable: evaluated.loadable,
     modelVisible: false,
     diagnostics,
-    format: { eol: evaluated.doc?.eol ?? 'lf', bom: evaluated.doc?.bom ?? false, safeToToggle: evaluated.safeToToggle },
+    format: { eol: evaluated.doc?.eol ?? "lf", bom: evaluated.doc?.bom ?? false, safeToToggle: evaluated.safeToToggle },
     extraKeys,
     mtimeMs: read.mtimeMs,
   };
@@ -295,9 +316,14 @@ export function applyShadowing(skills: SkillSummary[], specs: RootSpec[]): void 
     if (best !== undefined && best !== skill) {
       skill.shadowedBy = best.id;
       skill.diagnostics.push({
-        level: 'warning',
-        code: 'SHADOWED_BY_HIGHER_PRIORITY',
-        message: '同名技能「' + skill.name + '」在更高优先级的根「' + best.rootId + '」中也存在，DSH 只会加载那一个（本条目不会对模型可见）。',
+        level: "warning",
+        code: "SHADOWED_BY_HIGHER_PRIORITY",
+        message:
+          "同名技能「" +
+          skill.name +
+          "」在更高优先级的根「" +
+          best.rootId +
+          "」中也存在，DSH 只会加载那一个（本条目不会对模型可见）。",
       });
     }
     skill.modelVisible = skill.loadable && !skill.modelInvocationDisabled && skill.shadowedBy === undefined;

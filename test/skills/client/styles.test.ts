@@ -56,7 +56,23 @@ test("CSS 只用主题变量，没有硬编码颜色", () => {
 });
 
 test("UI-A 起本目录只保留 kit 没有的形态", () => {
-  const keys = ["root", "errorBox", "note", "diag", "files", "codeWrap", "pathWrap", "form", "browseList", "modalBody", "repoRow", "repoGrow", "refGrow", "chip", "chipRemove"] as const;
+  const keys = [
+    "root",
+    "errorBox",
+    "note",
+    "diag",
+    "files",
+    "codeWrap",
+    "pathWrap",
+    "form",
+    "browseList",
+    "modalBody",
+    "repoRow",
+    "repoGrow",
+    "refGrow",
+    "chip",
+    "chipRemove",
+  ] as const;
   for (const key of keys) {
     assert.ok(SKILLS_CSS.includes("." + styles[key] + "{"), key);
   }

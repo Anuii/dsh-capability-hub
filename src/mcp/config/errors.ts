@@ -3,7 +3,7 @@
  * 路由器据此产出 { ok:false, error:{ code, message, details? } }。
  */
 
-import type { HubError } from '../../platform/contract/host.ts';
+import type { HubError } from "../../platform/contract/host.ts";
 
 export function hubError(status: number, code: string, message: string, details?: unknown): HubError {
   const error = new Error(message) as HubError;
@@ -13,9 +13,8 @@ export function hubError(status: number, code: string, message: string, details?
   return error;
 }
 
-export const badRequest = (message: string, details?: unknown) => hubError(400, 'BAD_REQUEST', message, details);
-export const validationFailed = (message: string, details?: unknown) =>
-  hubError(422, 'VALIDATION', message, details);
-export const notFound = (message: string) => hubError(404, 'NOT_FOUND', message);
-export const conflict = (message: string) => hubError(409, 'CONFLICT', message);
-export const internal = (message: string) => hubError(500, 'INTERNAL', message);
+export const badRequest = (message: string, details?: unknown) => hubError(400, "BAD_REQUEST", message, details);
+export const validationFailed = (message: string, details?: unknown) => hubError(422, "VALIDATION", message, details);
+export const notFound = (message: string) => hubError(404, "NOT_FOUND", message);
+export const conflict = (message: string) => hubError(409, "CONFLICT", message);
+export const internal = (message: string) => hubError(500, "INTERNAL", message);

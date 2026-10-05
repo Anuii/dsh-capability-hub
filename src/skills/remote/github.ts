@@ -7,22 +7,22 @@
  * fetch 可注入（RemoteOptions.fetchImpl），单测用假 fetch 全覆盖。
  */
 
-import type { AuthMode } from '../contract/remote.ts';
+import type { AuthMode } from "../contract/remote.ts";
 
-import { execFile } from 'node:child_process';
-import { gunzipSync } from 'node:zlib';
-import { upstream, rateLimited } from './errors.ts';
-import { readTarEntries, type TarEntry } from './tar.ts';
-import type { HubLogger } from '../../platform/contract/host.ts';
+import { execFile } from "node:child_process";
+import { gunzipSync } from "node:zlib";
+import { upstream, rateLimited } from "./errors.ts";
+import { readTarEntries, type TarEntry } from "./tar.ts";
+import type { HubLogger } from "../../platform/contract/host.ts";
 
 export const API_TIMEOUT_MS = 15_000;
 export const CODELOAD_TIMEOUT_MS = 60_000;
 export const SKILLS_SH_TIMEOUT_MS = 10_000;
 export const GH_TOKEN_TIMEOUT_MS = 5_000;
-export const SKILLS_SH_SEARCH_URL = 'https://skills.sh/api/search';
+export const SKILLS_SH_SEARCH_URL = "https://skills.sh/api/search";
 /** 查询剩余额度用的端点；GitHub 明确说明它**不消耗配额** */
-export const RATE_LIMIT_URL = 'https://api.github.com/rate_limit';
-export const USER_AGENT = 'dsh-capability-hub';
+export const RATE_LIMIT_URL = "https://api.github.com/rate_limit";
+export const USER_AGENT = "dsh-capability-hub";
 
 export interface AuthState {
   mode: AuthMode;
@@ -59,7 +59,7 @@ export interface TarballResult {
 }
 
 function defaultEnvToken(): string | undefined {
-  const raw = process.env['GITHUB_TOKEN'] ?? process.env['GH_TOKEN'];
+  const raw = process.env["GITHUB_TOKEN"] ?? process.env["GH_TOKEN"];
   const token = raw?.trim();
   return token ? token : undefined;
 }
@@ -71,25 +71,31 @@ function defaultEnvToken(): string | undefined {
 export async function ghAuthToken(): Promise<string | undefined> {
   return await new Promise<string | undefined>((resolve) => {
     execFile(
-      'gh',
-      ['auth', 'token'],
-      { timeout: GH_TOKEN_TIMEOUT_MS, windowsHide: true, encoding: 'utf8', maxBuffer: 1024 * 1024, env: { ...process.env, GH_PROMPT_DISABLED: '1' } },
+      "gh",
+      ["auth", "token"],
+      {
+        timeout: GH_TOKEN_TIMEOUT_MS,
+        windowsHide: true,
+        encoding: "utf8",
+        maxBuffer: 1024 * 1024,
+        env: { ...process.env, GH_PROMPT_DISABLED: "1" },
+      },
       (error, stdout) => {
         if (error) {
           resolve(undefined);
           return;
         }
         const token = String(stdout).trim();
-        resolve(token === '' ? undefined : token);
-      }
+        resolve(token === "" ? undefined : token);
+      },
     );
   });
 }
 
 export function parseRateLimit(headers: Headers): RateLimitInfo {
-  const remainingText = headers.get('x-ratelimit-remaining');
-  const resetText = headers.get('x-ratelimit-reset');
-  const limitText = headers.get('x-ratelimit-limit');
+  const remainingText = headers.get("x-ratelimit-remaining");
+  const resetText = headers.get("x-ratelimit-reset");
+  const limitText = headers.get("x-ratelimit-limit");
   const remaining = remainingText === null ? undefined : Number.parseInt(remainingText, 10);
   const resetSeconds = resetText === null ? undefined : Number.parseInt(resetText, 10);
   const limit = limitText === null ? undefined : Number.parseInt(limitText, 10);
@@ -106,14 +112,14 @@ export function parseRateLimit(headers: Headers): RateLimitInfo {
 /** 解析 GET /rate_limit 的响应体（resources.core 优先，其次是兼容字段 rate） */
 function parseRateLimitBody(payload: unknown): RateLimitInfo | undefined {
   const record = (payload ?? {}) as Record<string, unknown>;
-  const resources = record['resources'];
-  const core = ((resources as Record<string, unknown> | undefined)?.['core'] ?? record['rate']) as
+  const resources = record["resources"];
+  const core = ((resources as Record<string, unknown> | undefined)?.["core"] ?? record["rate"]) as
     | Record<string, unknown>
     | undefined;
-  if (!core || typeof core !== 'object') return undefined;
-  const remaining = typeof core['remaining'] === 'number' ? core['remaining'] : undefined;
-  const limit = typeof core['limit'] === 'number' ? core['limit'] : undefined;
-  const reset = typeof core['reset'] === 'number' ? core['reset'] : undefined;
+  if (!core || typeof core !== "object") return undefined;
+  const remaining = typeof core["remaining"] === "number" ? core["remaining"] : undefined;
+  const limit = typeof core["limit"] === "number" ? core["limit"] : undefined;
+  const reset = typeof core["reset"] === "number" ? core["reset"] : undefined;
   const info: RateLimitInfo = {};
   if (remaining !== undefined) info.remaining = remaining;
   if (limit !== undefined) info.limit = limit;
@@ -123,10 +129,10 @@ function parseRateLimitBody(payload: unknown): RateLimitInfo | undefined {
 }
 
 function formatLocal(iso?: string): string {
-  if (!iso) return '稍后';
+  if (!iso) return "稍后";
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '稍后';
-  const pad = (n: number) => String(n).padStart(2, '0');
+  if (Number.isNaN(date.getTime())) return "稍后";
+  const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
@@ -137,8 +143,8 @@ export function rateLimitMessage(info: RateLimitInfo): string {
 
 export function isRateLimitResponse(status: number, headers: Headers): boolean {
   if (status !== 403 && status !== 429) return false;
-  const remaining = headers.get('x-ratelimit-remaining');
-  if (remaining === '0') return true;
+  const remaining = headers.get("x-ratelimit-remaining");
+  if (remaining === "0") return true;
   return status === 429;
 }
 
@@ -171,18 +177,18 @@ export class GitHubClient {
     const fromEnv = this.envTokenProvider()?.trim();
     if (fromEnv) {
       this.onSecret(fromEnv);
-      const state: AuthState = { mode: 'env', token: fromEnv };
+      const state: AuthState = { mode: "env", token: fromEnv };
       this.cached = this.cacheAuth ? state : undefined;
       return state;
     }
     const fromGh = (await this.ghTokenProvider())?.trim();
     if (fromGh) {
       this.onSecret(fromGh);
-      const state: AuthState = { mode: 'gh', token: fromGh };
+      const state: AuthState = { mode: "gh", token: fromGh };
       this.cached = this.cacheAuth ? state : undefined;
       return state;
     }
-    const state: AuthState = { mode: 'anonymous' };
+    const state: AuthState = { mode: "anonymous" };
     this.cached = this.cacheAuth ? state : undefined;
     return state;
   }
@@ -202,11 +208,11 @@ export class GitHubClient {
     let response: Response;
     try {
       response = await this.request(RATE_LIMIT_URL, {
-        accept: 'application/vnd.github+json',
+        accept: "application/vnd.github+json",
         timeoutMs: API_TIMEOUT_MS,
       });
     } catch (error) {
-      this.logger.warn('查询 GitHub 剩余额度失败', (error as Error).message);
+      this.logger.warn("查询 GitHub 剩余额度失败", (error as Error).message);
       return undefined;
     }
     if (!response.ok) return undefined;
@@ -221,26 +227,26 @@ export class GitHubClient {
   }
 
   private headers(token: string | undefined, accept: string): Record<string, string> {
-    const headers: Record<string, string> = { Accept: accept, 'User-Agent': USER_AGENT };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const headers: Record<string, string> = { Accept: accept, "User-Agent": USER_AGENT };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
     return headers;
   }
 
   private async request(
     url: string,
-    init: { accept: string; timeoutMs: number; method?: string; signal?: AbortSignal }
+    init: { accept: string; timeoutMs: number; method?: string; signal?: AbortSignal },
   ): Promise<Response> {
     const auth = await this.auth();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), init.timeoutMs);
     const onAbort = () => controller.abort();
-    init.signal?.addEventListener('abort', onAbort, { once: true });
+    init.signal?.addEventListener("abort", onAbort, { once: true });
     try {
       const response = await this.fetchImpl(url, {
-        method: init.method ?? 'GET',
+        method: init.method ?? "GET",
         headers: this.headers(auth.token, init.accept),
         signal: controller.signal,
-        redirect: 'follow',
+        redirect: "follow",
       });
       // FIX-6（D-3）：**每一个** GitHub 响应（成功或失败）都读一次 x-ratelimit-*。
       // 旧实现只在 throwForResponse（错误路径）里记，于是成功路径永远拿不到配额，
@@ -249,7 +255,7 @@ export class GitHubClient {
       return response;
     } finally {
       clearTimeout(timer);
-      init.signal?.removeEventListener('abort', onAbort);
+      init.signal?.removeEventListener("abort", onAbort);
     }
   }
 
@@ -264,16 +270,22 @@ export class GitHubClient {
       throw rateLimited(rateLimitMessage(info), { url, remaining: info.remaining, resetAt: info.resetAt });
     }
     if (response.status === 401 || response.status === 403) {
-      throw upstream(`${what}被 GitHub 拒绝（HTTP ${response.status}）：仓库不存在、不是公开仓库，或当前凭据无权访问。`, {
-        url,
-        status: response.status,
-      });
+      throw upstream(
+        `${what}被 GitHub 拒绝（HTTP ${response.status}）：仓库不存在、不是公开仓库，或当前凭据无权访问。`,
+        {
+          url,
+          status: response.status,
+        },
+      );
     }
     if (response.status === 404) {
-      throw upstream(`${what}失败：在 GitHub 上找不到对应仓库或分支（HTTP 404）。请检查仓库名是否正确、是否为公开仓库。`, {
-        url,
-        status: response.status,
-      });
+      throw upstream(
+        `${what}失败：在 GitHub 上找不到对应仓库或分支（HTTP 404）。请检查仓库名是否正确、是否为公开仓库。`,
+        {
+          url,
+          status: response.status,
+        },
+      );
     }
     throw upstream(`${what}失败：GitHub 返回 HTTP ${response.status}。`, { url, status: response.status });
   }
@@ -283,17 +295,17 @@ export class GitHubClient {
     let response: Response;
     try {
       response = await this.request(`https://api.github.com/repos/${repo}`, {
-        accept: 'application/vnd.github+json',
+        accept: "application/vnd.github+json",
         timeoutMs: API_TIMEOUT_MS,
       });
     } catch (error) {
-      this.logger.warn('查询默认分支时网络失败', (error as Error).message);
+      this.logger.warn("查询默认分支时网络失败", (error as Error).message);
       return undefined;
     }
     if (!response.ok) return undefined;
     try {
       const data = (await response.json()) as { default_branch?: unknown };
-      return typeof data.default_branch === 'string' ? data.default_branch : undefined;
+      return typeof data.default_branch === "string" ? data.default_branch : undefined;
     } catch {
       return undefined;
     }
@@ -311,7 +323,7 @@ export class GitHubClient {
       } catch (error) {
         lastError = error;
         const message = (error as { code?: string }).code;
-        if (message === 'RATE_LIMITED') sawRateLimit = true;
+        if (message === "RATE_LIMITED") sawRateLimit = true;
       }
     }
     if (lastError !== undefined) throw lastError;
@@ -321,15 +333,15 @@ export class GitHubClient {
   }
 
   private async candidateRefs(repo: string, ref?: string): Promise<string[]> {
-    if (ref !== undefined && ref.trim() !== '') return [ref.trim()];
+    if (ref !== undefined && ref.trim() !== "") return [ref.trim()];
     const out: string[] = [];
     const push = (value: string | undefined) => {
       if (value && !out.includes(value)) out.push(value);
     };
     push(await this.defaultBranch(repo));
-    push('main');
-    push('master');
-    push('HEAD');
+    push("main");
+    push("master");
+    push("HEAD");
     return out;
   }
 
@@ -338,7 +350,7 @@ export class GitHubClient {
     let response: Response;
     try {
       response = await this.request(url, {
-        accept: 'application/x-gzip',
+        accept: "application/x-gzip",
         timeoutMs: CODELOAD_TIMEOUT_MS,
         signal,
       });
@@ -366,7 +378,7 @@ export class GitHubClient {
     if (entries.length === 0) {
       throw upstream(`下载 ${repo}@${ref} 失败：归档里没有任何文件，可能该分支为空。`, { url });
     }
-    const rootName = entries[0]!.path.split('/')[0] ?? '';
+    const rootName = entries[0]!.path.split("/")[0] ?? "";
     return { entries, ref, bytes: bytes.length, rootName };
   }
 
@@ -375,7 +387,7 @@ export class GitHubClient {
     const url = `${SKILLS_SH_SEARCH_URL}?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`;
     let response: Response;
     try {
-      response = await this.request(url, { accept: 'application/json', timeoutMs: SKILLS_SH_TIMEOUT_MS });
+      response = await this.request(url, { accept: "application/json", timeoutMs: SKILLS_SH_TIMEOUT_MS });
     } catch (error) {
       throw upstream(`搜索 skills.sh 失败：网络错误（${(error as Error).message}）。`, { url });
     }
@@ -404,31 +416,31 @@ export interface SkillsShSearchItem {
 
 export function normalizeSkillsShResponse(
   payload: unknown,
-  options: { skillPathLookup?: (repo: string, skillId: string) => string | undefined } = {}
+  options: { skillPathLookup?: (repo: string, skillId: string) => string | undefined } = {},
 ): SkillsShSearchItem[] {
   const raw = (payload ?? {}) as { skills?: unknown };
   const list = Array.isArray(raw.skills) ? raw.skills : [];
   const out: SkillsShSearchItem[] = [];
   for (const item of list) {
-    if (!item || typeof item !== 'object') continue;
+    if (!item || typeof item !== "object") continue;
     const record = item as Record<string, unknown>;
-    const source = typeof record['source'] === 'string' ? record['source'] : '';
-    const name = typeof record['name'] === 'string' ? record['name'] : '';
-    const [owner, repo] = source.split('/');
-    if (!owner || !repo || name === '') continue;
+    const source = typeof record["source"] === "string" ? record["source"] : "";
+    const name = typeof record["name"] === "string" ? record["name"] : "";
+    const [owner, repo] = source.split("/");
+    if (!owner || !repo || name === "") continue;
     // owner 必须是合法的 GitHub 用户名（不含点，因此 "skills.volces.com" 这类非 GitHub 来源被过滤）
     if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(owner)) continue;
     if (!/^[A-Za-z0-9._-]+$/.test(repo)) continue;
-    const skillId = typeof record['skillId'] === 'string' ? record['skillId'] : name;
-    const installs = typeof record['installs'] === 'number' ? record['installs'] : undefined;
+    const skillId = typeof record["skillId"] === "string" ? record["skillId"] : name;
+    const installs = typeof record["installs"] === "number" ? record["installs"] : undefined;
     const item2: SkillsShSearchItem = {
       name,
       repo: `${owner}/${repo}`,
       skillPath: options.skillPathLookup?.(source, skillId),
       installs,
     };
-    const description = record['description'];
-    if (typeof description === 'string' && description.trim() !== '') item2.description = description;
+    const description = record["description"];
+    if (typeof description === "string" && description.trim() !== "") item2.description = description;
     out.push(item2);
   }
   return out;

@@ -51,10 +51,14 @@ export function apply(ctx: unknown, config: PlatformConfig = {}): void {
   };
   // 这里刻意用 console 兜底：外壳还没建起来之前 logger 可能拿不到。
   const logger = {
-    debug: (...a: unknown[]) => Reflect.get(face.logger ?? console, "debug")?.call(face.logger ?? console, "[capability-hub]", ...a),
-    info: (...a: unknown[]) => Reflect.get(face.logger ?? console, "info")?.call(face.logger ?? console, "[capability-hub]", ...a),
-    warn: (...a: unknown[]) => Reflect.get(face.logger ?? console, "warn")?.call(face.logger ?? console, "[capability-hub]", ...a),
-    error: (...a: unknown[]) => Reflect.get(face.logger ?? console, "error")?.call(face.logger ?? console, "[capability-hub]", ...a),
+    debug: (...a: unknown[]) =>
+      Reflect.get(face.logger ?? console, "debug")?.call(face.logger ?? console, "[capability-hub]", ...a),
+    info: (...a: unknown[]) =>
+      Reflect.get(face.logger ?? console, "info")?.call(face.logger ?? console, "[capability-hub]", ...a),
+    warn: (...a: unknown[]) =>
+      Reflect.get(face.logger ?? console, "warn")?.call(face.logger ?? console, "[capability-hub]", ...a),
+    error: (...a: unknown[]) =>
+      Reflect.get(face.logger ?? console, "error")?.call(face.logger ?? console, "[capability-hub]", ...a),
   };
 
   let shell: Shell | undefined;
@@ -82,7 +86,10 @@ export function apply(ctx: unknown, config: PlatformConfig = {}): void {
     try {
       face.effect(() => {
         void boot().catch((error: unknown) => {
-          logger.error("外壳异步启动未捕获异常（已降级，不影响 DSH）：", error instanceof Error ? error.message : error);
+          logger.error(
+            "外壳异步启动未捕获异常（已降级，不影响 DSH）：",
+            error instanceof Error ? error.message : error,
+          );
         });
         return async () => {
           try {

@@ -2,8 +2,8 @@
  * MCP 配置模块内部的类型：落盘文件形状与注入点。HTTP 与进程内契约在 ../contract/config.ts（ADR-0002）。
  */
 
-import type { RawMcpServer, McpConfigSource } from '../contract/config.ts';
-import type { HubModule } from '../../platform/contract/host.ts';
+import type { RawMcpServer, McpConfigSource } from "../contract/config.ts";
+import type { HubModule } from "../../platform/contract/host.ts";
 
 /** 输出护栏的输入形态：true/false 或部分对象（缺的子字段取默认）。 */
 export type OutputGuardInput = boolean | { enabled?: boolean; maxBytes?: number; maxLines?: number };

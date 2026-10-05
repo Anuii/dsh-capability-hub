@@ -9,8 +9,8 @@
  * 不支持：sparse 文件、加密、多卷 —— codeload 不会产出这些。
  */
 
-import { describeUnsafePath, safeRelativePath } from './safepath.ts';
-import { upstream } from './errors.ts';
+import { describeUnsafePath, safeRelativePath } from "./safepath.ts";
+import { upstream } from "./errors.ts";
 
 export const TAR_BLOCK_SIZE = 512;
 
@@ -18,7 +18,7 @@ export interface TarEntry {
   /** 归档内路径，/ 分隔，已剥离 codeload 的 <repo>-<ref>/ 根前缀 */
   path: string;
   /** 目录 / 普通文件 / 符号链接（pax 头不产出条目） */
-  type: 'file' | 'dir' | 'symlink';
+  type: "file" | "dir" | "symlink";
   /** 普通文件的字节；其余为空 */
   data: Buffer;
   /** 符号链接目标（type=symlink 时有值） */
@@ -28,7 +28,7 @@ export interface TarEntry {
 function readCString(buf: Buffer): string {
   const idx = buf.indexOf(0);
   const slice = idx === -1 ? buf : buf.subarray(0, idx);
-  return slice.toString('utf8');
+  return slice.toString("utf8");
 }
 
 /** 八进制（含前导空格 / 尾随 NUL 与空格）；base-256（高位为 0x80）也支持。 */
@@ -42,8 +42,8 @@ function parseNumericField(buf: Buffer): number {
     }
     return value;
   }
-  const text = buf.toString('latin1').replace(/\0/g, ' ').trim();
-  if (text === '') return 0;
+  const text = buf.toString("latin1").replace(/\0/g, " ").trim();
+  if (text === "") return 0;
   const value = Number.parseInt(text, 8);
   return Number.isFinite(value) ? value : 0;
 }
@@ -55,24 +55,24 @@ export function parsePaxRecords(block: Buffer): Record<string, string> {
   while (offset < block.length) {
     const space = block.indexOf(0x20, offset);
     if (space === -1) break;
-    const lenText = block.toString('latin1', offset, space);
+    const lenText = block.toString("latin1", offset, space);
     const len = Number.parseInt(lenText, 10);
     if (!Number.isFinite(len) || len <= 0 || offset + len > block.length) break;
-    const record = block.toString('utf8', space + 1, offset + len - 1);
-    const eq = record.indexOf('=');
+    const record = block.toString("utf8", space + 1, offset + len - 1);
+    const eq = record.indexOf("=");
     if (eq !== -1) out[record.slice(0, eq)] = record.slice(eq + 1);
     offset += len;
   }
   return out;
 }
 
-const TYPE_DIR = '5';
-const TYPE_FILE = '0';
-const TYPE_FILE_ALT = '\0';
-const TYPE_SYMLINK = '2';
-const TYPE_PAX_LOCAL = 'x';
-const TYPE_PAX_GLOBAL = 'g';
-const TYPE_GNU_LONGNAME = 'L';
+const TYPE_DIR = "5";
+const TYPE_FILE = "0";
+const TYPE_FILE_ALT = "\0";
+const TYPE_SYMLINK = "2";
+const TYPE_PAX_LOCAL = "x";
+const TYPE_PAX_GLOBAL = "g";
+const TYPE_GNU_LONGNAME = "L";
 
 /**
  * 从已解压的 tar 字节里读出全部普通文件、目录与符号链接。
@@ -92,7 +92,7 @@ export function readTarEntries(tarBytes: Buffer, options: { stripRoot?: boolean 
     const typeByte = String.fromCharCode(header[156]!);
     const rawName = readCString(header.subarray(0, 100));
     const prefix = readCString(header.subarray(345, 500));
-    const headerName = prefix === '' ? rawName : `${prefix}/${rawName}`;
+    const headerName = prefix === "" ? rawName : `${prefix}/${rawName}`;
     const size = parseNumericField(header.subarray(124, 136));
     const dataStart = offset;
     const dataEnd = dataStart + size;
@@ -107,26 +107,26 @@ export function readTarEntries(tarBytes: Buffer, options: { stripRoot?: boolean 
       continue;
     }
     if (typeByte === TYPE_GNU_LONGNAME) {
-      gnuLongName = data.toString('utf8').replace(/\0+$/, '');
+      gnuLongName = data.toString("utf8").replace(/\0+$/, "");
       continue;
     }
 
-    const name = gnuLongName ?? pax['path'] ?? headerName;
+    const name = gnuLongName ?? pax["path"] ?? headerName;
     const linkTarget = typeByte === TYPE_SYMLINK ? readCString(header.subarray(157, 257)) : undefined;
     gnuLongName = undefined;
     pax = {};
 
-    if (name === '' || name.endsWith('/')) {
-      if (typeByte === TYPE_DIR || name.endsWith('/')) {
-        const dirName = name.replace(/\/+$/, '');
-        if (dirName !== '') entries.push({ path: dirName, type: 'dir', data: Buffer.alloc(0) });
+    if (name === "" || name.endsWith("/")) {
+      if (typeByte === TYPE_DIR || name.endsWith("/")) {
+        const dirName = name.replace(/\/+$/, "");
+        if (dirName !== "") entries.push({ path: dirName, type: "dir", data: Buffer.alloc(0) });
       }
       continue;
     }
     if (typeByte === TYPE_FILE || typeByte === TYPE_FILE_ALT) {
-      entries.push({ path: name, type: 'file', data });
+      entries.push({ path: name, type: "file", data });
     } else if (typeByte === TYPE_SYMLINK) {
-      entries.push({ path: name, type: 'symlink', data: Buffer.alloc(0), linkTarget });
+      entries.push({ path: name, type: "symlink", data: Buffer.alloc(0), linkTarget });
     }
     // 其余类型（硬链接 '1'、字符/块设备、fifo）本插件不关心，直接忽略
   }
@@ -135,15 +135,15 @@ export function readTarEntries(tarBytes: Buffer, options: { stripRoot?: boolean 
   const first = entries[0]!;
   // codeload 归档的第一条永远是根目录（"<repo>-<ref>/"）；若不是目录则不做剥离，
   // 避免把一条平铺文件名误当根。
-  if (first.type !== 'dir') return entries;
-  const root = first.path.split('/')[0]!;
-  if (root === '' || root === first.path && first.path.includes('/')) return entries;
+  if (first.type !== "dir") return entries;
+  const root = first.path.split("/")[0]!;
+  if (root === "" || (root === first.path && first.path.includes("/"))) return entries;
   const rootPrefix = `${root}/`;
   const stripped: TarEntry[] = [];
   for (const entry of entries) {
     if (!entry.path.startsWith(rootPrefix)) continue;
     const path = entry.path.slice(rootPrefix.length);
-    if (path === '') continue;
+    if (path === "") continue;
     stripped.push({ ...entry, path });
   }
   return stripped.length === 0 ? entries : stripped;
@@ -158,11 +158,11 @@ export function readTarEntries(tarBytes: Buffer, options: { stripRoot?: boolean 
  * 本次安装/更新/浏览。符号链接（type='symlink'）从一开始就不在返回集里，永远不会被写盘。
  */
 export function filesUnderDirectory(entries: TarEntry[], dir: string): { rel: string; data: Buffer }[] {
-  const normalized = dir.replace(/^\/+/, '').replace(/\/+$/, '');
-  if (normalized !== '') safeRelativePath(normalized, '上游归档里的技能目录路径');
-  const prefix = normalized === '' ? '' : `${normalized}/`;
+  const normalized = dir.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (normalized !== "") safeRelativePath(normalized, "上游归档里的技能目录路径");
+  const prefix = normalized === "" ? "" : `${normalized}/`;
   return entries
-    .filter((e) => e.type === 'file' && e.path.startsWith(prefix))
+    .filter((e) => e.type === "file" && e.path.startsWith(prefix))
     .map((e) => {
       const rel = e.path.slice(prefix.length);
       const reason = describeUnsafePath(rel);
@@ -180,32 +180,32 @@ export function filesUnderDirectory(entries: TarEntry[], dir: string): { rel: st
 export function locateSkillDirectory(
   entries: TarEntry[],
   skillPath: string,
-  options: { allowRoot?: boolean } = {}
+  options: { allowRoot?: boolean } = {},
 ): { dirName: string; path: string } | undefined {
-  const normalized = skillPath.replace(/\\/g, '/').replace(/^\/+/, '');
+  const normalized = skillPath.replace(/\\/g, "/").replace(/^\/+/, "");
   // 注意："SKILL.md" 本身（没有目录段）就是仓库根 —— 与 sourceurl.ts 的 skillDirOf 同一判据
-  const folder = /^SKILL\.md$/i.test(normalized) ? '' : normalized.replace(/\/SKILL\.md$/i, '').replace(/\/+$/, '');
+  const folder = /^SKILL\.md$/i.test(normalized) ? "" : normalized.replace(/\/SKILL\.md$/i, "").replace(/\/+$/, "");
   // FIX-6（D-1）：skillPath === "SKILL.md" 表示技能就在仓库根（npx skills 的写法）——
   // 此时技能目录是仓库根，dirName 为空串。只给显式允许的调用方（检查/应用更新）；
   // 安装不允许（会把整个仓库写进技能根本身）。
-  if (folder === '') {
-    if (options.allowRoot === true && entryExists(entries, 'SKILL.md')) return { dirName: '', path: '' };
+  if (folder === "") {
+    if (options.allowRoot === true && entryExists(entries, "SKILL.md")) return { dirName: "", path: "" };
     return undefined;
   }
   if (entryExists(entries, `${folder}/SKILL.md`)) {
-    return { dirName: folder.split('/').pop() ?? folder, path: folder };
+    return { dirName: folder.split("/").pop() ?? folder, path: folder };
   }
-  const base = folder === '' ? '' : (folder.split('/').pop() ?? folder);
-  if (base === '') return undefined;
+  const base = folder === "" ? "" : (folder.split("/").pop() ?? folder);
+  if (base === "") return undefined;
   const matches = entries.filter(
-    (e) => e.type === 'file' && /\/SKILL\.md$/i.test(e.path) && (e.path.split('/').at(-2) ?? '') === base
+    (e) => e.type === "file" && /\/SKILL\.md$/i.test(e.path) && (e.path.split("/").at(-2) ?? "") === base,
   );
   if (matches.length !== 1) return undefined;
-  const dir = matches[0]!.path.replace(/\/SKILL\.md$/i, '');
+  const dir = matches[0]!.path.replace(/\/SKILL\.md$/i, "");
   return { dirName: base, path: dir };
 }
 
 function entryExists(entries: TarEntry[], path: string): boolean {
   const needle = path.toLowerCase();
-  return entries.some((e) => e.type === 'file' && e.path.toLowerCase() === needle);
+  return entries.some((e) => e.type === "file" && e.path.toLowerCase() === needle);
 }

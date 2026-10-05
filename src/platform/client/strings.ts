@@ -77,7 +77,8 @@ export const en: Record<string, string> = {
   "env.loading": "Loading…",
   "env.failed": "Failed: {message}",
   "env.degraded": "Some features are unavailable: {modules}",
-  "env.staleHost": "Capability Hub was upgraded to {client}, but DSH is still running the {host} host code; restart DSH to enable the new features.",
+  "env.staleHost":
+    "Capability Hub was upgraded to {client}, but DSH is still running the {host} host code; restart DSH to enable the new features.",
   "env.viewDetails": "View details",
   "action.refresh": "Refresh",
   "action.close": "Close",
@@ -100,9 +101,8 @@ export function setRuntimeTranslate(
 
 /** 当前语言的字典（没接运行期翻译时的兜底）。 */
 function dictionary(): Record<string, string> {
-  const lang = typeof document !== "undefined" && document.documentElement.lang !== ""
-    ? document.documentElement.lang
-    : "zh";
+  const lang =
+    typeof document !== "undefined" && document.documentElement.lang !== "" ? document.documentElement.lang : "zh";
   return lang.toLowerCase().startsWith("en") ? en : { ...zh };
 }
 

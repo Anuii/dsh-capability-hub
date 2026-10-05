@@ -52,7 +52,11 @@ async function parse(response: Response): Promise<unknown> {
     return JSON.parse(text) as unknown;
   } catch {
     // 插件路由不存在：最常见的原因是插件刚升级、DSH 还在运行旧的宿主代码（浏览器半已热更新）。
-    if (response.status === 404) throw new ApiError("ROUTE_MISSING", "接口不存在（HTTP 404）：能力中心刚升级过的话，需要重启 DSH 才会加载新的宿主代码。");
+    if (response.status === 404)
+      throw new ApiError(
+        "ROUTE_MISSING",
+        "接口不存在（HTTP 404）：能力中心刚升级过的话，需要重启 DSH 才会加载新的宿主代码。",
+      );
     if (!response.ok) throw new ApiError("BAD_RESPONSE", `服务端返回了非 JSON 响应（HTTP ${response.status}）`);
     throw new ApiError("BAD_RESPONSE", "服务端返回了非 JSON 响应");
   }

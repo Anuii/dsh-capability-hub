@@ -89,7 +89,7 @@ export function createStubRuntime(options: { servers?: string[]; reason?: string
       listeners.clear();
     },
     /** 测试/演示用：改服务器名列表并触发描述变化。 */
-    ...( {
+    ...({
       setServers(next: string[]): void {
         servers = [...next];
         emit();

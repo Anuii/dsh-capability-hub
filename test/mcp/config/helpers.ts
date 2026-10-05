@@ -3,18 +3,18 @@
  * 所有落盘一律在 os.tmpdir() 下的临时目录里，绝不触碰真实用户目录（PLAN §4）。
  */
 
-import { promises as fs } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { promises as fs } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import type { HubContext, HubLogger, RouteRequest } from '../../../src/platform/contract/host.ts';
+import type { HubContext, HubLogger, RouteRequest } from "../../../src/platform/contract/host.ts";
 
 export interface TempDir {
   path: string;
   cleanup(): Promise<void>;
 }
 
-export async function makeTempDir(prefix = 'mcp-config-test-'): Promise<TempDir> {
+export async function makeTempDir(prefix = "mcp-config-test-"): Promise<TempDir> {
   const path = await fs.mkdtemp(join(tmpdir(), prefix));
   return {
     path,
@@ -31,25 +31,34 @@ export interface RecordingLogger extends HubLogger {
 
 export function recordingLogger(): RecordingLogger {
   const entries: { level: string; args: unknown[] }[] = [];
-  const push = (level: string) => (...args: unknown[]) => {
-    entries.push({ level, args });
-  };
+  const push =
+    (level: string) =>
+    (...args: unknown[]) => {
+      entries.push({ level, args });
+    };
   return {
     entries,
-    text: () => entries.map((e) => e.level + ' ' + e.args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')).join('\n'),
-    debug: push('debug'),
-    info: push('info'),
-    warn: push('warn'),
-    error: push('error'),
+    text: () =>
+      entries
+        .map((e) => e.level + " " + e.args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "))
+        .join("\n"),
+    debug: push("debug"),
+    info: push("info"),
+    warn: push("warn"),
+    error: push("error"),
   };
 }
 
-export function makeContext(hubHome: string, homeDir: string, logger: HubLogger = recordingLogger()): HubContext & { logger: HubLogger } {
+export function makeContext(
+  hubHome: string,
+  homeDir: string,
+  logger: HubLogger = recordingLogger(),
+): HubContext & { logger: HubLogger } {
   return {
     homeDir,
-    dshHome: join(hubHome, '..'),
+    dshHome: join(hubHome, ".."),
     hubHome,
-    profileName: 'test',
+    profileName: "test",
     logger,
     customSkillDirs: [],
   };
@@ -67,7 +76,7 @@ export async function callRoute(
   query?: Record<string, string>,
 ): Promise<unknown> {
   const handler = routes[key];
-  if (handler === undefined) throw new Error('路由不存在：' + key);
+  if (handler === undefined) throw new Error("路由不存在：" + key);
   return await handler(makeRequest(body, query));
 }
 
@@ -84,13 +93,13 @@ export async function expectRejection(fn: () => Promise<unknown>): Promise<Asser
     await fn();
   } catch (error) {
     const e = error as { status?: number; code?: string; message?: string; details?: unknown };
-    return { status: e.status, code: e.code, message: e.message ?? '', details: e.details };
+    return { status: e.status, code: e.code, message: e.message ?? "", details: e.details };
   }
-  throw new Error('预期抛出错误，但调用成功返回了。');
+  throw new Error("预期抛出错误，但调用成功返回了。");
 }
 
 export async function readJson(path: string): Promise<unknown> {
-  return JSON.parse(await fs.readFile(path, 'utf8')) as unknown;
+  return JSON.parse(await fs.readFile(path, "utf8")) as unknown;
 }
 
 export function delay(ms: number): Promise<void> {

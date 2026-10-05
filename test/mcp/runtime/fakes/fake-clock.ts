@@ -6,7 +6,7 @@
  * - **I/O 模拟的延迟**（假服务器"慢响应"）走真实 setTimeout —— 十几毫秒，
  *   既能让并发窗口真实存在，又不会让测试变慢。
  */
-import type { Clock } from '../../../../src/mcp/runtime/atoms/clock.ts';
+import type { Clock } from "../../../../src/mcp/runtime/atoms/clock.ts";
 
 interface FakeTimer {
   id: number;
@@ -77,11 +77,11 @@ export class FakeClock implements Clock {
 export const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** 轮询等待条件成立（用于等后台任务）。 */
-export async function waitFor(condition: () => boolean, timeoutMs = 3000, label = '条件'): Promise<void> {
+export async function waitFor(condition: () => boolean, timeoutMs = 3000, label = "条件"): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (condition()) return;
     await sleep(5);
   }
-  if (!condition()) throw new Error('等待超时：' + label);
+  if (!condition()) throw new Error("等待超时：" + label);
 }

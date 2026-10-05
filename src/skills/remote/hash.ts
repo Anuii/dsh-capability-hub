@@ -19,13 +19,13 @@
  *     误报「有更新」，也能识别真正的上游改动
  */
 
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { walkFiles } from './fsx.ts';
-import { filesUnderDirectory, type TarEntry } from './tar.ts';
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { walkFiles } from "./fsx.ts";
+import { filesUnderDirectory, type TarEntry } from "./tar.ts";
 
 /** 默认跳过清单 —— 与 npx skills 完全一致（只有这两个） */
-export const HASH_SKIP_DIRS = ['.git', 'node_modules'];
+export const HASH_SKIP_DIRS = [".git", "node_modules"];
 
 /** 纯二进制样本判定阈值：前 8000 字节里出现 NUL 即视为二进制 */
 const BINARY_SNIFF_BYTES = 8000;
@@ -38,18 +38,18 @@ export function isProbablyBinary(data: Buffer): boolean {
 
 /** LF → CRLF（文本文件用；与 git core.autocrlf=true 的落盘结果一致） */
 export function toCrlf(data: Buffer): Buffer {
-  const text = data.toString('binary');
-  const normalized = text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+  const text = data.toString("binary");
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n");
   if (normalized === text) return data;
-  return Buffer.from(normalized, 'binary');
+  return Buffer.from(normalized, "binary");
 }
 
 /** CRLF / 裸 CR → LF */
 export function toLf(data: Buffer): Buffer {
-  const text = data.toString('binary');
-  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const text = data.toString("binary");
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   if (normalized === text) return data;
-  return Buffer.from(normalized, 'binary');
+  return Buffer.from(normalized, "binary");
 }
 
 export interface HashFile {
@@ -62,15 +62,15 @@ function stableSort(files: HashFile[]): HashFile[] {
   return [...files].sort((a, b) => a.rel.localeCompare(b.rel));
 }
 
-function sha256Of(files: HashFile[], normalize: 'none' | 'crlf'): string {
-  const hash = createHash('sha256');
+function sha256Of(files: HashFile[], normalize: "none" | "crlf"): string {
+  const hash = createHash("sha256");
   for (const file of stableSort(files)) {
     let data = file.data;
-    if (normalize === 'crlf' && !isProbablyBinary(data)) data = toCrlf(data);
+    if (normalize === "crlf" && !isProbablyBinary(data)) data = toCrlf(data);
     hash.update(file.rel);
     hash.update(data);
   }
-  return hash.digest('hex');
+  return hash.digest("hex");
 }
 
 export interface FolderHash {
@@ -84,8 +84,8 @@ export interface FolderHash {
 
 export function hashFiles(files: HashFile[]): FolderHash {
   return {
-    raw: sha256Of(files, 'none'),
-    normalized: sha256Of(files, 'crlf'),
+    raw: sha256Of(files, "none"),
+    normalized: sha256Of(files, "crlf"),
     fileCount: files.length,
   };
 }
@@ -115,10 +115,7 @@ export function recordedHash(folder: FolderHash): string {
 }
 
 /** 比较上游与记录值：raw 或 normalized 任一相等即视为无变化。 */
-export function hashesEqual(
-  upstream: Pick<FolderHash, 'raw' | 'normalized'>,
-  recorded: string | undefined
-): boolean {
+export function hashesEqual(upstream: Pick<FolderHash, "raw" | "normalized">, recorded: string | undefined): boolean {
   if (!recorded) return false;
   return upstream.raw === recorded || upstream.normalized === recorded;
 }

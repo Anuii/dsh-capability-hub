@@ -21,7 +21,7 @@
  * 匹配是**精确 pathname**（fetchRoutes 是 Map，按 pathname 直接 get），所以一条接口 = 一条路由。
  */
 
-import type { RouteTable } from '../contract/host.ts';
+import type { RouteTable } from "../contract/host.ts";
 import type { RouteHandler, RouteRequest } from "../contract/host.ts";
 import { asHubError } from "./errors.ts";
 
@@ -111,7 +111,11 @@ export function parseRouteKey(key: string): { method: string; relative: string }
   const at = key.indexOf(" ");
   if (at <= 0) return undefined;
   const method = key.slice(0, at).toUpperCase();
-  const relative = key.slice(at + 1).trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  const relative = key
+    .slice(at + 1)
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
   if (!METHODS.has(method)) return undefined;
   // 与 DSH 的 endpointFromPath（connection/lib/index.js:711-716）对齐：段不能为空、
   // 不能是 "." / ".."，且只允许 [A-Za-z0-9_$.-]+。

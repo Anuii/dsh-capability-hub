@@ -47,16 +47,20 @@ mkdirSync(outDir, { recursive: true });
 const profileDir = join(repoRoot, ".dev", "tmp", "edge-profile");
 mkdirSync(profileDir, { recursive: true });
 
-const edge = spawn(EDGE, [
-  "--headless=new",
-  "--disable-gpu",
-  "--no-first-run",
-  "--no-default-browser-check",
-  "--user-data-dir=" + profileDir,
-  "--remote-debugging-port=" + String(debugPort),
-  "--window-size=1440,960",
-  "about:blank",
-], { stdio: "ignore", detached: false });
+const edge = spawn(
+  EDGE,
+  [
+    "--headless=new",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--user-data-dir=" + profileDir,
+    "--remote-debugging-port=" + String(debugPort),
+    "--window-size=1440,960",
+    "about:blank",
+  ],
+  { stdio: "ignore", detached: false },
+);
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
@@ -110,7 +114,8 @@ function send(method, params = {}) {
 
 async function evaluate(expression) {
   const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
-  if (result.exceptionDetails !== undefined) throw new Error("页面脚本异常：" + JSON.stringify(result.exceptionDetails));
+  if (result.exceptionDetails !== undefined)
+    throw new Error("页面脚本异常：" + JSON.stringify(result.exceptionDetails));
   return result.result.value;
 }
 
@@ -140,7 +145,7 @@ await sleep(800);
 
 facts.title = await evaluate("document.title");
 facts.bootLoaded = await evaluate("!!globalThis.__DSH_BOOT__");
-facts.hubInBoot = await evaluate("JSON.stringify(globalThis.__DSH_BOOT__ ?? {}).includes(\"dsh-capability-hub\")");
+facts.hubInBoot = await evaluate('JSON.stringify(globalThis.__DSH_BOOT__ ?? {}).includes("dsh-capability-hub")');
 
 // 1. 点开侧栏的「能力中心」行
 facts.sidebarEntryFound = await evaluate(
@@ -151,21 +156,31 @@ facts.pagePresent = await evaluate("!!document.querySelector('[data-testid=capab
 await shot("01-page.png");
 
 // 2. 依次切两个标签
-facts.tabs = await evaluate("JSON.stringify([...document.querySelectorAll('[role=tab]')].map((node) => node.textContent))");
+facts.tabs = await evaluate(
+  "JSON.stringify([...document.querySelectorAll('[role=tab]')].map((node) => node.textContent))",
+);
 for (const tab of ["skills", "mcp"]) {
   facts["clicked-" + tab] = await evaluate(
-    "(() => { const node = document.querySelector('[data-testid=capability-hub-tab-" + tab + "]'); if (!node) return false; node.click(); return true; })()",
+    "(() => { const node = document.querySelector('[data-testid=capability-hub-tab-" +
+      tab +
+      "]'); if (!node) return false; node.click(); return true; })()",
   );
   await sleep(400);
   facts["activeTab-" + tab] = await evaluate(
-    "(() => { const node = document.querySelector('[data-testid=capability-hub-tab-" + tab + "]'); return node ? node.getAttribute('aria-selected') : null; })()",
+    "(() => { const node = document.querySelector('[data-testid=capability-hub-tab-" +
+      tab +
+      "]'); return node ? node.getAttribute('aria-selected') : null; })()",
   );
   // 两个标签是同时挂载的（切换只改 hidden），所以「存在」恒为真 ——
   // 判断可见性要看 hidden 属性。
   facts["panel-" + tab] = await evaluate(
-    "(() => { const node = document.querySelector('[data-testid=capability-hub-panel-" + tab + "]'); return node ? !node.hidden : false; })()",
+    "(() => { const node = document.querySelector('[data-testid=capability-hub-panel-" +
+      tab +
+      "]'); return node ? !node.hidden : false; })()",
   );
-  facts["panelMounted-" + tab] = await evaluate("!!document.querySelector('[data-testid=capability-hub-panel-" + tab + "]')");
+  facts["panelMounted-" + tab] = await evaluate(
+    "!!document.querySelector('[data-testid=capability-hub-panel-" + tab + "]')",
+  );
   await shot("02-tab-" + tab + ".png");
 }
 
@@ -197,9 +212,7 @@ facts.console = consoleLines.filter((line) => line.includes("capability-hub")).s
 facts.headerTitle = await evaluate(
   "(() => { const node = document.querySelector('[data-testid=capability-hub-page] h2'); return node ? node.textContent : null; })()",
 );
-facts.subtitleRemoved = await evaluate(
-  "document.querySelector('[data-testid=capability-hub-page] header p') === null",
-);
+facts.subtitleRemoved = await evaluate("document.querySelector('[data-testid=capability-hub-page] header p') === null");
 facts.envCardOnPage = await evaluate("document.querySelector('[data-testid=capability-hub-env]') !== null");
 facts.degradedBannerOnPage = await evaluate("!!document.querySelector('[data-testid=capability-hub-degraded]')");
 await shot("03-workspace.png");

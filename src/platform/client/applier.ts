@@ -106,7 +106,8 @@ export function installApplier(ctx: unknown): void {
   //   globalThis.__dshCapabilityHubDiagnostics()
   // 看客户端每一步是否成功（steps）以及哪些服务缺失（errors）。见 docs/CLIENT-GUIDE.md。
   step("diagnostics-hook", () => {
-    (globalThis as { __dshCapabilityHubDiagnostics?: () => unknown }).__dshCapabilityHubDiagnostics = () => clientDiagnostics();
+    (globalThis as { __dshCapabilityHubDiagnostics?: () => unknown }).__dshCapabilityHubDiagnostics = () =>
+      clientDiagnostics();
   });
 
   if (typeof view.effect === "function") {

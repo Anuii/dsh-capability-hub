@@ -10,20 +10,22 @@
  * 注意：真正被调用时优先用注入对象上的字段（可能是 SDK 的真实导出），
  * 本文件顶部的 fallback 只是为了给「未注入 getDefaultEnvironment」这种情况兜底。
  */
-import { fallbackDefaultEnvironment } from './sandbox-env.ts';
-import type { McpSdk } from '../../contract/runtime.ts';
+import { fallbackDefaultEnvironment } from "./sandbox-env.ts";
+import type { McpSdk } from "../../contract/runtime.ts";
 
 /** 注入 SDK 的形状校验。缺少必需字段时报出中文、可操作的错误。 */
 export function assertSdk(sdk: McpSdk | undefined): McpSdk {
-  if (!sdk || typeof sdk !== 'object') {
-    throw new Error('MCP 运行时缺少 SDK：平台层必须注入 { Client, StdioClientTransport, StreamableHTTPClientTransport }');
+  if (!sdk || typeof sdk !== "object") {
+    throw new Error(
+      "MCP 运行时缺少 SDK：平台层必须注入 { Client, StdioClientTransport, StreamableHTTPClientTransport }",
+    );
   }
   const missing: string[] = [];
-  if (typeof sdk.Client !== 'function') missing.push('Client');
-  if (typeof sdk.StdioClientTransport !== 'function') missing.push('StdioClientTransport');
-  if (typeof sdk.StreamableHTTPClientTransport !== 'function') missing.push('StreamableHTTPClientTransport');
+  if (typeof sdk.Client !== "function") missing.push("Client");
+  if (typeof sdk.StdioClientTransport !== "function") missing.push("StdioClientTransport");
+  if (typeof sdk.StreamableHTTPClientTransport !== "function") missing.push("StreamableHTTPClientTransport");
   if (missing.length > 0) {
-    throw new Error('MCP 运行时注入的 SDK 不完整，缺少：' + missing.join('、'));
+    throw new Error("MCP 运行时注入的 SDK 不完整，缺少：" + missing.join("、"));
   }
   return sdk;
 }
