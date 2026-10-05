@@ -14,3 +14,6 @@
 ## 第一批落地
 - MCP 页的运行状态：`mcp/client/runtime-store.ts`。服务器行、详情抽屉、「运行中」、标签红点读同一份快照；轮询（5 秒，页面不可见时跳过，多处启动共用一个计时器）、刷新缓存与断开后的重读、保存后等工具数（D-C6）都在仓库里。删掉了 `runningTick` 与重复的 `running/data.ts`。
 - 「运行中」的预览数据（?hubPreviewRunning=1）改成一个 adapter：服务器状态照常读，会话换成示例。
+- 仓库视图：`skills/client/remote/repo-view-store.ts`（输入框、临时浏览、仓库列表编辑、汇总筛选与分批、勾选与安装），`install-view.tsx` 只渲染。
+- 技能页：`skills/client/skills-store.ts`（列表、回收站、启停 / 删除 / 恢复 / 彻底删除）；对话框与 Toast 仍在组件里——写操作返回 `{ ok, message, fieldErrors, conflict? }`，组件据此决定关不关对话框。
+- 来源与更新的共享状态（`remote/store.ts`）改为建在 `createStore` 之上，删掉了它自己的订阅实现与 `use-store.ts`。

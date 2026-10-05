@@ -8,10 +8,10 @@
 
 import * as React from "react";
 import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge } from "../../../kit/index.ts";
+import { Badge, useStoreState } from "../../../kit/index.ts";
 import { applyUpdates, checkUpdates } from "./data.ts";
 import { loadAuth } from "./cache.ts";
-import { useRemoteState } from "./use-store.ts";
+
 import { remoteStore } from "./store.ts";
 import {
   applySummaryText,
@@ -40,7 +40,7 @@ export interface SkillUpdateSectionProps {
 /** 更新那一段。 */
 export function SkillUpdateSection(props: SkillUpdateSectionProps): React.ReactElement | null {
   const { skill, workspace } = props;
-  const state = useRemoteState();
+  const state = useStoreState(remoteStore.state);
   const [checking, setChecking] = React.useState<boolean>(false);
   const [updating, setUpdating] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | undefined>(undefined);

@@ -8,6 +8,7 @@
 
 import { api } from "../../platform/client/api.ts";
 import type { ListResult, SkillSummary, SkillView, TrashItem } from "../contract/local.ts";
+import type { SkillsAdapter } from "./skills-store.ts";
 
 /**
  * 当前会话工作区参数；undefined 与空白串都不下发 —— 宿主在没有 workspace 时
@@ -83,3 +84,13 @@ export async function purgeTrash(trashId: string | undefined): Promise<number> {
   const data = await api.post<{ purged?: number }>("skills/trash/purge", body);
   return typeof data?.purged === "number" ? data.purged : 0;
 }
+
+/** 技能页数据仓库（skills-store.ts）的 HTTP adapter。 */
+export const skillsApi: SkillsAdapter = {
+  list: listSkills,
+  trash: listTrash,
+  setEnabled: setSkillEnabled,
+  remove: deleteSkill,
+  restore: restoreTrash,
+  purge: purgeTrash,
+};

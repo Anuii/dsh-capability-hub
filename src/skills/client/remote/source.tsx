@@ -12,10 +12,10 @@
 import * as React from "react";
 import type { FieldError } from "../../../platform/contract/host.ts";
 import { Button, Checkbox, Input } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge, KeyValue } from "../../../kit/index.ts";
+import { Badge, KeyValue, useStoreState } from "../../../kit/index.ts";
 import { ensureSources, reloadSources } from "./cache.ts";
 import { discoverSources, registerSource, unregisterSource } from "./data.ts";
-import { useRemoteState } from "./use-store.ts";
+
 import { remoteStore } from "./store.ts";
 import { SkillUpdateSection } from "./update.tsx";
 import {
@@ -50,7 +50,7 @@ export interface SkillSourceSectionProps {
 /** 来源那一段。 */
 export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactElement {
   const { skill, workspace } = props;
-  const state = useRemoteState();
+  const state = useStoreState(remoteStore.state);
   const [step, setStep] = React.useState<Step>("view");
   const [candidates, setCandidates] = React.useState<DiscoverCandidate[] | undefined>(undefined);
   const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set<string>());

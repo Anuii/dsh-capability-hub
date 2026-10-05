@@ -11,11 +11,11 @@
 import * as React from "react";
 import type { FieldError } from "../../../platform/contract/host.ts";
 import { Button, Checkbox, Modal } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge } from "../../../kit/index.ts";
+import { Badge, useStoreState } from "../../../kit/index.ts";
 import type { MenuItem } from "../../../kit/index.ts";
 import { ensureSources, loadAuth, reloadSources } from "./cache.ts";
 import { applyUpdates, checkUpdates, discoverSources, registerSource } from "./data.ts";
-import { useRemoteState } from "./use-store.ts";
+
 import { remoteStore } from "./store.ts";
 import {
   applySummaryText,
@@ -63,7 +63,7 @@ export interface RemoteMenu {
 /** ⋯ 菜单里的远程动作。 */
 export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
   const { skills, workspace, onChanged, onOpenTrash, notify } = props;
-  const state = useRemoteState();
+  const state = useStoreState(remoteStore.state);
   const [checking, setChecking] = React.useState<boolean>(false);
   const [applying, setApplying] = React.useState<boolean>(false);
   const [discoverOpen, setDiscoverOpen] = React.useState<boolean>(false);

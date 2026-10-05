@@ -1,7 +1,7 @@
 /**
  * 技能标签页（UI-DESIGN §4）：**工具栏 + 列表 + 三个抽屉**，没有二级导航、没有常驻统计行、
- * 没有常驻说明文字。数据流（list / trash 的加载与写操作）仍然集中在这里，
- * 视图层（list.tsx / detail.tsx / trash.tsx / remote/*）只做展示。
+ * 没有常驻说明文字。列表与回收站的数据和写操作在 skills-store.ts（规则与单测都在那里），
+ * 本文件只管对话框、抽屉与 Toast；视图层（list.tsx / detail.tsx / trash.tsx / remote/*）只做展示。
  *
  * 硬约束：
  *   - 组件绝不 throw：请求错误一律转成界面状态；渲染异常由 TabErrorBoundary 兜底；
@@ -14,25 +14,13 @@ import * as React from "react";
 import type { FieldError } from "../../platform/contract/host.ts";
 import { Button, Toast } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { TabProps } from "../../platform/client/tab-props.ts";
-import { Banner, Toolbar } from "../../kit/index.ts";
+import { Banner, Toolbar, useStoreState } from "../../kit/index.ts";
 import type { MenuItem } from "../../kit/index.ts";
 import { AddSkillDrawer } from "./remote/install-view.tsx";
 import { useSkillsRemoteMenu } from "./remote/batch.tsx";
-import { deleteSkill, listSkills, listTrash, purgeTrash, restoreTrash, setSkillEnabled } from "./data.ts";
-import {
-  displayName,
-  errorMessage,
-  homeDirFromRoots,
-  fieldErrors,
-  filterCounts,
-  filterLabel,
-  FILTERS,
-  isConflict,
-  removeSkill,
-  replaceSkill,
-  type FilterId,
-  type MatchContext,
-} from "./format.ts";
+import { skillsApi } from "./data.ts";
+import { createSkillsStore } from "./skills-store.ts";
+import { homeDirFromRoots, filterCounts, filterLabel, FILTERS, type FilterId, type MatchContext } from "./format.ts";
 import { injectSkillsStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import { DeleteSkillDialog, PurgeAllDialog, PurgeOneDialog, RestoreConflictDialog } from "./dialogs.tsx";
@@ -78,17 +66,13 @@ class TabErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 
 function SkillsTabInner(props: TabProps): React.ReactElement {
   const workspace = props.workspace;
-  const [list, setList] = React.useState<ListResult | undefined>(undefined);
-  const [listError, setListError] = React.useState<string | undefined>(undefined);
-  const [loading, setLoading] = React.useState<boolean>(true);
-  const [trash, setTrash] = React.useState<TrashItem[] | undefined>(undefined);
-  const [trashError, setTrashError] = React.useState<string | undefined>(undefined);
-  const [trashLoading, setTrashLoading] = React.useState<boolean>(false);
+  const store = React.useMemo(() => createSkillsStore(skillsApi), []);
+  const { list, listError, loading, trash, trashError, trashLoading, busyIds, trashBusyIds, purgingAll } =
+    useStoreState(store.state);
+  React.useEffect(() => store.setWorkspace(workspace), [store, workspace]);
+  React.useEffect(() => void store.reloadTrash(), [store]);
   const [trashOpen, setTrashOpen] = React.useState<boolean>(false);
   const [addOpen, setAddOpen] = React.useState<boolean>(false);
-  const [busyIds, setBusyIds] = React.useState<ReadonlySet<string>>(new Set<string>());
-  const [trashBusyIds, setTrashBusyIds] = React.useState<ReadonlySet<string>>(new Set<string>());
-  const [purgingAll, setPurgingAll] = React.useState<boolean>(false);
   const [query, setQuery] = React.useState<string>("");
   const [filter, setFilter] = React.useState<FilterId>("all");
   /** 目录筛选（rootId）；"" = 全部目录（D-B15）。 */
@@ -112,44 +96,10 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
     [],
   );
 
-  const reload = React.useCallback((): void => {
-    setLoading(true);
-    setListError(undefined);
-    void listSkills(workspace).then(
-      (payload) => {
-        setList(payload);
-        setLoading(false);
-      },
-      (failure: unknown) => {
-        setListError(errorMessage(failure));
-        setLoading(false);
-      },
-    );
-  }, [workspace]);
-
-  const reloadTrash = React.useCallback((): void => {
-    setTrashLoading(true);
-    setTrashError(undefined);
-    void listTrash().then(
-      (items) => {
-        setTrash(items);
-        setTrashLoading(false);
-      },
-      (failure: unknown) => {
-        setTrashError(errorMessage(failure));
-        setTrashLoading(false);
-      },
-    );
-  }, []);
-
-  React.useEffect(() => reload(), [reload]);
-  React.useEffect(() => reloadTrash(), [reloadTrash]);
-
+  const reload = (): void => void store.reload();
+  const reloadTrash = (): void => void store.reloadTrash();
   /** 来源/更新这类写操作之后：技能列表与回收站计数都要跟上（更新会把旧版本送进回收站）。 */
-  const reloadAll = React.useCallback((): void => {
-    reload();
-    reloadTrash();
-  }, [reload, reloadTrash]);
+  const reloadAll = React.useCallback((): void => void store.reloadAll(), [store]);
 
   const skills = list?.skills ?? [];
   const openTrash = React.useCallback((): void => setTrashOpen(true), []);
@@ -162,115 +112,57 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
   });
   const context: MatchContext = { updatable: remote.updatable };
 
-  const markBusy = (id: string, busy: boolean): void => {
-    setBusyIds((previous) => {
-      const next = new Set(previous);
-      if (busy) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  };
-
-  const markTrashBusy = (trashId: string, busy: boolean): void => {
-    setTrashBusyIds((previous) => {
-      const next = new Set(previous);
-      if (busy) next.add(trashId);
-      else next.delete(trashId);
-      return next;
-    });
-  };
-
-  /** 启停：成功后只替换这一行。 */
+  /** 启停：成功后只替换这一行（规则在 skills-store.ts）。 */
   const onToggle = (skill: SkillSummary, next: boolean): void => {
-    markBusy(skill.id, true);
-    const name = displayName(skill).text;
-    void setSkillEnabled(skill.id, next, workspace)
-      .then(
-        (updated) => {
-          setList((previous) => (previous === undefined ? previous : replaceSkill(previous, updated)));
-          showToast(next ? t("skills.toast.toggleOn", { name }) : t("skills.toast.toggleOff", { name }));
-        },
-        (failure: unknown) => showToast(t("skills.toast.failed", { message: errorMessage(failure) })),
-      )
-      .finally(() => markBusy(skill.id, false));
+    void store.toggle(skill, next).then((result) => showToast(result.message));
   };
 
   const confirmDelete = (): void => {
     const skill = pendingDelete;
     if (skill === undefined) return;
-    const name = displayName(skill).text;
-    markBusy(skill.id, true);
-    void deleteSkill(skill.id, workspace)
-      .then(
-        () => {
-          setList((previous) => (previous === undefined ? previous : removeSkill(previous, skill.id)));
-          setPendingDelete(undefined);
-          setDeleteErrors([]);
-          setDetailId(undefined);
-          reloadTrash();
-          showToast(t("skills.delete.done", { name }), {
-            action: { label: t("skills.delete.openTrash"), onClick: openTrash },
-          });
-        },
-        (failure: unknown) => {
-          setDeleteErrors(fieldErrors(failure));
-          showToast(t("skills.toast.failed", { message: errorMessage(failure) }));
-        },
-      )
-      .finally(() => markBusy(skill.id, false));
+    void store.remove(skill).then((result) => {
+      if (result.ok) {
+        setPendingDelete(undefined);
+        setDeleteErrors([]);
+        setDetailId(undefined);
+        showToast(result.message, { action: { label: t("skills.delete.openTrash"), onClick: openTrash } });
+      } else {
+        setDeleteErrors(result.fieldErrors);
+        showToast(result.message);
+      }
+    });
   };
 
   /** 恢复；默认不带 replace，冲突时再问用户是否覆盖。 */
   const doRestore = (item: TrashItem, replace: boolean): void => {
-    markTrashBusy(item.trashId, true);
-    void restoreTrash(item.trashId, replace, workspace)
-      .then(
-        () => {
-          setPendingConflict(undefined);
-          setConflictErrors([]);
-          reload();
-          reloadTrash();
-          showToast(t("skills.trash.restored", { name: item.name ?? item.dirName }));
-        },
-        (failure: unknown) => {
-          setConflictErrors(fieldErrors(failure));
-          if (!replace && isConflict(failure)) {
-            setPendingConflict(item);
-          } else {
-            showToast(t("skills.toast.failed", { message: errorMessage(failure) }));
-          }
-        },
-      )
-      .finally(() => markTrashBusy(item.trashId, false));
+    void store.restore(item, replace).then((result) => {
+      setConflictErrors(result.fieldErrors);
+      if (result.ok) {
+        setPendingConflict(undefined);
+        showToast(result.message);
+      } else if (result.conflict === true) {
+        setPendingConflict(item);
+      } else {
+        showToast(result.message);
+      }
+    });
   };
 
   const doPurgeOne = (item: TrashItem): void => {
-    markTrashBusy(item.trashId, true);
-    void purgeTrash(item.trashId)
-      .then(
-        () => {
-          setPendingPurgeOne(undefined);
-          reloadTrash();
-          showToast(t("skills.trash.purgedOne"));
-        },
-        (failure: unknown) => showToast(t("skills.toast.failed", { message: errorMessage(failure) })),
-      )
-      .finally(() => markTrashBusy(item.trashId, false));
+    void store.purgeOne(item).then((result) => {
+      if (result.ok) setPendingPurgeOne(undefined);
+      showToast(result.message);
+    });
   };
 
   const doPurgeAll = (): void => {
-    setPurgingAll(true);
-    void purgeTrash(undefined)
-      .then(
-        (purged) => {
-          setPurgeAllOpen(false);
-          setPurgeAck(false);
-          reloadTrash();
-          showToast(t("skills.trash.purgedAll", { count: purged }));
-        },
-        (failure: unknown) => showToast(t("skills.toast.failed", { message: errorMessage(failure) })),
-      )
-      .finally(() => setPurgingAll(false));
+    void store.purgeAll().then((result) => {
+      if (result.ok) {
+        setPurgeAllOpen(false);
+        setPurgeAck(false);
+      }
+      showToast(result.message);
+    });
   };
 
   const trashCount = trash?.length ?? 0;

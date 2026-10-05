@@ -8,8 +8,18 @@
  * 折叠用 kit 的 useFold（规则见 kit/fold.ts），状态在本组件里（标签隐藏而不卸载，切标签不会丢）。
  */
 import * as React from "react";
-import { Badge, EmptyState, ListGroup, ListRow, ListSurface, SkeletonRows, kit, useFold } from "../../kit/index.ts";
-import { useRemoteState } from "./remote/use-store.ts";
+import {
+  Badge,
+  EmptyState,
+  ListGroup,
+  ListRow,
+  ListSurface,
+  SkeletonRows,
+  kit,
+  useFold,
+  useStoreState,
+} from "../../kit/index.ts";
+import { remoteStore } from "./remote/store.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { FilterId, MatchContext } from "./format.ts";
@@ -129,7 +139,7 @@ export function DirFilter(props: {
 
 /** 技能列表（工具栏由 index.tsx 渲染）。 */
 export function SkillList(props: SkillListProps): React.ReactElement {
-  const remote = useRemoteState();
+  const remote = useStoreState(remoteStore.state);
   const sourcesReady = remote.sourcesLoaded && remote.sourcesError === undefined;
   const hasWorkspace = typeof props.workspace === "string" && props.workspace.trim() !== "";
   const tree = buildSkillTree({

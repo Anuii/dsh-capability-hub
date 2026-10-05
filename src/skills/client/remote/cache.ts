@@ -20,12 +20,12 @@ function keyOf(workspace: string | undefined): string {
 /** 拉来源表；已加载且工作区没变时直接返回。 */
 export async function ensureSources(workspace: string | undefined, force = false): Promise<void> {
   const key = keyOf(workspace);
-  const snapshot = remoteStore.snapshot();
+  const snapshot = remoteStore.state.get();
   if (!force && snapshot.sourcesLoaded && currentKey === key) return;
   if (!force && loadingKey === key) return;
   loadingKey = key;
   const generationAtStart = ++generation;
-  remoteStore.patch({ sourcesLoading: true, sourcesError: undefined });
+  remoteStore.state.patch({ sourcesLoading: true, sourcesError: undefined });
   try {
     const entries = await listSources(workspace);
     if (generationAtStart !== generation) return;
@@ -33,7 +33,7 @@ export async function ensureSources(workspace: string | undefined, force = false
     remoteStore.setSources(entries);
   } catch (error) {
     if (generationAtStart !== generation) return;
-    remoteStore.patch({ sourcesLoading: false, sourcesError: errorMessage(error) });
+    remoteStore.state.patch({ sourcesLoading: false, sourcesError: errorMessage(error) });
   } finally {
     if (loadingKey === key) loadingKey = undefined;
   }
