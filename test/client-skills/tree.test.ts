@@ -4,16 +4,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  DEFAULT_COLLAPSED,
   buildSkillTree,
   dirOptions,
   dirTagText,
-  isExpanded,
+  filterKeyOf,
+  initialFoldState,
   isFiltering,
+  isFoldExpanded,
   levelKey,
   levelOfRoot,
   repoKey,
-  toggleCollapsed,
+  toggleFold,
 } from "../../src/client/skills/tree.ts";
 import type { SourceEntry } from "../../src/client/skills/remote/types.ts";
 import { makeList, makeSkill, root } from "./fixtures.ts";
@@ -141,19 +142,33 @@ test("搜索 / 筛选 / 目录筛选：只留有匹配的层级与仓库，计�
   assert.equal(none.shown, 0);
   assert.deepEqual(none.levels, []);
 });
+test("折叠：DSH 内置默认折叠；筛选时有匹配的分组先展开、仍可手动折叠；清空后回到原来的状态", () => {
+  const none = filterKeyOf("", "all", "");
+  assert.equal(none, "");
+  let state = initialFoldState();
+  assert.equal(isFoldExpanded(state, none, levelKey("builtin")), false, "DSH 内置默认折叠");
+  assert.equal(isFoldExpanded(state, none, levelKey("user")), true);
+  state = toggleFold(state, none, levelKey("user"));
+  assert.equal(isFoldExpanded(state, none, levelKey("user")), false, "不筛选时用户折叠了用户级");
 
-test("折叠：DSH 内置默认折叠；筛选时一律展开；清空后回到用户原来的状态", () => {
-  const initial = new Set(DEFAULT_COLLAPSED);
-  assert.equal(isExpanded(levelKey("builtin"), initial, false), false);
-  assert.equal(isExpanded(levelKey("user"), initial, false), true);
-  const userFolded = toggleCollapsed(initial, levelKey("user"));
-  assert.equal(isExpanded(levelKey("user"), userFolded, false), false);
-  assert.equal(isExpanded(levelKey("user"), userFolded, true), true, "筛选中强制展开");
-  assert.equal(isExpanded(levelKey("builtin"), userFolded, true), true);
-  assert.equal(isExpanded(levelKey("user"), userFolded, false), false, "筛选清空后恢复用户的折叠");
-  const reopened = toggleCollapsed(userFolded, levelKey("builtin"));
-  assert.equal(isExpanded(levelKey("builtin"), reopened, false), true);
-  assert.equal(initial.has(levelKey("builtin")), true, "toggle 不修改原集合");
+  const enabled = filterKeyOf("", "enabled", "");
+  assert.notEqual(enabled, "");
+  assert.equal(isFoldExpanded(state, enabled, levelKey("user")), true, "进入筛选：全部展开");
+  assert.equal(isFoldExpanded(state, enabled, levelKey("builtin")), true);
+  state = toggleFold(state, enabled, levelKey("user"));
+  assert.equal(isFoldExpanded(state, enabled, levelKey("user")), false, "筛选中可以折叠（本次反馈的缺陷）");
+  state = toggleFold(state, enabled, repoKey("user", "mattpocock/skills"));
+  assert.equal(isFoldExpanded(state, enabled, repoKey("user", "mattpocock/skills")), false, "二级分组同样可以折叠");
+
+  const disabled = filterKeyOf("", "disabled", "");
+  assert.equal(isFoldExpanded(state, disabled, levelKey("user")), true, "换一种筛选：重新全部展开");
+  assert.equal(isFoldExpanded(state, none, levelKey("user")), false, "清空筛选：回到不筛选时的折叠");
+  assert.equal(isFoldExpanded(state, none, levelKey("builtin")), false);
+
+  const before = state;
+  toggleFold(before, none, levelKey("builtin"));
+  assert.equal(isFoldExpanded(before, none, levelKey("builtin")), false, "toggle 不修改原状态");
+  assert.equal(filterKeyOf(" Grill ", "all", ""), filterKeyOf("grill", "all", ""), "搜索词大小写与首尾空格不算新筛选");
   assert.equal(isFiltering("  ", "all", ""), false);
   assert.equal(isFiltering("", "all", "user-dsh"), true);
 });

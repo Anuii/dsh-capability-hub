@@ -14,6 +14,7 @@
  *   p11/p12  MCP 服务器详情抽屉
  *   p13/p14  仓库视图：展开仓库列表、勾选两项（底部出现安装区）
  *   p15      仓库视图：skills.sh 搜索结果（固定高度滚动框；会联网）
+ *   p17      技能页「已启用」筛选下折叠用户级里的第一个来源仓库（筛选中也能折叠）
  *   p16      仓库视图：从搜索结果「浏览」某个仓库后（结果出现在输入区下方并自动滚到可见）
  *   pages-facts.json  每一步的 DOM 事实（标签、彩色元素统计、每行可见控件数）
  *
@@ -265,6 +266,20 @@ if (firstRow) { await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 
 FACTS.skillsExpandedAudit = await evaluate(AUDIT);
 await pair("p03", "skills-expanded");
 await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 5, y: 5, buttons: 0 });
+
+// 筛选中折叠：切到「已启用」，折叠第一个来源仓库分组，再切回「全部」看折叠是否还原
+FACTS.filterEnabled = await clickTestId("skills-toolbar-filter-enabled");
+await sleep(500);
+const repoToggle = "[data-testid^=skills-repo-user-][data-testid$=-toggle]";
+FACTS.filteredRepoBefore = await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); return n ? n.getAttribute('aria-expanded') : null; })()");
+await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); if (n) n.click(); return !!n; })()");
+await sleep(400);
+FACTS.filteredRepoAfter = await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); return n ? n.getAttribute('aria-expanded') : null; })()");
+await evaluate("window.scrollTo(0, 0)");
+await shot("p17-skills-filtered-fold-light.png");
+await clickTestId("skills-toolbar-filter-all");
+await sleep(400);
+FACTS.unfilteredRepoAfterClear = await evaluate("(() => { const n = document.querySelector(" + JSON.stringify(repoToggle) + "); return n ? n.getAttribute('aria-expanded') : null; })()");
 
 FACTS.addSkillOpened = await clickText("添加技能");
 await sleep(2500);

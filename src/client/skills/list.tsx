@@ -9,7 +9,8 @@
  * 其余信息（来源、更新、诊断、文件、SKILL.md）全在详情抽屉里。
  *
  * 分组（tree.ts）：一级 = 层级（DSH 内置默认折叠 / 用户级 / 项目级），二级 = 来源仓库。
- * 折叠状态在本组件里（标签隐藏而不卸载，切标签不会丢）；搜索或任何筛选时一律展开。
+ * 折叠状态在本组件里（标签隐藏而不卸载，切标签不会丢）；搜索或任何筛选时有匹配的分组先展开，
+ * 筛选中仍可折叠（只对这一次筛选有效），清空后回到原来的折叠。
  */
 import * as React from "react";
 import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
@@ -29,14 +30,16 @@ import {
   type MatchContext,
 } from "./format.ts";
 import {
-  DEFAULT_COLLAPSED,
   LEVELS,
   buildSkillTree,
   dirOptions,
   dirTagIndex,
-  isExpanded,
+  filterKeyOf,
+  initialFoldState,
+  isFoldExpanded,
   levelLabel,
-  toggleCollapsed,
+  toggleFold,
+  type FoldState,
   type LevelView,
 } from "./tree.ts";
 import type { ListResult, SkillSummary } from "./types.ts";
@@ -137,7 +140,7 @@ export function DirFilter(props: {
 
 /** 技能列表（工具栏由 index.tsx 渲染）。 */
 export function SkillList(props: SkillListProps): React.ReactElement {
-  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set(DEFAULT_COLLAPSED));
+  const [fold, setFold] = React.useState<FoldState>(initialFoldState);
   const remote = useRemoteState();
   const sourcesReady = remote.sourcesLoaded && remote.sourcesError === undefined;
   const hasWorkspace = typeof props.workspace === "string" && props.workspace.trim() !== "";
@@ -151,8 +154,10 @@ export function SkillList(props: SkillListProps): React.ReactElement {
     ...(sourcesReady ? { sources: remote.sources } : {}),
   });
   const tags = React.useMemo(() => dirTagIndex(props.list.roots), [props.list.roots]);
-  const toggle = (key: string): void => setCollapsed((current) => toggleCollapsed(current, key));
-  const expanded = (key: string): boolean => isExpanded(key, collapsed, tree.filtering);
+  // 筛选时有匹配的分组先全部展开，但仍可手动折叠（只在这一次筛选里有效），清空后回到原来的折叠。
+  const filterKey = filterKeyOf(props.query, props.filter, props.dir);
+  const toggle = (key: string): void => setFold((current) => toggleFold(current, filterKey, key));
+  const expanded = (key: string): boolean => isFoldExpanded(fold, filterKey, key);
 
   const row = (skill: SkillSummary): React.ReactElement => React.createElement(SkillRow, {
     key: skill.id,
