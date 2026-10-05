@@ -65,7 +65,9 @@ const CSS = [
   ".chk_select{height:28px;max-width:220px;padding:0 6px;border:1px solid var(--chk-line-weak);border-radius:var(--chk-radius-control);background:var(--chk-surface);color:var(--chk-fg-secondary);font:inherit;font-size:var(--chk-fs-small);cursor:pointer}",
   ".chk_select:hover{color:var(--chk-fg-primary)}",
   // 行首的原生勾选框（仓库视图）：中性色、无可见文字（名称就在同一行的标题里，靠 aria-label 提供无障碍名）。
-  ".chk_check{flex:none;width:14px;height:14px;margin:0;cursor:pointer;accent-color:var(--chk-fg-primary)}",
+  // color-scheme 跟随 DSH 主题（而不是系统偏好），否则亮色主题下未勾选的框会被画成深色方块。
+  ".chk_check{flex:none;width:14px;height:14px;margin:0;cursor:pointer;accent-color:var(--chk-fg-primary);color-scheme:light}",
+  "[data-ds-dark-theme] .chk_check{color-scheme:dark}",
   ".chk_check:disabled{cursor:default;opacity:.45}",
   ".chk_check:focus-visible{outline:2px solid var(--chk-focus);outline-offset:2px}",
   ".chk_select:focus-visible{outline:2px solid var(--chk-focus);outline-offset:1px}",
@@ -101,7 +103,14 @@ const CSS = [
   // 二级分组：嵌在一级分组里，不再有外框；标题行缩进、用面板底色。
   ".chk_group[data-depth='1']{border:none;border-radius:0;border-top:1px solid var(--chk-line-weak)}",
   ".chk_nested>.chk_group[data-depth='1']:first-child{border-top:none}",
-  ".chk_group[data-depth='1']>.chk_groupHead,.chk_group[data-depth='1']>.chk_groupHeadWrap>.chk_groupHead{background:var(--chk-surface);padding-left:calc(var(--chk-sp4) + 12px);min-height:30px}",
+  // 缩进规则：子级内容与父级标题文字对齐（折叠箭头 12px + 间距 8px = 20px 一级）。
+  //   一级可折叠分组（技能的层级）：标题文字在 16+20，直接挂在它下面的行也缩到 16+20；
+  //   二级分组（来源仓库 / 会话）：标题行缩到 16+20；可折叠的二级分组标题文字在 16+40，它的行缩到 16+40，
+  //   不可折叠的二级分组（「运行中」的会话）没有箭头，行与标题文字同在 16+20。
+  ".chk_group[data-depth='1']>.chk_groupHead,.chk_group[data-depth='1']>.chk_groupHeadWrap>.chk_groupHead{background:var(--chk-surface);padding-left:calc(var(--chk-sp4) + 20px);min-height:30px}",
+  ".chk_group[data-foldable]:not([data-depth])>.chk_rows>.chk_row{padding-left:calc(var(--chk-sp4) + 20px)}",
+  ".chk_group[data-depth='1'][data-foldable]>.chk_rows>.chk_row{padding-left:calc(var(--chk-sp4) + 40px)}",
+  ".chk_group[data-depth='1']:not([data-foldable])>.chk_rows>.chk_row{padding-left:calc(var(--chk-sp4) + 20px)}",
   ".chk_rows{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}",
   ".chk_rowsEmpty{padding:var(--chk-sp4);font-size:var(--chk-fs-small);color:var(--chk-fg-tertiary)}",
 

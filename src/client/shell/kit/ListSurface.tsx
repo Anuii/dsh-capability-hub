@@ -98,6 +98,7 @@ export function ListGroup(props: {
     className: kit.group,
     "data-testid": props.testId,
     "data-depth": props.depth === 1 ? "1" : undefined,
+    "data-foldable": foldable ? "" : undefined,
     "data-collapsed": expanded ? undefined : "",
   }, head, body);
 }
