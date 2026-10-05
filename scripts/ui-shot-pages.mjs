@@ -12,6 +12,7 @@
  *   p07/p08  MCP 标签（滚到底，含「运行中」区域的真实空状态）
  *   p09/p10  MCP 标签，?hubPreviewRunning=1 的示例实例（预览数据，不新建会话）
  *   p11/p12  MCP 服务器详情抽屉
+ *   p13/p14  仓库视图：展开仓库列表、勾选两项（底部出现安装区）
  *   pages-facts.json  每一步的 DOM 事实（标签、彩色元素统计、每行可见控件数）
  *
  * 不新建会话：会话存储与桌面版共用（AGENTS.md 硬规则 3）。
@@ -267,6 +268,12 @@ FACTS.addSkillOpened = await clickText("添加技能");
 await sleep(2500);
 FACTS.addSkillDrawerWidth = await evaluate("(() => { const d = document.querySelector('[data-testid=kit-drawer]') || document.querySelector('[role=dialog]'); return d ? Math.round(d.getBoundingClientRect().width) : null; })()");
 await pair("p05", "add-skill");
+FACTS.repoListToggled = await clickTestId("skills-repo-group-toggle");
+FACTS.checked = await evaluate("(() => { const boxes = [...document.querySelectorAll('[data-testid=skills-discovery-list] input[type=checkbox]:not(:disabled)')].slice(0, 2); boxes.forEach((b) => b.click()); return boxes.length; })()");
+await sleep(600);
+FACTS.footerVisible = await evaluate("!!document.querySelector('[data-testid=skills-install-submit]')");
+FACTS.addSkillAudit = await evaluate("(() => { const d = document.querySelector('[data-testid=kit-drawer]'); if (!d) return null; const rows = [...d.querySelectorAll('[data-testid=skills-discovery-list] li')]; return rows.slice(0, 50).map((r) => [...r.querySelectorAll('button, input, [role=switch], [role=checkbox], select')].filter((c) => getComputedStyle(c).opacity !== '0' && c.getBoundingClientRect().width > 0 && getComputedStyle(c.closest('[class]')).opacity !== '0').length).reduce((m, n) => Math.max(m, n), 0); })()");
+await pair("p13", "add-skill-selected");
 await escape();
 
 // ---- MCP --------------------------------------------------------------------

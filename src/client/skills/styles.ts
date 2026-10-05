@@ -71,6 +71,10 @@ const CSS = [
   // 技能树里的一行说明（没有工作区 / 该层级还没有技能）：与行同样的左右留白、次要色小字。
   `.${PREFIX}treeNote{padding:12px 16px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-tertiary);border-top:1px solid var(--dsw-alias-border-l1)}`,
   `.${PREFIX}treeNote:first-child{border-top:none}`,
+  // 仓库列表里就地展开的编辑行（分支 · 子目录 · 取消 · 保存）。
+  `.${PREFIX}repoEdit{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);list-style:none}`,
+  // 汇总发现工具栏右侧的「上次扫描」小字。
+  `.${PREFIX}scanMeta{font-size:12px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}`,
 ].join("");
 
 /** 类名表。 */
@@ -78,6 +82,8 @@ export const styles = {
   root: PREFIX + "root",
   errorBox: PREFIX + "errorBox",
   treeNote: PREFIX + "treeNote",
+  repoEdit: PREFIX + "repoEdit",
+  scanMeta: PREFIX + "scanMeta",
   loading: PREFIX + "loading",
   note: PREFIX + "note",
   diag: PREFIX + "diag",

@@ -11,6 +11,8 @@ import { workspaceQuery } from "../data.ts";
 import type {
   BrowseResult,
   DiscoverCandidate,
+  DiscoveryView,
+  DiscoveryRepoView,
   GithubAuth,
   InstallItemResult,
   InstallTarget,
@@ -111,18 +113,57 @@ export async function listRepos(): Promise<RepoRecord[]> {
   return Array.isArray(data?.repos) ? data.repos : [];
 }
 
-/** POST skills/repos/add { repo, ref? } → { repo, repos } */
-export async function addRepo(repo: string, ref: string | undefined): Promise<RepoRecord[]> {
-  const body: Record<string, unknown> = { repo };
-  if (ref !== undefined && ref.trim() !== "") body.ref = ref.trim();
-  const data = await api.post<{ repos?: RepoRecord[] }>("skills/repos/add", body);
-  return Array.isArray(data?.repos) ? data.repos : [];
+/** 把接口返回的发现视图补成安全形状。 */
+export function normalizeDiscovery(data: Partial<DiscoveryView> | undefined): DiscoveryView {
+  return {
+    cached: data?.cached === true,
+    ...(typeof data?.lastScannedAt === "string" ? { lastScannedAt: data.lastScannedAt } : {}),
+    repos: Array.isArray(data?.repos) ? data.repos.filter((r): r is DiscoveryRepoView => r !== null && typeof r === "object" && typeof r.repo === "string") : [],
+    skills: Array.isArray(data?.skills) ? data.skills.filter((s) => s !== null && typeof s === "object" && typeof s.skillPath === "string" && typeof s.repo === "string") : [],
+  };
 }
 
-/** POST skills/repos/remove { repo } → { repos } */
-export async function removeRepo(repo: string): Promise<RepoRecord[]> {
-  const data = await api.post<{ repos?: RepoRecord[] }>("skills/repos/remove", { repo });
-  return Array.isArray(data?.repos) ? data.repos : [];
+export interface RepoChange {
+  repos: RepoRecord[];
+  discovery: DiscoveryView;
+}
+
+/** POST skills/repos/add { repo, ref?, subPath?, workspace? } → { repo, repos, discovery }（宿主已补扫这个仓库） */
+export async function addRepo(repo: string, ref: string | undefined, workspace?: string, subPath?: string): Promise<RepoChange> {
+  const body: Record<string, unknown> = { repo };
+  if (ref !== undefined && ref.trim() !== "") body.ref = ref.trim();
+  if (subPath !== undefined && subPath.trim() !== "") body.subPath = subPath.trim();
+  const data = await api.post<{ repos?: RepoRecord[]; discovery?: Partial<DiscoveryView> }>("skills/repos/add", withWorkspace(body, workspace));
+  return { repos: Array.isArray(data?.repos) ? data.repos : [], discovery: normalizeDiscovery(data?.discovery) };
+}
+
+/** POST skills/repos/update { repo, ref?, subPath?, workspace? }（空串 = 清除）→ { repo, changed, repos, discovery } */
+export async function updateRepo(repo: string, patch: { ref?: string; subPath?: string }, workspace?: string): Promise<RepoChange> {
+  const body: Record<string, unknown> = { repo };
+  if (patch.ref !== undefined) body.ref = patch.ref.trim();
+  if (patch.subPath !== undefined) body.subPath = patch.subPath.trim();
+  const data = await api.post<{ repos?: RepoRecord[]; discovery?: Partial<DiscoveryView> }>("skills/repos/update", withWorkspace(body, workspace));
+  return { repos: Array.isArray(data?.repos) ? data.repos : [], discovery: normalizeDiscovery(data?.discovery) };
+}
+
+/** POST skills/repos/remove { repo, workspace? } → { repos, discovery } */
+export async function removeRepo(repo: string, workspace?: string): Promise<RepoChange> {
+  const data = await api.post<{ repos?: RepoRecord[]; discovery?: Partial<DiscoveryView> }>("skills/repos/remove", withWorkspace({ repo }, workspace));
+  return { repos: Array.isArray(data?.repos) ? data.repos : [], discovery: normalizeDiscovery(data?.discovery) };
+}
+
+/* ---------------- 汇总发现 ---------------- */
+
+/** GET skills/discovery ?workspace= → 只读缓存，不联网 */
+export async function fetchDiscovery(workspace: string | undefined): Promise<DiscoveryView> {
+  return normalizeDiscovery(await api.get<Partial<DiscoveryView>>("skills/discovery", workspaceQuery(workspace)));
+}
+
+/** POST skills/discovery/refresh { repos?, workspace? } → 联网扫描 */
+export async function refreshDiscovery(workspace: string | undefined, repos?: readonly string[]): Promise<DiscoveryView> {
+  const body: Record<string, unknown> = {};
+  if (repos !== undefined && repos.length > 0) body.repos = [...repos];
+  return normalizeDiscovery(await api.post<Partial<DiscoveryView>>("skills/discovery/refresh", withWorkspace(body, workspace)));
 }
 
 /* ---------------- 浏览 / 搜索 / 安装 ---------------- */

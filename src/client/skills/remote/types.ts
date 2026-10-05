@@ -45,7 +45,47 @@ export interface BrowseResult {
 export interface RepoRecord {
   repo: string;
   ref?: string;
+  /** 只在这个子目录下发现技能（0.3.0） */
+  subPath?: string;
   preset: boolean;
+}
+
+/* ---------------- 汇总发现（D-B16，0.3.0） ---------------- */
+
+/** GET skills/discovery 的 repos[]：一个仓库的配置 + 上次扫描结果。 */
+export interface DiscoveryRepoView {
+  repo: string;
+  ref?: string;
+  subPath?: string;
+  preset: boolean;
+  /** 从未扫描过时没有 */
+  scannedAt?: string;
+  resolvedRef?: string;
+  skillCount?: number;
+  /** 上次扫描失败的原因（中文，已打码） */
+  error?: string;
+  /** 缓存是按旧的分支 / 子目录扫的 */
+  stale?: boolean;
+}
+
+/** 汇总里的一个技能。 */
+export interface DiscoveredSkill {
+  skillPath: string;
+  dirName: string;
+  name?: string;
+  description?: string;
+  repo: string;
+  /** 安装时带的分支 */
+  ref?: string;
+  installedId?: string;
+}
+
+export interface DiscoveryView {
+  /** false = 从未扫描过（打开视图时自动扫一次） */
+  cached: boolean;
+  lastScannedAt?: string;
+  repos: DiscoveryRepoView[];
+  skills: DiscoveredSkill[];
 }
 
 /* ---------------- 来源推测 ---------------- */

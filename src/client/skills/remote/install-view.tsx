@@ -1,27 +1,46 @@
 /**
- * 「添加技能」抽屉（UI-DESIGN §4）：宽 720px。
+ * 「添加技能」= 仓库视图（D-B6 / D-B16，UI-DESIGN §3）：宽抽屉 860px。
  *
- * 自上而下：仓库输入 → 常用仓库胶囊（可增删）+ skills.sh 搜索 → 浏览结果（勾选列表）
- * → 底部固定区（目标选择 + 安装）。
+ * 自上而下：
+ *   1. 仓库地址：粘贴 owner/name 或 GitHub 链接 →「浏览」（临时只看这一个仓库）或「加入仓库列表」；
+ *      skills.sh 搜索，结果可浏览、可把所在仓库加入列表。
+ *   2. 仓库列表（默认折叠成一行）：分支 · 子目录 · 扫描状态；悬停浏览 / 编辑 / 移除，编辑就地展开。
+ *   3. 汇总发现（主体）：所有仓库的技能合成一张表，可按名称、已安装 / 未安装、仓库筛选；
+ *      显示上次扫描时间，点「刷新」才联网；第一次没有缓存时自动扫一次；上千行时分批渲染。
+ *      临时浏览某个仓库时，这一块换成该仓库的技能，「返回汇总」回来。
+ *   4. 底部（有勾选时才出现）：安装位置 + 安装；跨仓库的勾选按仓库分组依次安装。
  *
- * 所有请求错误都转成界面状态；VALIDATION 的 details 落到对应字段上。
- * 「安装到当前项目」只把 target 参数发给宿主（界面与参数可查），不在本任务里真的往项目根写。
+ * 纯逻辑在 discovery-model.ts；所有请求错误都转成界面状态。
  */
 
 import * as React from "react";
-import { Button, Checkbox, Input, Pill } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge, Drawer, ListGroup, ListRow, ListSurface, kit } from "../../shell/kit/index.ts";
+import { Button, Input, Pill } from "@deepseek-ai/dsh-client-ui-primitives";
+import { Badge, Drawer, ListFoot, ListGroup, ListRow, ListSurface, SkeletonRows, Toolbar, kit } from "../../shell/kit/index.ts";
 import { listSkills } from "../data.ts";
-import { addRepo, browseRepo, installSkills, listRepos, removeRepo, searchSkills } from "./data.ts";
+import { addRepo, browseRepo, fetchDiscovery, installSkills, refreshDiscovery, removeRepo, searchSkills, updateRepo } from "./data.ts";
 import { reloadSources } from "./cache.ts";
-import { installResultText, installSummaryText, installTargetOptions, targetLabel } from "./model.ts";
+import { installResultText, installSummaryText, installTargetOptions } from "./model.ts";
+import {
+  DISCOVERY_PAGE,
+  INSTALLED_FILTERS,
+  discoveredKey,
+  filterDiscovered,
+  installPlan,
+  installedCounts,
+  relativeTime,
+  repoConfigText,
+  repoScanText,
+  shouldAutoScan,
+  sliceVisible,
+  type InstalledFilter,
+} from "./discovery-model.ts";
 import { errorMessage, fieldErrors, type FieldError } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { RootInfo } from "../types.ts";
-import type { BrowseResult, InstallItemResult, InstallTarget, RepoRecord, SearchResultItem } from "./types.ts";
+import type { BrowseResult, DiscoveryRepoView, DiscoveryView, InstallItemResult, InstallTarget, SearchResultItem } from "./types.ts";
 
-/** 胶囊的悬停提示：仓库@分支（+ 预置）。胶囊里只显示仓库名，其余信息全在提示里。 */
+/** 仓库行的悬停提示：仓库@分支（+ 预置）。 */
 export function repoChipTitle(record: { repo: string; ref?: string; preset: boolean }): string {
   const head = record.ref === undefined || record.ref === "" ? record.repo : record.repo + "@" + record.ref;
   return record.preset ? head + " · " + t("skills.install.repoPreset") : head;
@@ -36,33 +55,80 @@ export interface AddSkillDrawerProps {
   onClose(): void;
 }
 
-/** 「添加技能」抽屉。 */
+interface Picked {
+  repo: string;
+  ref?: string;
+  skillPath: string;
+}
+
+interface RepoResult extends InstallItemResult {
+  repo: string;
+}
+
+interface EditState {
+  repo: string;
+  ref: string;
+  subPath: string;
+}
+
+const sameRepo = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
+function installedFilterLabel(id: InstalledFilter): string {
+  if (id === "not") return t("skills.repoView.filter.not");
+  if (id === "yes") return t("skills.repoView.filter.yes");
+  return t("skills.repoView.filter.all");
+}
+
+/** 「添加技能」抽屉（仓库视图）。 */
 export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
   const { workspace } = props;
   const [roots, setRoots] = React.useState<RootInfo[]>([]);
+  // 顶部：仓库地址与 skills.sh 搜索
   const [repoInput, setRepoInput] = React.useState<string>("");
   const [refInput, setRefInput] = React.useState<string>("");
   const [browsing, setBrowsing] = React.useState<boolean>(false);
   const [browse, setBrowse] = React.useState<BrowseResult | undefined>(undefined);
   const [browseError, setBrowseError] = React.useState<string | undefined>(undefined);
   const [browseErrors, setBrowseErrors] = React.useState<readonly FieldError[]>([]);
-  const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set<string>());
-  const [target, setTarget] = React.useState<InstallTarget>("user-agents");
-  const [installing, setInstalling] = React.useState<boolean>(false);
-  const [results, setResults] = React.useState<InstallItemResult[] | undefined>(undefined);
-  const [installError, setInstallError] = React.useState<string | undefined>(undefined);
-  const [installSummary, setInstallSummary] = React.useState<string | undefined>(undefined);
   const [query, setQuery] = React.useState<string>("");
   const [searching, setSearching] = React.useState<boolean>(false);
   const [searchResults, setSearchResults] = React.useState<SearchResultItem[] | undefined>(undefined);
   const [searchError, setSearchError] = React.useState<string | undefined>(undefined);
-  const [repos, setRepos] = React.useState<RepoRecord[] | undefined>(undefined);
-  const [repoDraft, setRepoDraft] = React.useState<string>("");
-  const [repoRefDraft, setRepoRefDraft] = React.useState<string>("");
+  // 仓库列表与汇总发现
+  const [discovery, setDiscovery] = React.useState<DiscoveryView | undefined>(undefined);
+  const [discoveryError, setDiscoveryError] = React.useState<string | undefined>(undefined);
+  const [scanning, setScanning] = React.useState<boolean>(false);
+  const [reposOpen, setReposOpen] = React.useState<boolean>(false);
+  const [editing, setEditing] = React.useState<EditState | undefined>(undefined);
   const [repoBusy, setRepoBusy] = React.useState<boolean>(false);
   const [repoError, setRepoError] = React.useState<string | undefined>(undefined);
-  /** 「+ 添加」默认收起：点开才出现输入框（UI-C：常用仓库那一行要保持整洁）。 */
-  const [addRepoOpen, setAddRepoOpen] = React.useState<boolean>(false);
+  const [repoNote, setRepoNote] = React.useState<string | undefined>(undefined);
+  const [dq, setDq] = React.useState<string>("");
+  const [installedFilter, setInstalledFilter] = React.useState<InstalledFilter>("all");
+  const [repoFilter, setRepoFilter] = React.useState<string>("");
+  const [limit, setLimit] = React.useState<number>(DISCOVERY_PAGE);
+  // 勾选与安装
+  const [selected, setSelected] = React.useState<ReadonlyMap<string, Picked>>(new Map());
+  const [target, setTarget] = React.useState<InstallTarget>("user-agents");
+  const [installing, setInstalling] = React.useState<boolean>(false);
+  const [results, setResults] = React.useState<RepoResult[] | undefined>(undefined);
+  const [installError, setInstallError] = React.useState<string | undefined>(undefined);
+  const [installSummary, setInstallSummary] = React.useState<string | undefined>(undefined);
+
+  const doRefresh = React.useCallback((repos?: readonly string[]): void => {
+    setScanning(true);
+    setDiscoveryError(undefined);
+    void refreshDiscovery(workspace, repos).then(
+      (view) => {
+        setDiscovery(view);
+        setScanning(false);
+      },
+      (failure: unknown) => {
+        setDiscoveryError(errorMessage(failure));
+        setScanning(false);
+      },
+    );
+  }, [workspace]);
 
   React.useEffect(() => {
     if (!props.open) return;
@@ -72,28 +138,32 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
         if (alive) setRoots(data.roots);
       },
       () => {
-        // 拿不到根只影响「目标完整路径」的展示，不阻塞安装
+        // 拿不到根只影响安装位置的完整路径提示，不阻塞安装
       },
     );
-    void listRepos().then(
-      (list) => {
-        if (alive) setRepos(list);
+    // 先读缓存立刻显示；从没扫过就自动扫一次（之后只有点「刷新」才联网）
+    void fetchDiscovery(workspace).then(
+      (view) => {
+        if (!alive) return;
+        setDiscovery(view);
+        if (shouldAutoScan(view)) doRefresh();
       },
       (failure: unknown) => {
-        if (alive) setRepoError(errorMessage(failure));
+        if (alive) setDiscoveryError(errorMessage(failure));
       },
     );
     return () => {
       alive = false;
     };
-  }, [workspace, props.open]);
+  }, [workspace, props.open, doRefresh]);
 
   const targetOptions = installTargetOptions(roots, workspace);
+  const repos = discovery?.repos ?? [];
+  const inList = (repo: string): boolean => repos.some((record) => sameRepo(record.repo, repo));
 
-  /**
-   * 浏览仓库。keepResults=true 用于「安装成功后刷新这一屏的已安装标记」——
-   * 这时不能把逐个安装结果清掉（那正是用户要看的东西）。
-   */
+  /* ---------------- 顶部：浏览 / 加入 / 搜索 ---------------- */
+
+  /** 临时浏览一个仓库。keepResults=true 用于「安装后刷新已安装标记」，不清掉逐个结果。 */
   const doBrowse = (repo: string, ref: string | undefined, preselectPath?: string, keepResults = false): void => {
     setRepoInput(repo);
     if (ref !== undefined) setRefInput(ref);
@@ -107,23 +177,74 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
     void browseRepo(repo, ref, workspace).then(
       (payload) => {
         setBrowse(payload);
-        const free = payload.skills.filter((skill) => skill.installedId === undefined);
         const wanted = preselectPath === undefined ? undefined : payload.skills.find((skill) => skill.skillPath === preselectPath);
-        setSelected(
-          new Set(
-            wanted === undefined || wanted.installedId !== undefined
-              ? free.map((skill) => skill.skillPath)
-              : [wanted.skillPath],
-          ),
-        );
+        if (wanted !== undefined && wanted.installedId === undefined) {
+          setSelected(new Map([[discoveredKey({ repo: payload.repo, skillPath: wanted.skillPath }), { repo: payload.repo, ref: payload.ref, skillPath: wanted.skillPath }]]));
+        }
         setBrowsing(false);
       },
       (failure: unknown) => {
         setBrowse(undefined);
-        setSelected(new Set<string>());
         setBrowseErrors(fieldErrors(failure));
         setBrowseError(errorMessage(failure));
         setBrowsing(false);
+      },
+    );
+  };
+
+  const applyRepoChange = (view: DiscoveryView): void => {
+    setDiscovery(view);
+    setRepoBusy(false);
+  };
+
+  const doAddToList = (repo: string, ref?: string): void => {
+    if (repo.trim() === "") {
+      setRepoError(t("skills.remote.form.required"));
+      return;
+    }
+    setRepoBusy(true);
+    setRepoError(undefined);
+    setRepoNote(undefined);
+    void addRepo(repo, ref, workspace).then(
+      (change) => {
+        applyRepoChange(change.discovery);
+        const added = change.discovery.repos.find((record) => !repos.some((old) => sameRepo(old.repo, record.repo)));
+        if (added !== undefined) setRepoNote(t("skills.repoView.added", { repo: added.repo, status: repoScanText(added) }));
+      },
+      (failure: unknown) => {
+        setRepoError(errorMessage(failure));
+        setRepoBusy(false);
+      },
+    );
+  };
+
+  const doSaveEdit = (): void => {
+    if (editing === undefined) return;
+    setRepoBusy(true);
+    setRepoError(undefined);
+    void updateRepo(editing.repo, { ref: editing.ref, subPath: editing.subPath }, workspace).then(
+      (change) => {
+        applyRepoChange(change.discovery);
+        setEditing(undefined);
+      },
+      (failure: unknown) => {
+        setRepoError(errorMessage(failure));
+        setRepoBusy(false);
+      },
+    );
+  };
+
+  const doRemoveRepo = (repo: string): void => {
+    setRepoBusy(true);
+    setRepoError(undefined);
+    void removeRepo(repo, workspace).then(
+      (change) => {
+        applyRepoChange(change.discovery);
+        if (sameRepo(repoFilter, repo)) setRepoFilter("");
+      },
+      (failure: unknown) => {
+        setRepoError(errorMessage(failure));
+        setRepoBusy(false);
       },
     );
   };
@@ -150,111 +271,56 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
     );
   };
 
-  const doInstall = (): void => {
-    if (browse === undefined || selected.size === 0) return;
-    setInstalling(true);
-    setInstallError(undefined);
-    setResults(undefined);
-    void installSkills(
-      { repo: browse.repo, ref: browse.ref, skillPaths: [...selected], target },
-      workspace,
-    ).then(
-      (list) => {
-        setResults(list);
-        setInstalling(false);
-        const ok = list.filter((item) => item.ok).length;
-        setInstallSummary(installSummaryText(ok, list.length - ok));
-        if (ok > 0) {
-          props.onInstalled?.();
-          void reloadSources(workspace);
-          // 刷新「已安装」标记，但保留刚才的逐个结果
-          doBrowse(browse.repo, browse.ref, undefined, true);
-        }
-      },
-      (failure: unknown) => {
-        setInstallError(errorMessage(failure));
-        setInstalling(false);
-      },
-    );
-  };
+  /* ---------------- 勾选与安装 ---------------- */
 
-  const doAddRepo = (): void => {
-    if (repoDraft.trim() === "") {
-      setRepoError(t("skills.remote.form.required"));
-      return;
-    }
-    setRepoBusy(true);
-    setRepoError(undefined);
-    void addRepo(repoDraft, repoRefDraft).then(
-      (list) => {
-        setRepos(list);
-        setRepoDraft("");
-        setRepoRefDraft("");
-        setRepoBusy(false);
-        setAddRepoOpen(false);
-      },
-      (failure: unknown) => {
-        setRepoError(errorMessage(failure));
-        setRepoBusy(false);
-      },
-    );
-  };
-
-  const doRemoveRepo = (repo: string): void => {
-    setRepoBusy(true);
-    setRepoError(undefined);
-    void removeRepo(repo).then(
-      (list) => {
-        setRepos(list);
-        setRepoBusy(false);
-      },
-      (failure: unknown) => {
-        setRepoError(errorMessage(failure));
-        setRepoBusy(false);
-      },
-    );
-  };
-
-  const toggle = (path: string, next: boolean): void => {
+  const toggle = (item: Picked, next: boolean): void => {
     setSelected((previous) => {
-      const set = new Set(previous);
-      if (next) set.add(path);
-      else set.delete(path);
-      return set;
+      const map = new Map(previous);
+      const key = discoveredKey(item);
+      if (next) map.set(key, item);
+      else map.delete(key);
+      return map;
     });
   };
 
+  const doInstall = async (): Promise<void> => {
+    const plan = installPlan(selected.values());
+    if (plan.length === 0) return;
+    setInstalling(true);
+    setInstallError(undefined);
+    setResults(undefined);
+    const collected: RepoResult[] = [];
+    const failures: string[] = [];
+    for (const group of plan) {
+      try {
+        const list = await installSkills({ repo: group.repo, ...(group.ref === undefined ? {} : { ref: group.ref }), skillPaths: group.skillPaths, target }, workspace);
+        for (const item of list) collected.push({ ...item, repo: group.repo });
+      } catch (failure) {
+        failures.push(group.repo + "：" + errorMessage(failure));
+      }
+    }
+    setResults(collected);
+    setInstalling(false);
+    if (failures.length > 0) setInstallError(failures.join("；"));
+    const ok = collected.filter((item) => item.ok).length;
+    setInstallSummary(installSummaryText(ok, collected.length - ok));
+    setSelected(new Map());
+    if (ok > 0) {
+      props.onInstalled?.();
+      void reloadSources(workspace);
+      // 「已安装」是读取时现算的：重读缓存即可，不联网
+      void fetchDiscovery(workspace).then((view) => setDiscovery(view), () => undefined);
+      if (browse !== undefined) doBrowse(browse.repo, browse.ref, undefined, true);
+    }
+  };
+
+  /* ---------------- 渲染 ---------------- */
+
   const fieldErrorsNode = browseErrors.length === 0
     ? null
-    : browseErrors.map((entry) => React.createElement("p", { key: entry.field + entry.message, className: styles.fieldError }, `${entry.field}：${entry.message}`));
+    : browseErrors.map((entry) => React.createElement("p", { key: entry.field + entry.message, className: styles.fieldError }, entry.field + "：" + entry.message));
 
-  return React.createElement(Drawer, {
-    open: props.open,
-    title: t("skills.install.title"),
-    subtitle: t("skills.install.subtitle"),
-    width: 720,
-    testId: "skills-add",
-    onClose: props.onClose,
-    footer: React.createElement(React.Fragment, null,
-      React.createElement("span", { className: styles.fieldLabel }, t("skills.install.target")),
-      React.createElement("div", { className: styles.chips, "data-testid": "skills-install-target" },
-        targetOptions.map((option) => React.createElement(Pill, {
-          key: option.id,
-          active: target === option.id,
-          "data-testid": "skills-install-target-" + option.id,
-          onClick: () => setTarget(option.id),
-        }, option.label))),
-      React.createElement("span", { className: kit.drawerFootSpacer }),
-      React.createElement(Button, {
-        variant: "primary",
-        disabled: installing || selected.size === 0,
-        "data-testid": "skills-install-submit",
-        onClick: doInstall,
-      }, installing ? t("skills.install.running") : t("skills.install.submit"))),
-  },
-  React.createElement("div", { className: styles.form, "data-testid": "skills-install-view", "data-browsing": browsing ? "1" : "0" },
-    /* ---------- 仓库输入 ---------- */
-    // 同一行：仓库输入占满剩余宽度 · 分支固定 140px · 「浏览」靠右（UI-C）。
+  const topRow = React.createElement("div", { className: styles.form, "data-testid": "skills-repo-input" },
     React.createElement("div", { className: styles.repoRow, "data-testid": "skills-remote-browse" },
       React.createElement("span", { className: styles.repoGrow },
         React.createElement(Input, {
@@ -275,169 +341,270 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
       React.createElement(Button, {
         size: "sm",
         variant: "outline",
-        disabled: browsing,
+        disabled: browsing || repoInput.trim() === "",
         "data-testid": "skills-remote-browse-button",
         onClick: () => doBrowse(repoInput, refInput.trim() === "" ? undefined : refInput),
-      }, browsing ? t("skills.install.browsing") : t("skills.install.browse"))),
+      }, browsing ? t("skills.install.browsing") : t("skills.install.browse")),
+      React.createElement(Button, {
+        size: "sm",
+        variant: "outline",
+        disabled: repoBusy || repoInput.trim() === "",
+        "data-testid": "skills-repo-add",
+        onClick: () => doAddToList(repoInput, refInput.trim() === "" ? undefined : refInput),
+      }, t("skills.repoView.addToList"))),
     browseError === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-browse-error" }, browseError),
     fieldErrorsNode,
-
-    /* ---------- 常用仓库（胶囊里只有名称；× 悬停才出现；「+ 添加」点开才出输入框） ---------- */
-    React.createElement("div", { className: styles.form, "data-testid": "skills-remote-repos" },
-      React.createElement("span", { className: styles.fieldLabel }, t("skills.install.commonRepos")),
-      repos === undefined
-        ? React.createElement("p", { className: styles.loading }, t("skills.loading"))
-        : React.createElement("div", { className: styles.chips, "data-testid": "skills-remote-repo-list" },
-          repos.map((record) => React.createElement("span", {
-            key: record.repo,
-            className: styles.chip,
-            "data-repo": record.repo,
-            "data-preset": record.preset ? "1" : "0",
+    React.createElement("div", { className: styles.repoRow, "data-testid": "skills-remote-search" },
+      React.createElement("span", { className: styles.repoGrow },
+        React.createElement(Input, {
+          value: query,
+          placeholder: t("skills.remote.search.placeholder"),
+          "aria-label": t("skills.remote.search.placeholder"),
+          "data-testid": "skills-remote-search-input",
+          onChange: (event: { target: { value: string } }) => setQuery(event.target.value),
+          onKeyDown: (event: { key: string }) => {
+            if (event.key === "Enter") doSearch();
           },
-          // 胶囊里只留仓库名：「· 预置」挪到悬停提示里（UI-C）。
-          React.createElement(Pill, {
-            active: false,
-            title: repoChipTitle(record),
-            "data-testid": "skills-remote-repo-browse-" + record.repo,
-            onClick: () => doBrowse(record.repo, record.ref),
-          }, record.repo),
-          React.createElement("button", {
-            type: "button",
-            className: styles.chipRemove,
-            title: t("skills.install.repoRemove"),
-            "aria-label": t("skills.install.repoRemove") + " " + record.repo,
-            "data-testid": "skills-remote-repo-remove-" + record.repo,
-            disabled: repoBusy,
-            onClick: () => doRemoveRepo(record.repo),
-          }, "\u00d7"))),
-          addRepoOpen
-            ? null
-            : React.createElement(Pill, {
-              active: false,
-              "data-testid": "skills-remote-repo-add-toggle",
-              onClick: () => setAddRepoOpen(true),
-            }, "+ " + t("skills.install.repoAdd"))),
-      addRepoOpen
-        ? React.createElement("div", { className: styles.repoRow },
-          React.createElement("span", { className: styles.repoGrow },
-            React.createElement(Input, {
-              value: repoDraft,
-              placeholder: t("skills.install.repoAddPlaceholder"),
-              "aria-label": t("skills.install.repoAddPlaceholder"),
-              "data-testid": "skills-remote-repo-add-input",
-              onChange: (event: { target: { value: string } }) => setRepoDraft(event.target.value),
-            })),
-          React.createElement("span", { className: styles.refGrow },
-            React.createElement(Input, {
-              value: repoRefDraft,
-              placeholder: t("skills.install.refPlaceholder"),
-              "aria-label": t("skills.install.refPlaceholder"),
-              "data-testid": "skills-remote-repo-add-ref",
-              onChange: (event: { target: { value: string } }) => setRepoRefDraft(event.target.value),
-            })),
-          React.createElement(Button, {
-            size: "sm",
-            variant: "outline",
-            disabled: repoBusy,
-            "data-testid": "skills-remote-repo-add",
-            onClick: doAddRepo,
-          }, t("skills.install.repoAdd")))
-        : null,
-      repoError === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-repo-error" }, repoError)),
-
-    /* ---------- skills.sh 搜索 ---------- */
-    React.createElement("div", { className: styles.form, "data-testid": "skills-remote-search" },
-      React.createElement("span", { className: styles.fieldLabel }, t("skills.remote.search.title")),
-      React.createElement("div", { className: styles.repoRow },
-        React.createElement("span", { className: styles.repoGrow },
-          React.createElement(Input, {
-            value: query,
-            placeholder: t("skills.remote.search.placeholder"),
-            "aria-label": t("skills.remote.search.placeholder"),
-            "data-testid": "skills-remote-search-input",
-            onChange: (event: { target: { value: string } }) => setQuery(event.target.value),
-          })),
-        React.createElement(Button, {
-          size: "sm",
-          variant: "outline",
-          disabled: searching,
-          "data-testid": "skills-remote-search-button",
-          onClick: doSearch,
-        }, searching ? t("skills.remote.search.searching") : t("skills.remote.search.button"))),
-      searchError === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-search-error" }, searchError),
-      searchResults === undefined
-        ? null
-        : React.createElement("div", { className: styles.form, "data-testid": "skills-remote-search-results", "data-count": String(searchResults.length) },
-          searchResults.length === 0
-            ? React.createElement("p", { className: styles.note, "data-testid": "skills-remote-search-empty" }, t("skills.remote.search.empty"))
-            : React.createElement(ListSurface, { testId: "skills-remote-search-list" },
-            React.createElement(ListGroup, { title: t("skills.remote.search.results"), count: searchResults.length, testId: "skills-remote-search-group" },
+        })),
+      React.createElement(Button, {
+        size: "sm",
+        variant: "outline",
+        disabled: searching,
+        "data-testid": "skills-remote-search-button",
+        onClick: doSearch,
+      }, searching ? t("skills.remote.search.searching") : t("skills.remote.search.button"))),
+    searchError === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-search-error" }, searchError),
+    searchResults === undefined
+      ? null
+      : searchResults.length === 0
+        ? React.createElement("p", { className: styles.note, "data-testid": "skills-remote-search-empty" }, t("skills.remote.search.empty"))
+        : React.createElement(ListSurface, { testId: "skills-remote-search-list" },
+          React.createElement(ListGroup, { title: t("skills.remote.search.results"), count: searchResults.length, testId: "skills-remote-search-group" },
             searchResults.map((item, index) => React.createElement(ListRow, {
               key: item.repo + "-" + item.name + "-" + String(index),
               testId: "skills-remote-search-item-" + String(index),
               title: item.name,
               subtitle: item.repo + (item.installs === undefined ? "" : " · " + t("skills.remote.search.installs", { count: item.installs })),
-              hoverActions: [{
-                label: t("skills.remote.search.browse"),
-                testId: "skills-remote-search-browse-" + String(index),
-                onClick: () => doBrowse(item.repo, undefined, item.skillPath),
-              }],
-            })))))),
+              badges: inList(item.repo) ? [React.createElement(Badge, { key: "in", tone: "neutral" }, t("skills.repoView.inList"))] : [],
+              hoverActions: [
+                { label: t("skills.remote.search.browse"), testId: "skills-remote-search-browse-" + String(index), onClick: () => doBrowse(item.repo, undefined, item.skillPath) },
+                ...(inList(item.repo)
+                  ? []
+                  : [{ label: t("skills.repoView.addToList"), testId: "skills-remote-search-add-" + String(index), onClick: () => doAddToList(item.repo) }]),
+              ],
+            })))));
 
-    /* ---------- 浏览结果 ---------- */
-    browse === undefined
-      ? React.createElement("p", { className: styles.note, "data-testid": "skills-install-idle" }, t("skills.install.idle"))
-      : React.createElement("div", { className: styles.form, "data-testid": "skills-remote-browse-result", "data-repo": browse.repo, "data-ref": browse.ref, "data-skill-count": String(browse.skills.length) },
-        React.createElement("div", { className: styles.inlineRow },
-          React.createElement("span", { className: styles.note, "data-testid": "skills-remote-browse-summary" }, t("skills.install.browseResult", { repo: browse.repo, ref: browse.ref, count: browse.skills.length })),
-          React.createElement("span", { className: styles.grow }),
-          React.createElement("span", { className: styles.code, "data-testid": "skills-remote-selected-count" }, t("skills.install.selectedCount", { count: selected.size })),
-          React.createElement(Button, {
-            size: "sm",
-            variant: "ghost",
-            "data-testid": "skills-remote-select-all",
-            onClick: () => setSelected(new Set(browse.skills.filter((skill) => skill.installedId === undefined).map((skill) => skill.skillPath))),
-          }, t("skills.install.selectAll")),
-          React.createElement(Button, {
-            size: "sm",
-            variant: "ghost",
-            "data-testid": "skills-remote-select-none",
-            onClick: () => setSelected(new Set<string>()),
-          }, t("skills.install.selectNone"))),
-        React.createElement(ListSurface, { testId: "skills-remote-browse-list" },
-          React.createElement(ListGroup, { title: t("skills.install.browseResults"), count: browse.skills.length, testId: "skills-remote-browse-group" },
-          browse.skills.map((skill) => React.createElement(ListRow, {
-            key: skill.skillPath,
-            testId: "skills-remote-browse-skill-" + skill.dirName,
-            leading: React.createElement(Checkbox, {
-              checked: selected.has(skill.skillPath),
-              disabled: skill.installedId !== undefined,
-              label: skill.name ?? skill.dirName,
-              onChange: (next: boolean) => toggle(skill.skillPath, next),
-            }),
-            title: skill.name ?? skill.dirName,
-            subtitle: skill.description === undefined ? skill.skillPath : skill.skillPath + " · " + skill.description,
-            badges: skill.installedId === undefined
-              ? []
-              : [React.createElement(Badge, { key: "installed", tone: "neutral" }, t("skills.install.installed"))],
-            onOpen: skill.installedId === undefined ? () => toggle(skill.skillPath, !selected.has(skill.skillPath)) : undefined,
-          }))))),
-    browse === undefined ? null : React.createElement("span", { className: styles.code, "data-testid": "skills-remote-target-path" },
-      targetOptions.find((option) => option.id === target)?.path ?? t("skills.install.targetPathUnknown")),
-    workspace === undefined || workspace.trim() === ""
-      ? React.createElement("p", { className: styles.note }, t("skills.install.targetNoWorkspace"))
-      : null,
+  const repoRow = (record: DiscoveryRepoView): React.ReactNode[] => {
+    const failed = record.error !== undefined;
+    const subtitle = repoConfigText(record) + " · " + (failed ? repoScanText(record) + "：" + record.error : repoScanText(record)) +
+      (record.stale === true ? " · " + t("skills.repoView.stale") : "");
+    const nodes: React.ReactNode[] = [React.createElement(ListRow, {
+      key: record.repo,
+      testId: "skills-repo-row-" + record.repo,
+      title: record.repo,
+      subtitle,
+      subtitleTone: failed ? "danger" : "default",
+      badges: record.preset ? [React.createElement(Badge, { key: "preset", tone: "neutral" }, t("skills.install.repoPreset"))] : [],
+      hoverActions: [
+        { label: t("skills.install.browse"), testId: "skills-repo-browse-" + record.repo, onClick: () => doBrowse(record.repo, record.ref) },
+        { label: t("skills.repoView.edit"), testId: "skills-repo-edit-" + record.repo, onClick: () => setEditing({ repo: record.repo, ref: record.ref ?? "", subPath: record.subPath ?? "" }) },
+        { label: t("skills.repoView.remove"), danger: true, testId: "skills-repo-remove-" + record.repo, onClick: () => doRemoveRepo(record.repo) },
+      ],
+    })];
+    if (editing !== undefined && sameRepo(editing.repo, record.repo)) {
+      nodes.push(React.createElement("li", { key: record.repo + ":edit", className: styles.repoEdit, "data-testid": "skills-repo-editor" },
+        React.createElement("span", { className: styles.refGrow },
+          React.createElement(Input, {
+            value: editing.ref,
+            placeholder: t("skills.install.refPlaceholder"),
+            "aria-label": t("skills.install.refPlaceholder"),
+            "data-testid": "skills-repo-edit-ref",
+            onChange: (event: { target: { value: string } }) => setEditing({ ...editing, ref: event.target.value }),
+          })),
+        React.createElement("span", { className: styles.repoGrow },
+          React.createElement(Input, {
+            value: editing.subPath,
+            placeholder: t("skills.repoView.subPathPlaceholder"),
+            "aria-label": t("skills.repoView.subPathPlaceholder"),
+            "data-testid": "skills-repo-edit-subpath",
+            onChange: (event: { target: { value: string } }) => setEditing({ ...editing, subPath: event.target.value }),
+          })),
+        React.createElement(Button, { size: "sm", variant: "ghost", "data-testid": "skills-repo-edit-cancel", onClick: () => setEditing(undefined) }, t("skills.repoView.cancel")),
+        React.createElement(Button, { size: "sm", variant: "outline", disabled: repoBusy, "data-testid": "skills-repo-edit-save", onClick: doSaveEdit }, t("skills.repoView.save"))));
+    }
+    return nodes;
+  };
+
+  const repoList = React.createElement("div", { className: styles.form },
+    React.createElement(ListSurface, { testId: "skills-repo-list" },
+      React.createElement(ListGroup, {
+        title: t("skills.repoView.repos"),
+        count: t("skills.repoView.repoCount", { count: repos.length }),
+        expanded: reposOpen,
+        onToggle: () => setReposOpen((open) => !open),
+        testId: "skills-repo-group",
+      }, repos.flatMap(repoRow))),
+    repoNote === undefined ? null : React.createElement("p", { className: styles.note, "data-testid": "skills-repo-note" }, repoNote),
+    repoError === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-repo-error" }, repoError));
+
+  const skillRow = (item: { repo: string; ref?: string; skillPath: string; dirName: string; name?: string; description?: string; installedId?: string }, showRepo: boolean): React.ReactElement => {
+    const picked: Picked = { repo: item.repo, ...(item.ref === undefined ? {} : { ref: item.ref }), skillPath: item.skillPath };
+    const key = discoveredKey(item);
+    const installed = item.installedId !== undefined;
+    return React.createElement(ListRow, {
+      key,
+      testId: "skills-discovered-" + item.repo + "-" + item.dirName,
+      // 原生勾选框：宿主 Checkbox 的 label 是可见文字，会与行标题重复（名称只出现一次）。
+      leading: React.createElement("input", {
+        type: "checkbox",
+        className: kit.check,
+        checked: selected.has(key),
+        disabled: installed,
+        "aria-label": item.name ?? item.dirName,
+        onClick: (event: React.MouseEvent) => event.stopPropagation(),
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) => toggle(picked, event.target.checked),
+      }),
+      title: item.name ?? item.dirName,
+      ...(showRepo ? { tag: { text: item.repo, title: item.repo + (item.ref === undefined ? "" : "@" + item.ref) + " · " + item.skillPath } } : {}),
+      subtitle: item.description ?? item.skillPath,
+      badges: installed ? [React.createElement(Badge, { key: "installed", tone: "neutral" }, t("skills.install.installed"))] : [],
+      onOpen: installed ? undefined : () => toggle(picked, !selected.has(key)),
+    });
+  };
+
+  const browseBlock = browse === undefined ? null : React.createElement("div", {
+    className: styles.form,
+    "data-testid": "skills-remote-browse-result",
+    "data-repo": browse.repo,
+    "data-ref": browse.ref,
+    "data-skill-count": String(browse.skills.length),
+  },
+  React.createElement("div", { className: styles.inlineRow },
+    React.createElement("span", { className: styles.note, "data-testid": "skills-remote-browse-summary" }, t("skills.repoView.browsing", { repo: browse.repo, ref: browse.ref })),
+    React.createElement("span", { className: styles.grow }),
+    React.createElement(Button, {
+      size: "sm",
+      variant: "ghost",
+      "data-testid": "skills-remote-select-all",
+      onClick: () => setSelected((previous) => {
+        const map = new Map(previous);
+        for (const skill of browse.skills) if (skill.installedId === undefined) map.set(discoveredKey({ repo: browse.repo, skillPath: skill.skillPath }), { repo: browse.repo, ref: browse.ref, skillPath: skill.skillPath });
+        return map;
+      }),
+    }, t("skills.install.selectAll")),
+    React.createElement(Button, { size: "sm", variant: "outline", "data-testid": "skills-repo-back", onClick: () => setBrowse(undefined) }, t("skills.repoView.back"))),
+  React.createElement(ListSurface, { testId: "skills-remote-browse-list" },
+    React.createElement(ListGroup, { title: t("skills.install.browseResults"), count: browse.skills.length, testId: "skills-remote-browse-group" },
+      browse.skills.map((skill) => skillRow({ ...skill, repo: browse.repo, ref: browse.ref }, false)))));
+
+  const discoveryBlock = ((): React.ReactNode => {
+    if (browse !== undefined) return browseBlock;
+    const all = discovery?.skills ?? [];
+    const counts = installedCounts(all, dq, repoFilter);
+    const filtered = filterDiscovered(all, { query: dq, installed: installedFilter, repo: repoFilter });
+    const { visible, rest } = sliceVisible(filtered, limit);
+    const toolbar = React.createElement(Toolbar, {
+      testId: "skills-discovery-toolbar",
+      search: { value: dq, onChange: (value: string) => { setDq(value); setLimit(DISCOVERY_PAGE); }, placeholder: t("skills.repoView.searchPlaceholder"), testId: "skills-discovery-search" },
+      filters: {
+        items: INSTALLED_FILTERS.map((id) => ({ id, label: installedFilterLabel(id), count: counts[id] })),
+        value: installedFilter,
+        onChange: (id: string) => { setInstalledFilter(id as InstalledFilter); setLimit(DISCOVERY_PAGE); },
+        label: t("skills.filterLabel"),
+      },
+      afterFilters: React.createElement("select", {
+        className: kit.select,
+        value: repoFilter,
+        "aria-label": t("skills.repoView.repoAll"),
+        "data-testid": "skills-discovery-repo-filter",
+        "data-active": repoFilter === "" ? undefined : "",
+        onChange: (event: React.ChangeEvent<HTMLSelectElement>) => { setRepoFilter(event.target.value); setLimit(DISCOVERY_PAGE); },
+      },
+      React.createElement("option", { value: "" }, t("skills.repoView.repoAll")),
+      repos.map((record) => React.createElement("option", { key: record.repo, value: record.repo }, record.repo + (record.skillCount === undefined ? "" : "（" + String(record.skillCount) + "）")))),
+      end: React.createElement(React.Fragment, null,
+        React.createElement("span", { className: styles.scanMeta, "data-testid": "skills-discovery-last-scan", title: discovery?.lastScannedAt ?? "" },
+          scanning ? t("skills.repoView.refreshing") : t("skills.repoView.lastScan", { time: relativeTime(discovery?.lastScannedAt, Date.now()) })),
+        React.createElement(Button, {
+          size: "sm",
+          variant: "outline",
+          disabled: scanning,
+          "data-testid": "skills-discovery-refresh",
+          onClick: () => doRefresh(),
+        }, t("skills.repoView.refresh"))),
+    });
+    let body: React.ReactNode;
+    if (discoveryError !== undefined && discovery === undefined) {
+      body = React.createElement("p", { className: styles.errorBox, "data-testid": "skills-discovery-error" }, t("skills.repoView.loadFailed", { message: discoveryError }));
+    } else if (discovery === undefined || (scanning && !discovery.cached)) {
+      body = React.createElement(React.Fragment, null,
+        React.createElement("p", { className: styles.note, "data-testid": "skills-discovery-first-scan" }, t("skills.repoView.firstScan")),
+        React.createElement(SkeletonRows, { testId: "skills-discovery-loading" }));
+    } else if (filtered.length === 0) {
+      body = React.createElement("p", { className: styles.note, "data-testid": "skills-discovery-empty" }, all.length === 0 ? t("skills.repoView.empty") : t("skills.repoView.emptyFiltered"));
+    } else {
+      body = React.createElement(React.Fragment, null,
+        React.createElement(ListSurface, { testId: "skills-discovery-list" },
+          React.createElement(ListGroup, { testId: "skills-discovery-group" }, visible.map((skill) => skillRow(skill, true)))),
+        rest === 0 ? null : React.createElement(ListFoot, {
+          testId: "skills-discovery-more",
+          text: "",
+          action: { label: t("skills.repoView.more", { count: Math.min(rest, DISCOVERY_PAGE), total: filtered.length }), onClick: () => setLimit((value) => value + DISCOVERY_PAGE), testId: "skills-discovery-more-button" },
+        }));
+    }
+    return React.createElement("div", { className: styles.form, "data-testid": "skills-discovery", "data-count": String(filtered.length) },
+      toolbar,
+      discoveryError !== undefined && discovery !== undefined
+        ? React.createElement("p", { className: styles.errorBox, "data-testid": "skills-discovery-refresh-error" }, discoveryError)
+        : null,
+      body);
+  })();
+
+  const footer = selected.size === 0 && !installing
+    ? undefined
+    : React.createElement(React.Fragment, null,
+        React.createElement("span", { className: styles.fieldLabel }, t("skills.install.target")),
+        React.createElement("div", { className: styles.chips, "data-testid": "skills-install-target" },
+          targetOptions.map((option) => React.createElement(Pill, {
+            key: option.id,
+            active: target === option.id,
+            title: option.path ?? t("skills.install.targetPathUnknown"),
+            "data-testid": "skills-install-target-" + option.id,
+            onClick: () => setTarget(option.id),
+          }, option.label))),
+        React.createElement("span", { className: kit.drawerFootSpacer }),
+        React.createElement("span", { className: styles.code, "data-testid": "skills-remote-selected-count" }, t("skills.repoView.selected", { count: selected.size })),
+        React.createElement(Button, {
+          variant: "primary",
+          disabled: installing || selected.size === 0,
+          "data-testid": "skills-install-submit",
+          onClick: () => void doInstall(),
+        }, installing ? t("skills.install.running") : t("skills.install.submit")));
+
+  return React.createElement(Drawer, {
+    open: props.open,
+    title: t("skills.install.title"),
+    subtitle: t("skills.repoView.subtitle"),
+    width: 860,
+    testId: "skills-add",
+    onClose: props.onClose,
+    ...(footer === undefined ? {} : { footer }),
+  },
+  React.createElement("div", { className: styles.form, "data-testid": "skills-install-view", "data-browsing": browsing ? "1" : "0" },
+    topRow,
+    repoList,
+    discoveryBlock,
     installSummary === undefined ? null : React.createElement("p", { className: styles.note, "data-testid": "skills-remote-install-summary" }, installSummary),
     installError === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-install-error" }, installError),
     results === undefined
       ? null
       : React.createElement("ul", { className: styles.resultList, "data-testid": "skills-remote-install-results" },
         results.map((result, index) => React.createElement("li", {
-          key: result.skillPath + "-" + String(index),
+          key: result.repo + result.skillPath + "-" + String(index),
           className: styles.resultRow,
           "data-ok": result.ok ? "1" : "0",
           "data-skill-path": result.skillPath,
         },
         React.createElement(Badge, { tone: result.ok ? "neutral" : "danger" }, result.ok ? t("skills.install.ok") : t("skills.install.failed")),
-        React.createElement("span", { className: styles.note }, installResultText(result)))))));
+        React.createElement("span", { className: styles.note }, result.repo + " · " + installResultText(result)))))));
 }

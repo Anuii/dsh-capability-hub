@@ -60,14 +60,14 @@ test("抽屉副标题与「位置」都用缩写后的路径，完整路径走 t
   assert.ok(detail.includes('title: skill.path'), "位置那一项要给出完整路径的悬停提示");
 });
 
-test("添加技能抽屉：仓库输入占满、分支固定 140px、+ 添加默认收起", () => {
+test("添加技能 = 仓库视图：地址输入占满、分支固定 140px、仓库列表默认折叠、汇总发现分批渲染", () => {
   const install = fs.readFileSync(path.join(skillsDir, "remote", "install-view.tsx"), "utf8");
   assert.ok(install.includes("styles.repoGrow"));
   assert.ok(install.includes("styles.refGrow"));
-  assert.ok(install.includes('"skills-remote-repo-add-toggle"'));
-  assert.ok(install.includes("addRepoOpen"));
-  assert.equal(/record\.repo \+ \(record\.preset/.test(install), false, "胶囊里不再拼「· 预置」");
-  assert.ok(install.includes("repoChipTitle"));
   assert.ok(SKILLS_CSS.includes(".chsk_refGrow{display:flex;flex:0 0 140px"), "分支输入框固定 140px");
-  assert.ok(SKILLS_CSS.includes(".chsk_chip:hover .chsk_chipRemove"), "× 悬停才出现");
+  assert.ok(install.includes("React.useState<boolean>(false);\n  const [editing"), "仓库列表默认折叠");
+  assert.ok(install.includes("shouldAutoScan(view)"), "第一次没有缓存时自动扫一次");
+  assert.ok(install.includes("sliceVisible(filtered, limit)"), "上千行分批渲染");
+  assert.ok(install.includes("installPlan(selected.values())"), "跨仓库按仓库分组安装");
+  assert.ok(install.includes("width: 860"), "宽抽屉");
 });

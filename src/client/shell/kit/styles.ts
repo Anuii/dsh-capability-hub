@@ -64,6 +64,10 @@ const CSS = [
   // 安静的原生下拉（技能页「目录」筛选）：与分段同高、中性灰，展开后是系统菜单。
   ".chk_select{height:28px;max-width:220px;padding:0 6px;border:1px solid var(--chk-line-weak);border-radius:var(--chk-radius-control);background:var(--chk-surface);color:var(--chk-fg-secondary);font:inherit;font-size:var(--chk-fs-small);cursor:pointer}",
   ".chk_select:hover{color:var(--chk-fg-primary)}",
+  // 行首的原生勾选框（仓库视图）：中性色、无可见文字（名称就在同一行的标题里，靠 aria-label 提供无障碍名）。
+  ".chk_check{flex:none;width:14px;height:14px;margin:0;cursor:pointer;accent-color:var(--chk-fg-primary)}",
+  ".chk_check:disabled{cursor:default;opacity:.45}",
+  ".chk_check:focus-visible{outline:2px solid var(--chk-focus);outline-offset:2px}",
   ".chk_select:focus-visible{outline:2px solid var(--chk-focus);outline-offset:1px}",
   ".chk_select[data-active]{color:var(--chk-fg-primary);border-color:var(--chk-line)}",
   ".chk_toolbarEnd{display:flex;align-items:center;gap:var(--chk-sp2);min-width:0}",
@@ -239,6 +243,7 @@ export const kit = {
   toolbarSpacer: PREFIX + "toolbarSpacer",
   toolbarAfterFilters: PREFIX + "toolbarAfterFilters",
   select: PREFIX + "select",
+  check: PREFIX + "check",
   toolbarEnd: PREFIX + "toolbarEnd",
   search: PREFIX + "search",
   segments: PREFIX + "segments",
