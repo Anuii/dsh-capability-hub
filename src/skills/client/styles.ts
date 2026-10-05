@@ -11,131 +11,130 @@
  * bundle，再插一个 <style> 标签（幂等）。类名统一 chsk_ 前缀，避免和别的标签页打架。
  */
 
-const PREFIX = "chsk_";
+import { defineSheet, injectStyleTag } from "../../kit/css.ts";
 
-const CSS = [
-  // flex:none 很关键：外壳的 .ch_content 是 flex 容器，默认 flex-shrink:1 会把列表压扁。
-  `.${PREFIX}root{display:flex;flex-direction:column;gap:16px;min-height:0;flex:none}`,
-  `.${PREFIX}errorBox{margin:0;padding:10px 12px;border:1px solid var(--dsw-alias-state-error-primary,var(--dsw-alias-border-l2));border-radius:10px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-primary));word-break:break-word}`,
-  `.${PREFIX}loading{margin:0;font-size:12.5px;color:var(--dsw-alias-label-tertiary)}`,
-  `.${PREFIX}note{margin:0;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-secondary);word-break:break-word}`,
-  // 列表底部那一行「另有 N 个空的技能目录 · 显示」已经收进 kit 的 ListFoot（.chk_foot）。
-  // 详情：按 4/8/12/16 的阶梯排
-  `.${PREFIX}diag{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}`,
-  `.${PREFIX}diagRow{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;line-height:18px}`,
-  `.${PREFIX}diagText{flex:1;min-width:0;color:var(--dsw-alias-label-secondary);word-break:break-word}`,
-  `.${PREFIX}code{margin:0;font-size:11px;color:var(--dsw-alias-label-tertiary);font-family:var(--dsw-font-family)}`,
-  `.${PREFIX}codeWrap{max-height:340px;overflow:auto;border:1px solid var(--dsw-alias-border-l1);border-radius:10px}`,
-  `.${PREFIX}files{max-height:260px;overflow:auto;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:6px 10px}`,
-  `.${PREFIX}fileRow{display:flex;align-items:center;gap:8px;font-size:12px;line-height:20px;color:var(--dsw-alias-label-secondary)}`,
-  `.${PREFIX}fileName{flex:1;min-width:0;word-break:break-all;font-family:var(--dsw-font-family)}`,
-  `.${PREFIX}fileDir{color:var(--dsw-alias-label-primary);font-weight:600}`,
-  `.${PREFIX}fileSize{font-size:11px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}`,
-  // 路径整段换行显示（不截断、不渐隐）
-  `.${PREFIX}pathWrap{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);font-family:var(--dsw-font-family);word-break:break-all;white-space:normal}`,
-  // 详情小节里的一行动作按钮
-  `.${PREFIX}slotRow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}`,
-  // 添加技能抽屉：表单
-  `.${PREFIX}form{display:flex;flex-direction:column;gap:12px}`,
-  `.${PREFIX}inlineRow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}`,
-  `.${PREFIX}grow{flex:1;min-width:160px}`,
-  // 添加技能抽屉：一行里「占满剩余宽度 + 固定 140px + 按钮靠右」，全部落在 8px 网格上
-  `.${PREFIX}repoRow{display:flex;align-items:center;gap:8px}`,
-  `.${PREFIX}repoGrow{display:flex;flex:1 1 auto;min-width:0}`,
-  `.${PREFIX}repoGrow>span{flex:1;min-width:0}`,
-  `.${PREFIX}repoGrow input{width:100%}`,
-  `.${PREFIX}refGrow{display:flex;flex:0 0 140px;width:140px;min-width:0}`,
-  `.${PREFIX}refGrow>span{flex:1;min-width:0}`,
-  `.${PREFIX}refGrow input{width:100%}`,
-  // 常用仓库胶囊：× 只在悬停 / 聚焦时出现（预置与自定义一样，保留删除能力）
-  `.${PREFIX}chip{display:inline-flex;align-items:center;gap:2px}`,
-  `.${PREFIX}chipRemove{cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:none;background:none;border-radius:6px;font:inherit;font-size:12px;line-height:1;color:var(--dsw-alias-label-tertiary);opacity:0;transition:opacity 120ms ease-out}`,
-  `.${PREFIX}chip:hover .${PREFIX}chipRemove,.${PREFIX}chip:focus-within .${PREFIX}chipRemove{opacity:1}`,
-  `.${PREFIX}chipRemove:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}`,
-  `.${PREFIX}fieldLabel{font-size:12px;color:var(--dsw-alias-label-tertiary)}`,
-  `.${PREFIX}chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px}`,
-  // 勾选清单 / 候选清单
-  `.${PREFIX}browseList{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;max-height:320px;overflow:auto;border:1px solid var(--dsw-alias-border-l1);border-radius:10px}`,
-  `.${PREFIX}browseRow{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-top:1px solid var(--dsw-alias-border-l1)}`,
-  `.${PREFIX}browseRow:first-child{border-top:none}`,
-  `.${PREFIX}browseMain{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}`,
-  `.${PREFIX}candidate{display:flex;flex-direction:column;gap:4px;padding:8px 12px;border-top:1px solid var(--dsw-alias-border-l1)}`,
-  `.${PREFIX}candidateMain{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}`,
-  // 候选行的勾选框标签：不许它吃掉整行宽度（标签可能是很长的候选键）
-  `.${PREFIX}candidateLabel{flex:none;max-width:240px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}`,
-  `.${PREFIX}resultList{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}`,
-  `.${PREFIX}resultRow{display:flex;align-items:center;gap:8px;font-size:12.5px;line-height:20px;color:var(--dsw-alias-label-secondary);padding:2px 0}`,
-  // 宿主 Modal 的内容区（对话框用）
-  `.${PREFIX}modalBody{display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto}`,
-  `.${PREFIX}fieldError{margin:0;font-size:12px;color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-primary))}`,
-  // 技能树里的一行说明（没有工作区 / 该层级还没有技能）：与行同样的左右留白、次要色小字。
-  `.${PREFIX}treeNote{padding:12px 16px 12px 36px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-tertiary);border-top:1px solid var(--dsw-alias-border-l1)}`,
-  `.${PREFIX}treeNote:first-child{border-top:none}`,
-  // 仓库列表里就地展开的编辑行（分支 · 子目录 · 取消 · 保存）。
-  `.${PREFIX}repoEdit{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);list-style:none}`,
-  // 搜索结果的固定高度滚动框（约 4 行）：结果再多也不把下面的内容顶出视野。
-  `.${PREFIX}scrollBox{max-height:232px;overflow:auto;border-radius:10px}`,
-  // 汇总里一个仓库分组 + 它的「再显示 200 个」：贴在一起，组与组之间的距离由 ListSurface 给。
-  `.${PREFIX}groupStack{display:flex;flex-direction:column;gap:8px}`,
-  // 汇总发现工具栏右侧的「上次扫描」小字。
-  `.${PREFIX}scanMeta{font-size:12px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}`,
-].join("");
+const skillsSheet = defineSheet(
+  "chsk_",
+  [
+    "root",
+    "errorBox",
+    "treeNote",
+    "repoEdit",
+    "scanMeta",
+    "scrollBox",
+    "groupStack",
+    "loading",
+    "note",
+    "diag",
+    "diagRow",
+    "diagText",
+    "code",
+    "codeWrap",
+    "files",
+    "fileRow",
+    "fileName",
+    "fileDir",
+    "fileSize",
+    "pathWrap",
+    "slotRow",
+    "form",
+    "inlineRow",
+    "grow",
+    "fieldLabel",
+    "chips",
+    "repoRow",
+    "repoGrow",
+    "refGrow",
+    "chip",
+    "chipRemove",
+    "browseList",
+    "browseRow",
+    "browseMain",
+    "candidate",
+    "candidateMain",
+    "candidateLabel",
+    "resultList",
+    "resultRow",
+    "modalBody",
+    "fieldError",
+  ],
+  [
+    // flex:none 很关键：外壳的 .ch_content 是 flex 容器，默认 flex-shrink:1 会把列表压扁。
+    ".chsk_root{display:flex;flex-direction:column;gap:16px;min-height:0;flex:none}",
+    ".chsk_errorBox{margin:0;padding:10px 12px;border:1px solid var(--dsw-alias-state-error-primary,var(--dsw-alias-border-l2));border-radius:10px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-primary));word-break:break-word}",
+    ".chsk_loading{margin:0;font-size:12.5px;color:var(--dsw-alias-label-tertiary)}",
+    ".chsk_note{margin:0;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-secondary);word-break:break-word}",
+    // 列表底部那一行「另有 N 个空的技能目录 · 显示」已经收进 kit 的 ListFoot（.chk_foot）。
+    // 详情：按 4/8/12/16 的阶梯排
+    ".chsk_diag{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}",
+    ".chsk_diagRow{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;line-height:18px}",
+    ".chsk_diagText{flex:1;min-width:0;color:var(--dsw-alias-label-secondary);word-break:break-word}",
+    ".chsk_code{margin:0;font-size:11px;color:var(--dsw-alias-label-tertiary);font-family:var(--dsw-font-family)}",
+    ".chsk_codeWrap{max-height:340px;overflow:auto;border:1px solid var(--dsw-alias-border-l1);border-radius:10px}",
+    ".chsk_files{max-height:260px;overflow:auto;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:6px 10px}",
+    ".chsk_fileRow{display:flex;align-items:center;gap:8px;font-size:12px;line-height:20px;color:var(--dsw-alias-label-secondary)}",
+    ".chsk_fileName{flex:1;min-width:0;word-break:break-all;font-family:var(--dsw-font-family)}",
+    ".chsk_fileDir{color:var(--dsw-alias-label-primary);font-weight:600}",
+    ".chsk_fileSize{font-size:11px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}",
+    // 路径整段换行显示（不截断、不渐隐）
+    ".chsk_pathWrap{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);font-family:var(--dsw-font-family);word-break:break-all;white-space:normal}",
+    // 详情小节里的一行动作按钮
+    ".chsk_slotRow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}",
+    // 添加技能抽屉：表单
+    ".chsk_form{display:flex;flex-direction:column;gap:12px}",
+    ".chsk_inlineRow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}",
+    ".chsk_grow{flex:1;min-width:160px}",
+    // 添加技能抽屉：一行里「占满剩余宽度 + 固定 140px + 按钮靠右」，全部落在 8px 网格上
+    ".chsk_repoRow{display:flex;align-items:center;gap:8px}",
+    ".chsk_repoGrow{display:flex;flex:1 1 auto;min-width:0}",
+    ".chsk_repoGrow>span{flex:1;min-width:0}",
+    ".chsk_repoGrow input{width:100%}",
+    ".chsk_refGrow{display:flex;flex:0 0 140px;width:140px;min-width:0}",
+    ".chsk_refGrow>span{flex:1;min-width:0}",
+    ".chsk_refGrow input{width:100%}",
+    // 常用仓库胶囊：× 只在悬停 / 聚焦时出现（预置与自定义一样，保留删除能力）
+    ".chsk_chip{display:inline-flex;align-items:center;gap:2px}",
+    ".chsk_chipRemove{cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:none;background:none;border-radius:6px;font:inherit;font-size:12px;line-height:1;color:var(--dsw-alias-label-tertiary);opacity:0;transition:opacity 120ms ease-out}",
+    ".chsk_chip:hover .chsk_chipRemove,.chsk_chip:focus-within .chsk_chipRemove{opacity:1}",
+    ".chsk_chipRemove:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
+    ".chsk_fieldLabel{font-size:12px;color:var(--dsw-alias-label-tertiary)}",
+    ".chsk_chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px}",
+    // 勾选清单 / 候选清单
+    ".chsk_browseList{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;max-height:320px;overflow:auto;border:1px solid var(--dsw-alias-border-l1);border-radius:10px}",
+    ".chsk_browseRow{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-top:1px solid var(--dsw-alias-border-l1)}",
+    ".chsk_browseRow:first-child{border-top:none}",
+    ".chsk_browseMain{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}",
+    ".chsk_candidate{display:flex;flex-direction:column;gap:4px;padding:8px 12px;border-top:1px solid var(--dsw-alias-border-l1)}",
+    ".chsk_candidateMain{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}",
+    // 候选行的勾选框标签：不许它吃掉整行宽度（标签可能是很长的候选键）
+    ".chsk_candidateLabel{flex:none;max-width:240px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}",
+    ".chsk_resultList{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}",
+    ".chsk_resultRow{display:flex;align-items:center;gap:8px;font-size:12.5px;line-height:20px;color:var(--dsw-alias-label-secondary);padding:2px 0}",
+    // 宿主 Modal 的内容区（对话框用）
+    ".chsk_modalBody{display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto}",
+    ".chsk_fieldError{margin:0;font-size:12px;color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-primary))}",
+    // 技能树里的一行说明（没有工作区 / 该层级还没有技能）：与行同样的左右留白、次要色小字。
+    ".chsk_treeNote{padding:12px 16px 12px 36px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-tertiary);border-top:1px solid var(--dsw-alias-border-l1)}",
+    ".chsk_treeNote:first-child{border-top:none}",
+    // 仓库列表里就地展开的编辑行（分支 · 子目录 · 取消 · 保存）。
+    ".chsk_repoEdit{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);list-style:none}",
+    // 搜索结果的固定高度滚动框（约 4 行）：结果再多也不把下面的内容顶出视野。
+    ".chsk_scrollBox{max-height:232px;overflow:auto;border-radius:10px}",
+    // 汇总里一个仓库分组 + 它的「再显示 200 个」：贴在一起，组与组之间的距离由 ListSurface 给。
+    ".chsk_groupStack{display:flex;flex-direction:column;gap:8px}",
+    // 汇总发现工具栏右侧的「上次扫描」小字。
+    ".chsk_scanMeta{font-size:12px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}",
+  ],
+);
 
 /** 类名表。 */
-export const styles = {
-  root: PREFIX + "root",
-  errorBox: PREFIX + "errorBox",
-  treeNote: PREFIX + "treeNote",
-  repoEdit: PREFIX + "repoEdit",
-  scanMeta: PREFIX + "scanMeta",
-  scrollBox: PREFIX + "scrollBox",
-  groupStack: PREFIX + "groupStack",
-  loading: PREFIX + "loading",
-  note: PREFIX + "note",
-  diag: PREFIX + "diag",
-  diagRow: PREFIX + "diagRow",
-  diagText: PREFIX + "diagText",
-  code: PREFIX + "code",
-  codeWrap: PREFIX + "codeWrap",
-  files: PREFIX + "files",
-  fileRow: PREFIX + "fileRow",
-  fileName: PREFIX + "fileName",
-  fileDir: PREFIX + "fileDir",
-  fileSize: PREFIX + "fileSize",
-  pathWrap: PREFIX + "pathWrap",
-  slotRow: PREFIX + "slotRow",
-  form: PREFIX + "form",
-  inlineRow: PREFIX + "inlineRow",
-  grow: PREFIX + "grow",
-  fieldLabel: PREFIX + "fieldLabel",
-  chips: PREFIX + "chips",
-  repoRow: PREFIX + "repoRow",
-  repoGrow: PREFIX + "repoGrow",
-  refGrow: PREFIX + "refGrow",
-  chip: PREFIX + "chip",
-  chipRemove: PREFIX + "chipRemove",
-  browseList: PREFIX + "browseList",
-  browseRow: PREFIX + "browseRow",
-  browseMain: PREFIX + "browseMain",
-  candidate: PREFIX + "candidate",
-  candidateMain: PREFIX + "candidateMain",
-  candidateLabel: PREFIX + "candidateLabel",
-  resultList: PREFIX + "resultList",
-  resultRow: PREFIX + "resultRow",
-  modalBody: PREFIX + "modalBody",
-  fieldError: PREFIX + "fieldError",
-} as const;
+export const styles = skillsSheet.classes;
+
+const CSS = skillsSheet.css;
 
 /** 把技能页样式注入 <head>（幂等）。 */
 export function injectSkillsStyles(): void {
-  if (typeof document === "undefined") return;
-  const tagId = "dsh-capability-hub/skills-styles";
-  if (document.querySelector(`style[data-plugin-css=${JSON.stringify(tagId)}]`) !== null) return;
-  const tag = document.createElement("style");
-  tag.dataset.plugin = "dsh-capability-hub";
-  tag.dataset.pluginCss = tagId;
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
+  injectStyleTag("dsh-capability-hub/skills-styles", CSS);
 }
 
 export { CSS as SKILLS_CSS };

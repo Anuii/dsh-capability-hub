@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { KIT_CSS, kit } from "../../src/kit/styles.ts";
+import { KIT_CSS, KIT_SHEETS, kit } from "../../src/kit/styles.ts";
 import { CSS as SHELL_CSS, styles } from "../../src/platform/client/styles.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +64,17 @@ test("kit 样式表里每个类名都有 CSS 规则", () => {
     )
     .map(([key, className]) => key + " (" + className + ")");
   assert.deepEqual(dead.sort(), []);
+});
+
+test("每张样式片段只写自己声明的类（样式就在组件旁边，ADR-0004）", () => {
+  const strays: string[] = [];
+  for (const entry of KIT_SHEETS) {
+    const own = new Set(Object.values(entry.classes));
+    for (const match of entry.css.matchAll(/\.(chk_[A-Za-z0-9]+)/g)) {
+      if (!own.has(match[1]) && match[1] !== kit.scope) strays.push(match[1]);
+    }
+  }
+  assert.deepEqual([...new Set(strays)].sort(), []);
 });
 
 test("外壳样式表里每个类名都有 CSS 规则", () => {
