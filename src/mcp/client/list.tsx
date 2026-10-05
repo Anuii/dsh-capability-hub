@@ -15,7 +15,8 @@ import { Badge, GripIcon, ListGroup, ListRow, ListSurface, StatusDot, kit } from
 import { activeInstanceCount, cooldownRemainingMs, rowSubtitleText, rowSubtitleTitle, serverStatusTone, statusTitle } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { RuntimeServerView, RuntimeStatus, ServerView } from "./types.ts";
+import type { RuntimeServerView, RuntimeStatus } from "../contract/runtime.ts";
+import type { ServerView } from "../contract/config.ts";
 
 export interface ServerListProps {
   servers: readonly ServerView[];

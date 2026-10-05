@@ -9,7 +9,8 @@ import { constants } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
 import { delimiter, isAbsolute, join, resolve, sep } from 'node:path';
 
-import type { CommandCheckOptions, CommandCheckResult } from './types.ts';
+import type { CommandCheckOptions } from './types.ts';
+import type { CommandCheckResult } from '../contract/config.ts';
 
 export type { CommandCheckOptions } from './types.ts';
 export type CheckCommandOptions = CommandCheckOptions;

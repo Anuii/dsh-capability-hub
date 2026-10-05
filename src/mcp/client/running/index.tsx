@@ -40,7 +40,7 @@ import {
 } from "./region.ts";
 import { injectRuntimeStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { RuntimeInstanceView, RuntimeSessionView, RuntimeStatus } from "./types.ts";
+import type { RuntimeInstanceView, RuntimeSessionView, RuntimeStatus } from "../../contract/runtime.ts";
 
 /* 样式只注入一次（模块加载时；无 document 时自动跳过）。 */
 injectRuntimeStyles();

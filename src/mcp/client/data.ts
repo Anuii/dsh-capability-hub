@@ -7,22 +7,8 @@
  */
 
 import { api } from "../../platform/client/api.ts";
-import type {
-  CommandCheckResult,
-  ConfigPayload,
-  ImportApplyResult,
-  ImportSourceView,
-  ImportSourcesPayload,
-  McpPreset,
-  McpSettings,
-  ParseJsonResult,
-  PresetsPayload,
-  RevealResult,
-  RuntimeStatus,
-  ServerView,
-  UpsertResult,
-  ValidateResult,
-} from "./types.ts";
+import type { CommandCheckResult, ConfigPayload, ImportApplyResponse, ImportSourceView, ImportSourcesPayload, PresetView, McpSettings, ParseResult, PresetsPayload, RevealResult, ServerView, UpsertResult, ValidateResult } from "../contract/config.ts";
+import type { RuntimeStatus } from "../contract/runtime.ts";
 
 /** GET mcp/config → { settings, settingsSet, servers, warnings }。 */
 export async function fetchConfig(): Promise<ConfigPayload> {
@@ -42,7 +28,8 @@ export async function fetchRuntime(): Promise<RuntimeStatus> {
     servers: Array.isArray(data?.servers) ? data.servers : [],
     sessions: Array.isArray(data?.sessions)
       ? data.sessions.map((session) => ({
-          ...(typeof session?.sessionId === "string" ? { sessionId: session.sessionId } : {}),
+          ...session,
+          sessionId: typeof session?.sessionId === "string" ? session.sessionId : "",
           instances: Array.isArray(session?.instances)
             ? session.instances.filter((instance) => instance !== null && typeof instance === "object" && typeof instance.server === "string")
             : [],
@@ -123,8 +110,8 @@ export async function checkCommand(command: string, cwd?: string): Promise<Comma
  * ------------------------------------------------------------------ */
 
 /** POST mcp/parse-json { text } → { servers, warnings }。 */
-export async function parseJsonText(text: string): Promise<ParseJsonResult> {
-  const data = await api.post<Partial<ParseJsonResult>>("mcp/parse-json", { text });
+export async function parseJsonText(text: string): Promise<ParseResult> {
+  const data = await api.post<Partial<ParseResult>>("mcp/parse-json", { text });
   return {
     servers: Array.isArray(data?.servers) ? data.servers : [],
     warnings: Array.isArray(data?.warnings) ? data.warnings : [],
@@ -132,7 +119,7 @@ export async function parseJsonText(text: string): Promise<ParseJsonResult> {
 }
 
 /** GET mcp/presets → { presets }。 */
-export async function fetchPresets(): Promise<McpPreset[]> {
+export async function fetchPresets(): Promise<PresetView[]> {
   const data = await api.get<Partial<PresetsPayload>>("mcp/presets");
   return Array.isArray(data?.presets) ? data.presets : [];
 }
@@ -144,8 +131,8 @@ export async function fetchImportSources(): Promise<ImportSourceView[]> {
 }
 
 /** POST mcp/import/apply { sourceId, names } → { imported, skipped, servers, warnings }。 */
-export async function applyImport(sourceId: string, names: readonly string[]): Promise<ImportApplyResult> {
-  const data = await api.post<Partial<ImportApplyResult>>("mcp/import/apply", { sourceId, names: [...names] });
+export async function applyImport(sourceId: string, names: readonly string[]): Promise<ImportApplyResponse> {
+  const data = await api.post<Partial<ImportApplyResponse>>("mcp/import/apply", { sourceId, names: [...names] });
   return {
     imported: Array.isArray(data?.imported) ? data.imported : [],
     skipped: Array.isArray(data?.skipped) ? data.skipped : [],

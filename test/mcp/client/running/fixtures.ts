@@ -4,7 +4,7 @@
  * 形状以宿主 GET mcp/runtime 的真实返回为准（src/mcp/runtime/contract.ts:106-131
  * 与 runtime.ts:963-1013）：cooldownUntil 只在冷却未结束时出现；instances 里没有实例的会话不会出现。
  */
-import type { RuntimeServerView, RuntimeSessionView, RuntimeStatus } from "../../../../src/mcp/client/running/types.ts";
+import type { RuntimeServerView, RuntimeSessionView, RuntimeStatus } from "../../../../src/mcp/contract/runtime.ts";
 
 export const T0 = 1_760_000_000_000; // 2025-10-09T08:53:20Z（固定时间戳，测试不依赖真实时钟）
 
@@ -23,7 +23,7 @@ export function makeStatus(servers: RuntimeServerView[], sessions: RuntimeSessio
 /** 一个有两层会话（父 + 子代理）的快照，用于「只看当前会话」与排序的测试。 */
 export function makeNestedStatus(): RuntimeStatus {
   return makeStatus(
-    [makeServer({ name: "fake", cache: { toolCount: 4, updatedAt: T0, stale: false } }),
+    [makeServer({ name: "fake", cache: { toolCount: 4, updatedAt: T0, stale: false, tools: [] } }),
       makeServer({ name: "broken", disabled: false, lastFailure: { message: "启动失败", at: T0, cooldownUntil: T0 + 60_000 } })],
     [
       makeSession({

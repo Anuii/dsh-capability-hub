@@ -11,7 +11,7 @@
  * 本文件顶部的 fallback 只是为了给「未注入 getDefaultEnvironment」这种情况兜底。
  */
 import { fallbackDefaultEnvironment } from './sandbox-env.ts';
-import type { McpSdk } from '../contract.ts';
+import type { McpSdk } from '../../contract/runtime.ts';
 
 /** 注入 SDK 的形状校验。缺少必需字段时报出中文、可操作的错误。 */
 export function assertSdk(sdk: McpSdk | undefined): McpSdk {

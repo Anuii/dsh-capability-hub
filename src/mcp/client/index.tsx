@@ -71,7 +71,8 @@ import {
 import { SettingsPanel } from "./settings.tsx";
 import { injectMcpStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { ConfigPayload, RuntimeStatus, ServerView } from "./types.ts";
+import type { ConfigPayload, ServerView } from "../contract/config.ts";
+import type { RuntimeStatus } from "../contract/runtime.ts";
 
 /* 样式只注入一次（模块加载时；无 document 时自动跳过）。 */
 injectMcpStyles();

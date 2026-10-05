@@ -18,7 +18,8 @@ import { resolveEnvFrom } from './env-from.ts';
 import { StderrTail } from './stderr-tail.ts';
 import { errorText } from './errors.ts';
 import { CLOSE_TIMEOUT_MS, CONNECT_TIMEOUT_MS } from '../constants.ts';
-import type { EffectiveServer, McpSdk } from '../contract.ts';
+import type { EffectiveServer } from '../../contract/config.ts';
+import type { McpSdk } from '../../contract/runtime.ts';
 import type { Clock } from './clock.ts';
 import type { ProcessSupervisor } from './supervisor.ts';
 

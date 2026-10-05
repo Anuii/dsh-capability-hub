@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { attachSessionBridge, type SessionBridgeClock, type SessionBridgeOptions } from "../../../src/platform/host/session-bridge.ts";
 import type { HubLogger } from "../../../src/platform/contract/host.ts";
-import type { McpSessionInfo } from "../../../src/platform/host/mcp-runtime-contract.ts";
+import type { McpSessionInfo } from "../../../src/mcp/contract/runtime.ts";
 
 /** 收集日志的替身 logger。 */
 function makeLogger(): HubLogger & { lines: string[] } {

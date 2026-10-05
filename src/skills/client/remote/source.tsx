@@ -10,6 +10,7 @@
  */
 
 import * as React from "react";
+import type { FieldError } from "../../../platform/contract/host.ts";
 import { Button, Checkbox, Input } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, KeyValue } from "../../../kit/index.ts";
 import { ensureSources, reloadSources } from "./cache.ts";
@@ -29,7 +30,7 @@ import {
   sourceTitle,
   storeLabel,
 } from "./model.ts";
-import { errorMessage, fieldErrors, formatDateTime, type FieldError } from "../format.ts";
+import { errorMessage, fieldErrors, formatDateTime } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
@@ -284,7 +285,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
       "data-testid": "skills-remote-manual-confirm",
       onClick: () => {
         if (repo.trim() === "") {
-          setErrors([{ field: "repo", message: t("skills.remote.form.required") }]);
+          setErrors([{ path: "repo", message: t("skills.remote.form.required") }]);
           return;
         }
         doRegister({ repo, ref, skillPath });
@@ -306,7 +307,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
     body.push(React.createElement("p", { key: "error", className: styles.errorBox, "data-testid": "skills-remote-source-error" }, error));
   }
   for (const entryError of errors) {
-    body.push(React.createElement("p", { key: "fe-" + entryError.field + entryError.message, className: styles.fieldError }, `${entryError.field}：${entryError.message}`));
+    body.push(React.createElement("p", { key: "fe-" + entryError.path + entryError.message, className: styles.fieldError }, `${entryError.path}：${entryError.message}`));
   }
 
   // 有来源、且停在「查看」这一步时才把「更新」那段接在下面：

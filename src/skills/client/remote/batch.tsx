@@ -9,6 +9,7 @@
  */
 
 import * as React from "react";
+import type { FieldError } from "../../../platform/contract/host.ts";
 import { Button, Checkbox, Modal } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge } from "../../../kit/index.ts";
 import type { MenuItem } from "../../../kit/index.ts";
@@ -31,7 +32,7 @@ import {
   summarizeChecks,
   updatableIds,
 } from "./model.ts";
-import { errorMessage, fieldErrors, type FieldError } from "../format.ts";
+import { errorMessage, fieldErrors } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
@@ -266,7 +267,7 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
                 React.createElement("span", { className: styles.note }, `${candidate.repo}${candidate.ref === undefined ? "" : "@" + candidate.ref} · ${candidate.skillPath}`),
                 React.createElement("span", { className: styles.code }, candidate.reason)))))),
       error === undefined ? null : React.createElement("p", { className: styles.errorBox }, error),
-      errors.map((entry) => React.createElement("p", { key: entry.field + entry.message, className: styles.fieldError }, `${entry.field}：${entry.message}`))))
+      errors.map((entry) => React.createElement("p", { key: entry.path + entry.message, className: styles.fieldError }, `${entry.path}：${entry.message}`))))
     : null;
 
   return { items, authItem, dialogs, updatable };

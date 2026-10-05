@@ -10,11 +10,10 @@
  * mcp 工具继续存在但只返回「尚未就绪」。
  */
 
-/** T3b 消费的 SDK 面（PLAN §3.6）。 */
-export interface McpSdk {
-  Client: unknown;
-  StdioClientTransport: unknown;
-  StreamableHTTPClientTransport: unknown;
+import type { McpSdk } from "../../mcp/contract/runtime.ts";
+
+/** 加载好的 SDK：运行时要的那几个构造函数（契约 McpSdk）+ 诊断信息。 */
+export interface LoadedMcpSdk extends McpSdk {
   /** 诊断用：解析到的真实路径与版本。 */
   info?: McpSdkInfo;
 }
@@ -32,7 +31,7 @@ export interface McpSdkInfo {
 }
 
 export type SdkLoadState =
-  | { status: "loaded"; sdk: McpSdk; info: McpSdkInfo }
+  | { status: "loaded"; sdk: LoadedMcpSdk; info: McpSdkInfo }
   | { status: "failed"; message: string };
 
 /** 从解析出的文件 URL 反推包目录并读版本。 */
@@ -88,7 +87,7 @@ export async function loadMcpSdk(
     if (missing.length > 0) {
       return { status: "failed", message: `MCP SDK 导出不完整，缺少：${missing.join(", ")}` };
     }
-    const sdk: McpSdk = {
+    const sdk: LoadedMcpSdk = {
       Client: mainMod.Client,
       StdioClientTransport: stdioMod.StdioClientTransport,
       StreamableHTTPClientTransport: mainMod.StreamableHTTPClientTransport,

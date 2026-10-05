@@ -7,7 +7,7 @@
  */
 
 import { api } from "../../../platform/client/api.ts";
-import type { RuntimeDisconnectResult, RuntimeRefreshResult, RuntimeStatus } from "./types.ts";
+import type { RuntimeDisconnectResult, RuntimeRefreshResult, RuntimeStatus } from "../../contract/runtime.ts";
 
 /** GET mcp/runtime → { servers, sessions }。 */
 export async function fetchRuntimeStatus(): Promise<RuntimeStatus> {

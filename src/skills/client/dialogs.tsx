@@ -6,10 +6,11 @@
  */
 
 import * as React from "react";
+import type { FieldError } from "../../platform/contract/host.ts";
 import { Button, Modal, RiskConfirmation } from "@deepseek-ai/dsh-client-ui-primitives";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import { displayName, fileName, isFlatSkill, type FieldError } from "./format.ts";
+import { displayName, fileName, isFlatSkill } from "./format.ts";
 import type { SkillSummary, TrashItem } from "../contract/local.ts";
 
 /** 逐字段错误（服务端 VALIDATION 的 details）。 */
@@ -17,7 +18,7 @@ function FieldErrorList({ errors }: { errors: readonly FieldError[] }): React.Re
   if (errors.length === 0) return null;
   return React.createElement("div", { className: styles.form },
     errors.map((entry) =>
-      React.createElement("p", { key: entry.field + entry.message, className: styles.fieldError }, `${entry.field}：${entry.message}`),
+      React.createElement("p", { key: entry.path + entry.message, className: styles.fieldError }, `${entry.path}：${entry.message}`),
     ));
 }
 

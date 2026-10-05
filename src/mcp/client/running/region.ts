@@ -11,7 +11,7 @@
  */
 
 import { totalInstances } from "./model.ts";
-import type { RuntimeStatus } from "./types.ts";
+import type { RuntimeStatus } from "../../contract/runtime.ts";
 
 /** 折叠状态。 */
 export interface RunningRegionState {
@@ -61,8 +61,8 @@ export function runningPreviewStatus(now: number): RuntimeStatus {
   const started = now - 90_000;
   return {
     servers: [
-      { name: "fetch", disabled: false, cache: { toolCount: 3, updatedAt: started, stale: false } },
-      { name: "time", disabled: false, cache: { toolCount: 1, updatedAt: started, stale: false } },
+      { name: "fetch", disabled: false, cache: { toolCount: 3, updatedAt: started, stale: false, tools: [] } },
+      { name: "time", disabled: false, cache: { toolCount: 1, updatedAt: started, stale: false, tools: [] } },
     ],
     sessions: [
       {

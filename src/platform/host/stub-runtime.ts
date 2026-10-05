@@ -8,7 +8,7 @@
  * prompt 都重算，所以原地改 description 会立刻生效；但描述文本变化会击穿前缀缓存，
  * 因此 runtime 只会在配置变化时改描述，这是设计约束而非实现选择。
  */
-import type { McpCallContext, McpRuntime, McpSessionInfo } from "./mcp-runtime-contract.ts";
+import type { McpCallContext, McpRuntime, McpSessionInfo } from "../../mcp/contract/runtime.ts";
 
 /**
  * 工具参数：**原始 JSON Schema**（不是 dsh-tools 的 DSL）。

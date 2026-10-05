@@ -97,11 +97,11 @@ test("instanceTone / instanceStateText：连接池的五个状态都有中文与
 });
 
 test("cacheSummaryText / cacheDetailText：工具数 + 时间；过期时追加提示；没有缓存时说明原因", () => {
-  const fresh = makeServer({ cache: { toolCount: 4, updatedAt: T0, stale: false } });
+  const fresh = makeServer({ cache: { toolCount: 4, updatedAt: T0, stale: false, tools: [] } });
   assert.equal(cacheSummaryText(fresh).includes("缓存 4 个工具"), true);
   assert.equal(cacheSummaryText(fresh).includes(formatClock(T0)), true);
   assert.equal(cacheSummaryText(fresh).includes("已过期"), false);
-  const stale = makeServer({ cache: { toolCount: 0, updatedAt: T0, stale: true } });
+  const stale = makeServer({ cache: { toolCount: 0, updatedAt: T0, stale: true, tools: [] } });
   assert.equal(cacheSummaryText(stale).includes("缓存已过期"), true);
   assert.equal(cacheSummaryText(makeServer()), "还没有工具缓存");
   assert.equal(cacheDetailText(fresh).includes(formatTime(T0)), true);
@@ -109,7 +109,7 @@ test("cacheSummaryText / cacheDetailText：工具数 + 时间；过期时追加�
 });
 
 test("serverSubtitleText / serverSubtitleTone：正常时是缓存与实例数，失败时是红色单行失败信息", () => {
-  const ok = makeServer({ cache: { toolCount: 4, updatedAt: T0, stale: false } });
+  const ok = makeServer({ cache: { toolCount: 4, updatedAt: T0, stale: false, tools: [] } });
   assert.equal(serverSubtitleText(ok, 2), "缓存 4 个工具 · 更新于 " + formatClock(T0) + " · 2 个活跃实例");
   assert.equal(serverSubtitleText(ok, 0).includes("没有活跃实例"), true);
   assert.equal(serverSubtitleTone(ok), "default");

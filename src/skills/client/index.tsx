@@ -11,6 +11,7 @@
  */
 
 import * as React from "react";
+import type { FieldError } from "../../platform/contract/host.ts";
 import { Button, Toast } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { TabProps } from "../../platform/client/tab-props.ts";
 import { Banner, Toolbar } from "../../kit/index.ts";
@@ -29,7 +30,6 @@ import {
   isConflict,
   removeSkill,
   replaceSkill,
-  type FieldError,
   type FilterId,
   type MatchContext,
 } from "./format.ts";

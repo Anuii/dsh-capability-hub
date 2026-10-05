@@ -16,7 +16,7 @@ import { join } from 'node:path';
 
 import { isPlainObject } from './schema.ts';
 import { HIDDEN, maskRawServer } from './mask.ts';
-import type { ImportSourceView, McpPreset, ParseResult, RawMcpServer, Transport } from './types.ts';
+import type { ImportSourceView, McpPreset, ParsedServer, ParseResult, Transport } from '../contract/config.ts';
 
 // —— 通用字段映射 ——
 
@@ -25,8 +25,8 @@ export function mapServerFields(
   name: string,
   value: Record<string, unknown>,
   warnings: string[],
-): RawMcpServer {
-  const server: RawMcpServer = { serverName: name };
+): ParsedServer {
+  const server: ParsedServer = { serverName: name };
   const label = '服务器「' + name + '」';
 
   // transport / type
@@ -135,7 +135,7 @@ function looksLikeServer(value: Record<string, unknown>): boolean {
  */
 export function parseMcpJson(text: unknown): ParseResult {
   const warnings: string[] = [];
-  const servers: RawMcpServer[] = [];
+  const servers: ParsedServer[] = [];
 
   if (typeof text !== 'string' || text.trim() === '') {
     return { servers, warnings: ['请输入要解析的 JSON 内容。'] };
@@ -309,7 +309,7 @@ async function readTextIfExists(path: string): Promise<string | undefined> {
 export interface ParsedImport {
   found: boolean;
   path: string;
-  servers: RawMcpServer[];
+  servers: ParsedServer[];
   warnings: string[];
   origins: Record<string, string>;
 }
@@ -318,7 +318,7 @@ async function importClaudeCode(homeDir: string): Promise<ParsedImport> {
   const path = join(homeDir, '.claude.json');
   const text = await readTextIfExists(path);
   const warnings: string[] = [];
-  const servers: RawMcpServer[] = [];
+  const servers: ParsedServer[] = [];
   const origins: Record<string, string> = {};
   if (text === undefined) return { found: false, path, servers, warnings, origins };
 
@@ -390,7 +390,7 @@ async function importCodex(homeDir: string): Promise<ParsedImport> {
   const path = join(homeDir, '.codex', 'config.toml');
   const text = await readTextIfExists(path);
   const warnings: string[] = [];
-  const servers: RawMcpServer[] = [];
+  const servers: ParsedServer[] = [];
   const origins: Record<string, string> = {};
   if (text === undefined) return { found: false, path, servers, warnings, origins };
 
@@ -501,7 +501,7 @@ export async function listImportSources(ctx: ImportContext): Promise<ImportSourc
     label: IMPORT_SOURCE_LABELS[id],
     path: parsed.path,
     found: parsed.found,
-    servers: parsed.servers.map((server) => maskRawServer(server) as RawMcpServer),
+    servers: parsed.servers.map((server) => maskRawServer(server) as ParsedServer),
     warnings: parsed.warnings,
     origins: parsed.origins,
   });

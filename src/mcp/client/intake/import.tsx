@@ -16,7 +16,7 @@ import { applyImport, fetchImportSources } from "../data.ts";
 import { errorMessage } from "../model.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
-import type { ImportApplyResult, ImportSourceView, RawParsedServer } from "../types.ts";
+import type { ImportApplyResponse, ImportSourceView, ParsedServer } from "../../contract/config.ts";
 import { hiddenKeys, importableNames, rawSummary, secretSummary } from "./pure.ts";
 
 export interface ImportViewProps {
@@ -28,9 +28,9 @@ export interface ImportViewProps {
 }
 
 type Selection = Record<string, string[]>;
-type Results = Record<string, ImportApplyResult>;
+type Results = Record<string, ImportApplyResponse>;
 
-function rowOrigin(source: ImportSourceView, server: RawParsedServer): string {
+function rowOrigin(source: ImportSourceView, server: ParsedServer): string {
   const origin = source.origins[server.serverName];
   return origin === undefined || origin === "" ? source.label : origin;
 }

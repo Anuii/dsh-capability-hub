@@ -12,7 +12,8 @@ import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { emptyRawConfig, toEffectiveConfig } from './schema.ts';
-import type { EffectiveMcpConfig, McpConfigSource, RawMcpConfigFile } from './types.ts';
+import type { RawMcpConfigFile } from './types.ts';
+import type { EffectiveMcpConfig, McpConfigSource } from '../contract/config.ts';
 import type { HubLogger } from '../../platform/contract/host.ts';
 
 export interface McpStore extends McpConfigSource {

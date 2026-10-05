@@ -6,7 +6,7 @@ import * as React from "react";
 import { Button, Modal } from "@deepseek-ai/dsh-client-ui-primitives";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { ServerView } from "./types.ts";
+import type { ServerView } from "../contract/config.ts";
 
 export interface DeleteServerDialogProps {
   server: ServerView | undefined;

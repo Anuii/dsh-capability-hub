@@ -13,15 +13,15 @@ import { fetchPresets } from "../data.ts";
 import { draftFromValues, errorMessage, type ServerDraft } from "../model.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
-import type { McpPreset } from "../types.ts";
+import type { PresetView } from "../../contract/config.ts";
 import { rawSummary, rawToSubmit } from "./pure.ts";
 
 export interface PresetViewProps {
   /** 选中模板后把草稿交给外壳（切到表单视图）。 */
-  onUsePreset(draft: ServerDraft, preset: McpPreset): void;
+  onUsePreset(draft: ServerDraft, preset: PresetView): void;
 }
 
-function commandText(preset: McpPreset): string {
+function commandText(preset: PresetView): string {
   const command = preset.server.command;
   if (typeof command !== "string" || command === "") return t("mcp.preset.depends") + "：" + rawSummary(preset.server);
   if (preset.commandFound === false) return t("mcp.preset.commandMissing", { command });
@@ -30,7 +30,7 @@ function commandText(preset: McpPreset): string {
 }
 
 export function PresetView(props: PresetViewProps): React.ReactElement {
-  const [presets, setPresets] = React.useState<McpPreset[] | undefined>(undefined);
+  const [presets, setPresets] = React.useState<PresetView[] | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [expanded, setExpanded] = React.useState<string | undefined>(undefined);

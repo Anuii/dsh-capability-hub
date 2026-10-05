@@ -22,11 +22,11 @@ import {
   suggestAvailableName,
   toggleSelection,
 } from "../../../src/mcp/client/intake/pure.ts";
-import type { RawParsedServer } from "../../../src/mcp/client/types.ts";
+import type { ParsedServer } from "../../../src/mcp/contract/config.ts";
 
 const FAKE = "C:\\x\\fake-mcp-server.mjs";
 
-function stdio(name: string, command = "node"): RawParsedServer {
+function stdio(name: string, command = "node"): ParsedServer {
   return { serverName: name, transport: "stdio", command, args: [FAKE] };
 }
 
@@ -117,8 +117,8 @@ test("rawToSubmit：不把 undefined 写进去（默认值不落盘）", () => {
 });
 
 test("hiddenKeys / placeholderNames / secretSummary：只认遮罩占位符与键数", () => {
-  const withHidden: RawParsedServer = { serverName: "a", transport: "stdio", env: { TOKEN: "***hidden***" }, headers: { Authorization: "***hidden***" } };
-  const plain: RawParsedServer = { serverName: "b", transport: "stdio", env: { TOKEN: "real" } };
+  const withHidden: ParsedServer = { serverName: "a", transport: "stdio", env: { TOKEN: "***hidden***" }, headers: { Authorization: "***hidden***" } };
+  const plain: ParsedServer = { serverName: "b", transport: "stdio", env: { TOKEN: "real" } };
   assert.deepEqual(hiddenKeys(withHidden).sort(), ["env.TOKEN", "headers.Authorization"]);
   assert.deepEqual(hiddenKeys(plain), []);
   assert.deepEqual(placeholderNames([withHidden, plain]), ["a"]);

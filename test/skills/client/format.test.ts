@@ -388,8 +388,8 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
   assert.equal(errorCode(validation), "VALIDATION");
   assert.equal(errorMessage(validation), "参数不合法");
   assert.deepEqual(fieldErrors(validation), [
-    { field: "id", message: "id 不能为空" },
-    { field: "enabled", message: "enabled 必须是布尔值" },
+    { path: "id", message: "id 不能为空" },
+    { path: "enabled", message: "enabled 必须是布尔值" },
   ]);
 
   const conflict = new FakeApiError("CONFLICT", "原路径已存在同名的目录/文件");

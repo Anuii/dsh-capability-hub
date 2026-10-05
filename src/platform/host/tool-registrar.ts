@@ -22,7 +22,7 @@
  *      parameters，再交给 ctx.tools.register），本文件照抄这条姿势。
  *   代价：parameters 必须是「受支持的 JSON Schema 子集」，register 会校验 output.schema。
  */
-import type { McpRuntime } from "./mcp-runtime-contract.ts";
+import type { McpRuntime } from "../../mcp/contract/runtime.ts";
 import type { HubLogger } from "../contract/host.ts";
 
 /** 从 exec.agent 取会话身份；取不到时回退并记录。 */

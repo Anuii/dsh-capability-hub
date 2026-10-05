@@ -23,7 +23,7 @@ import {
 } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { McpSettings } from "./types.ts";
+import type { McpSettings } from "../contract/config.ts";
 
 export interface SettingsPanelProps {
   settings: McpSettings;

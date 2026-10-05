@@ -18,7 +18,8 @@ import { FakeConfigSource, makeContext, makeHarness, makeServer, makeTempHome } 
 import { FakeMcpRegistry, createFakeSdk } from './fakes/fake-sdk.ts';
 import { FakeClock } from './fakes/fake-clock.ts';
 import type { CacheEntry, CachedTool } from '../../../src/mcp/runtime/atoms/metadata-cache.ts';
-import type { EffectiveServer, RuntimeStatus } from '../../../src/mcp/runtime/contract.ts';
+import type { EffectiveServer } from '../../../src/mcp/contract/config.ts';
+import type { RuntimeStatus } from '../../../src/mcp/contract/runtime.ts';
 import type { RouteRequest } from '../../../src/platform/contract/host.ts';
 
 const ALPHA = makeServer({ serverName: 'alpha', command: 'node', args: ['srv.js'] });

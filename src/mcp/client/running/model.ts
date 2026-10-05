@@ -8,7 +8,7 @@
  */
 
 import { t } from "./strings.ts";
-import type { RuntimeFailureView, RuntimeInstanceView, RuntimeServerView, RuntimeSessionView } from "./types.ts";
+import type { RuntimeFailureView, RuntimeInstanceView, RuntimeServerView, RuntimeSessionView } from "../../contract/runtime.ts";
 
 /** 自动刷新间隔（任务书：可见时每 5 秒一次）。 */
 export const POLL_INTERVAL_MS = 5000;

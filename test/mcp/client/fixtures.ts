@@ -2,7 +2,8 @@
  * 客户端 MCP 页的测试夹具（纯数据，不碰 DOM / 网络）。
  */
 
-import type { ConfigPayload, McpSettings, RuntimeStatus, ServerView } from "../../../src/mcp/client/types.ts";
+import type { ConfigPayload, McpSettings, ServerView } from "../../../src/mcp/contract/config.ts";
+import type { RuntimeStatus } from "../../../src/mcp/contract/runtime.ts";
 
 export const defaultSettings: McpSettings = {
   idleTimeoutMin: 10,

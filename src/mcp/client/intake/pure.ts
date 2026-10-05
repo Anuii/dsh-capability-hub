@@ -2,13 +2,13 @@
  * 三种添加方式（D-C2）的纯逻辑：粘贴 JSON 的识别计划、同名冲突与改名建议、
  * 勾选与阻断判定、导入的候选挑选。不碰 DOM / React / 网络，node:test 直接测。
  *
- * 「落盘形态」服务器（RawParsedServer）由宿主 mapServerFields() 产出：
+ * 「落盘形态」服务器（ParsedServer）由宿主 mapServerFields() 产出：
  * 只有 serverName / transport / command / args / cwd / url / env / headers 会被识别，
  * 预设与导入还可能多出 lifecycle / disabled / debug。
  */
 
 import { HIDDEN_VALUE, SERVER_NAME_RE, isPlainObject } from "../model.ts";
-import type { RawParsedServer, SkippedServer } from "../types.ts";
+import type { ParsedServer, SkippedServer } from "../../contract/config.ts";
 
 /** 粘贴预览里一行的状态。 */
 export type PasteRowStatus = "new" | "conflict" | "invalid";
@@ -26,11 +26,11 @@ export interface PasteRow {
   suggestedName?: string;
   /** 一行摘要（传输方式 + 命令/地址）。 */
   summary: string;
-  server: RawParsedServer;
+  server: ParsedServer;
 }
 
 /** 名字 → 一行摘要。 */
-export function rawSummary(server: RawParsedServer): string {
+export function rawSummary(server: ParsedServer): string {
   const transport = server.transport ?? "stdio";
   if (transport === "streamable-http") return "streamable-http · " + (server.url ?? "");
   const args = Array.isArray(server.args) ? server.args : [];
@@ -39,7 +39,7 @@ export function rawSummary(server: RawParsedServer): string {
 }
 
 /** 遮罩值清单：env / headers 里等于 ***hidden*** 的键（导入预览用）。 */
-export function hiddenKeys(server: RawParsedServer): string[] {
+export function hiddenKeys(server: ParsedServer): string[] {
   const out: string[] = [];
   for (const field of ["env", "headers"] as const) {
     const raw = server[field];
@@ -52,7 +52,7 @@ export function hiddenKeys(server: RawParsedServer): string[] {
 }
 
 /** 服务器里的敏感字段摘要（值一律不显示，只说有几个键）。 */
-export function secretSummary(server: RawParsedServer): string {
+export function secretSummary(server: ParsedServer): string {
   const parts: string[] = [];
   for (const field of ["env", "headers"] as const) {
     const raw = server[field];
@@ -99,7 +99,7 @@ function statusFor(
 }
 
 /** 把宿主 parse-json 的结果做成预览行（含同名冲突与非法名判定）。 */
-export function planPasteRows(servers: readonly RawParsedServer[], existingNames: readonly string[]): PasteRow[] {
+export function planPasteRows(servers: readonly ParsedServer[], existingNames: readonly string[]): PasteRow[] {
   return servers.map((server, index) => {
     const others = servers.filter((_, other) => other !== index).map((item) => item.serverName);
     const verdict = statusFor(server.serverName, existingNames, others);
@@ -163,7 +163,7 @@ export function selectedNames(rows: readonly PasteRow[], selected: readonly numb
 }
 
 /** 落盘形态 → upsert 的 server 体（只带本插件认识的字段）。 */
-export function rawToSubmit(server: RawParsedServer): Record<string, unknown> {
+export function rawToSubmit(server: ParsedServer): Record<string, unknown> {
   const out: Record<string, unknown> = { serverName: server.serverName };
   const fields = [
     "transport",
@@ -186,12 +186,12 @@ export function rawToSubmit(server: RawParsedServer): Record<string, unknown> {
 }
 
 /** 粘贴内容里带 ***hidden*** 占位符的服务器名（新建时该占位符会被当成真实值，必须先提示）。 */
-export function placeholderNames(servers: readonly RawParsedServer[]): string[] {
+export function placeholderNames(servers: readonly ParsedServer[]): string[] {
   return servers.filter((server) => hiddenKeys(server).length > 0).map((server) => server.serverName);
 }
 
 /** 导入候选：来源里找到、且当前配置里没有同名的服务器（同名由服务端跳过，这里只做默认勾选）。 */
-export function importableNames(servers: readonly RawParsedServer[], existingNames: readonly string[]): string[] {
+export function importableNames(servers: readonly ParsedServer[], existingNames: readonly string[]): string[] {
   return servers.filter((server) => !existingNames.includes(server.serverName)).map((server) => server.serverName);
 }
 

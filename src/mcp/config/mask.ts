@@ -6,7 +6,7 @@
  * - 只有 reveal 接口返回明文；任何日志都不得出现这些值 —— 用 redact() 后再交给 logger。
  */
 
-import type { EffectiveServer, RawMcpServer } from './types.ts';
+import type { EffectiveServer, RawMcpServer } from '../contract/config.ts';
 
 export const HIDDEN = '***hidden***';
 

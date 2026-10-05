@@ -56,6 +56,12 @@ export interface HubModule {
   dispose?(): void | Promise<void>;
 }
 
+/** 校验错误（错误信封里 VALIDATION 的 details 是 FieldError[]）：path 为字段路径，message 为中文。 */
+export interface FieldError {
+  path: string;
+  message: string;
+}
+
 /** 路由处理器抛出的错误：外壳据 status 映射 HTTP 状态，code 与 message（中文）进错误信封。 */
 export interface HubError extends Error {
   status: number;

@@ -40,7 +40,7 @@ import {
 } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { FieldError, ServerView, Transport } from "./types.ts";
+import type { FieldError, ServerView, Transport } from "../contract/config.ts";
 
 export interface ServerFormProps {
   /** 被编辑服务器的原名；新建时省略。 */

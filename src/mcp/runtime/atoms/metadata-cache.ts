@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { CACHE_FILE_NAME, CACHE_MAX_AGE_MS, CACHE_VERSION, MCP_DIR_NAME } from '../constants.ts';
 import { atomicWriteFile, readTextFile } from './fsx.ts';
-import type { EffectiveServer } from '../contract.ts';
+import type { EffectiveServer } from '../../contract/config.ts';
 import type { Clock } from './clock.ts';
 
 export interface CachedTool {

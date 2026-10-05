@@ -7,21 +7,8 @@
  * 3. 校验信息全部中文、带字段路径，可直接展示给用户。
  */
 
-import type {
-  EffectiveMcpConfig,
-  EffectiveServer,
-  FieldError,
-  Lifecycle,
-  McpServerMeta,
-  OutputGuard,
-  OutputGuardInput,
-  RawMcpConfigFile,
-  RawMcpServer,
-  RawMcpSettings,
-  ServerDefaultsHint,
-  ServerView,
-  Transport,
-} from './types.ts';
+import type { OutputGuardInput, RawMcpConfigFile, RawMcpSettings } from './types.ts';
+import type { EffectiveMcpConfig, EffectiveServer, FieldError, Lifecycle, McpServerMeta, OutputGuard, RawMcpServer, ServerDefaultsHint, ServerView, Transport } from '../contract/config.ts';
 
 // —— 常量 ——
 

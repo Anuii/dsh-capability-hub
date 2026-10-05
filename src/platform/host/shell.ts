@@ -38,7 +38,7 @@ import { attachSessionBridge, type SessionBridge } from "./session-bridge.ts";
 import { createDemoModule } from "./demo.ts";
 import { HUB_VERSION } from "../../version.ts";
 import { createRejectingModule, createThrowingModule } from "./demo-failing.ts";
-import type { McpRuntime } from "./mcp-runtime-contract.ts";
+import type { McpRuntime } from "../../mcp/contract/runtime.ts";
 
 /** 接线摘要（health 里的 wiring 字段）。 */
 export interface WiringSnapshot {

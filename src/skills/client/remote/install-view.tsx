@@ -14,6 +14,7 @@
  */
 
 import * as React from "react";
+import type { FieldError } from "../../../platform/contract/host.ts";
 import { Button, Input, Pill } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, Drawer, ListFoot, ListGroup, ListRow, ListSurface, SkeletonRows, Toolbar, kit } from "../../../kit/index.ts";
 import { listSkills } from "../data.ts";
@@ -42,7 +43,7 @@ import {
   type InstalledFilter,
   type RepoFold,
 } from "./discovery-model.ts";
-import { errorMessage, fieldErrors, type FieldError } from "../format.ts";
+import { errorMessage, fieldErrors } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { RootInfo } from "../../contract/local.ts";
@@ -340,7 +341,7 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
 
   const fieldErrorsNode = browseErrors.length === 0
     ? null
-    : browseErrors.map((entry) => React.createElement("p", { key: entry.field + entry.message, className: styles.fieldError }, entry.field + "：" + entry.message));
+    : browseErrors.map((entry) => React.createElement("p", { key: entry.path + entry.message, className: styles.fieldError }, entry.path + "：" + entry.message));
 
   const intent = inputIntent(entry);
   const browseEntry = (): void => doBrowse(normalizeRepoInput(entry), refInput.trim() === "" ? undefined : refInput);

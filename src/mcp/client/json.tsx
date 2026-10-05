@@ -13,7 +13,7 @@ import { upsertServer, validateServer } from "./data.ts";
 import { errorMessage, fieldErrorsOf, isPlainObject, parseJsonServer } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { FieldError, ServerView } from "./types.ts";
+import type { FieldError, ServerView } from "../contract/config.ts";
 
 export interface JsonEditorProps {
   originalName?: string;

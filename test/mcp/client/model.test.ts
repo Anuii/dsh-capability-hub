@@ -354,7 +354,7 @@ test("cooldownText / formatDuration：倒计时文案随 now 变化，冷却结�
 test("rowSubtitleText：命令 / 地址 + 「· N 个工具」（没有缓存时省略）", () => {
   const view = makeServerView({ args: ["-y", "pkg"] });
   assert.equal(rowSubtitleText(view, undefined), "node -y pkg");
-  assert.equal(rowSubtitleText(view, { name: "demo", disabled: false, cache: { toolCount: 4, updatedAt: NOW, stale: false } }), "node -y pkg · 4 个工具");
+  assert.equal(rowSubtitleText(view, { name: "demo", disabled: false, cache: { toolCount: 4, updatedAt: NOW, stale: false, tools: [] } }), "node -y pkg · 4 个工具");
   assert.equal(rowSubtitleText(makeServerView({ transport: "streamable-http", url: "https://x/y" }), undefined), "https://x/y");
 });
 
@@ -365,13 +365,14 @@ test("cacheLineText / cachedToolNames：抽屉「工具」小节", () => {
   assert.equal(cacheLineText(row).includes("缓存已过期"), true);
   assert.deepEqual(cachedToolNames(row), ["echo", "slow"]);
   assert.deepEqual(cachedToolNames(undefined), []);
-  assert.deepEqual(cachedToolNames({ name: "demo", disabled: false, cache: { toolCount: 1, updatedAt: NOW, stale: false } }), []);
+  assert.deepEqual(cachedToolNames({ name: "demo", disabled: false, cache: { toolCount: 1, updatedAt: NOW, stale: false, tools: [] } }), []);
 });
 
 test("activeInstanceCount / runtimeIndex：从运行态会话里数实例", () => {
+  const inst = (server: string) => ({ server, state: "ready", startedAt: NOW, lastUsedAt: NOW });
   const runtime = {
     servers: [{ name: "demo", disabled: false }],
-    sessions: [{ instances: [{ server: "demo" }, { server: "other" }] }, { instances: [{ server: "demo" }] }],
+    sessions: [{ sessionId: "s1", instances: [inst("demo"), inst("other")] }, { sessionId: "s2", instances: [inst("demo")] }],
   };
   assert.equal(activeInstanceCount(runtime, "demo"), 2);
   assert.equal(activeInstanceCount(runtime, "nope"), 0);

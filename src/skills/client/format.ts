@@ -15,6 +15,7 @@
 import type { DiagnosticLevel, ListResult, RootInfo, SkillSummary, SkillViewFile, TrashItem, TrashReason } from "../contract/local.ts";
 import { t } from "./strings.ts";
 import type { BadgeTone } from "../../kit/index.ts";
+import type { FieldError } from "../../platform/contract/host.ts";
 
 /* ---------------- 技能根 ---------------- */
 
@@ -575,12 +576,6 @@ export function errorDetails(error: unknown): unknown {
   return (error as { details?: unknown }).details;
 }
 
-/** 服务端 VALIDATION 的一条字段错误（details 里的一项）。 */
-export interface FieldError {
-  field: string;
-  message: string;
-}
-
 /** 服务端 VALIDATION 的 details → 逐字段消息（没有就返回空数组）。 */
 export function fieldErrors(error: unknown): FieldError[] {
   const details = errorDetails(error);
@@ -592,7 +587,7 @@ export function fieldErrors(error: unknown): FieldError[] {
     const field = typeof record.path === "string" ? record.path : typeof record.field === "string" ? record.field : undefined;
     const message = typeof record.message === "string" ? record.message : undefined;
     if (field === undefined || message === undefined) continue;
-    out.push({ field, message });
+    out.push({ path: field, message });
   }
   return out;
 }

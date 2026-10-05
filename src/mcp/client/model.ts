@@ -13,16 +13,8 @@
  */
 
 import { t } from "./strings.ts";
-import type {
-  FieldError,
-  Lifecycle,
-  McpSettings,
-  RuntimeFailureView,
-  RuntimeServerView,
-  RuntimeStatus,
-  ServerView,
-  Transport,
-} from "./types.ts";
+import type { FieldError, Lifecycle, McpSettings, ServerView, Transport } from "../contract/config.ts";
+import type { RuntimeFailureView, RuntimeServerView, RuntimeStatus } from "../contract/runtime.ts";
 
 /** 遮罩占位符（与宿主 src/mcp/config/mask.ts 的 HIDDEN 一致）。 */
 export const HIDDEN_VALUE = "***hidden***";
