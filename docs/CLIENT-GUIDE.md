@@ -99,6 +99,8 @@
       sessionId?: string;
       /** 切换到另一个标签页（标签之间互相跳转用）。 */
       openTab(tab: PanelTab): void;
+      /** 0.3.4（可选）：报告这个标签有没有需要注意的错误，外壳在标签旁画红点。 */
+      reportAttention?(tab: PanelTab, attention: boolean): void;
     }
 
 用法（组件可以只声明自己用得到的字段，多余的会被忽略）：
@@ -108,7 +110,8 @@
 
 - `workspace` 来自 slot 标准 prop `useSessions`（见第 4 节），技能页拿它找项目级技能根；
 - `sessionId` 来自同一份快照，「运行中」区域的「只看当前会话」用它过滤实例；
-- `openTab` 是外壳的切标签回调，稳定可调用。
+- `openTab` 是外壳的切标签回调，稳定可调用；
+- `reportAttention` 由 MCP 页在「有错误」数从 0 变非 0（或反过来）时调用，外壳据此在「MCP」标签旁画红点。
 
 **硬性规则**
 
@@ -320,7 +323,7 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 | 字段 | 说明 |
 |---|---|
 | `search` | `{ value, onChange(value), placeholder?, testId? }`，不传就没有搜索框 |
-| `filters` | `{ items: { id, label, count? }[], value, onChange(id), label? }`；`count` 显示成后面的小数字。**分段 testid**：给了工具栏 `testId` 时是 `<testId>-filter-<id>`，否则是 `kit-filter-<id>`（两个标签同时挂载，不带前缀会撞车） |
+| `filters` | `{ items: { id, label, count?, quiet? }[], value, onChange(id), label? }`；`count` 显示成后面的小数字；`quiet` 把该分段调淡（选中时不调淡），用于「需关注 0」「有错误 0」。**分段 testid**：给了工具栏 `testId` 时是 `<testId>-filter-<id>`，否则是 `kit-filter-<id>`（两个标签同时挂载，不带前缀会撞车） |
 | `primary` | `{ label, onClick, testId? }` 或 `{ label, menu: MenuItem[], testId? }`；**只有它是强调色按钮** |
 | `more` | `MenuItem[]`，渲染成右侧「⋯」 |
 | `afterFilters` | 紧跟分段之后的额外筛选（例如技能页的「目录」下拉，用原生 `<select className={kit.select}>`） |
@@ -358,11 +361,13 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 | `title` | node | 行标题（14/500 主文字色） |
 | `subtitle` | node? | 副标题（12.5/400 次要色，单行截断） |
 | `subtitleMono` | boolean? | 副标题用等宽（路径 / 命令） |
+| `subtitleTitle` | string? | 副标题的悬停提示（副标题是缩写时给完整内容，例如 MCP 的完整命令） |
 | `subtitleTone` | `"default"｜"danger"｜"warn"`? | 副标题语义色（失败信息用 danger） |
 | `leading` | `StatusTone` 或 node? | 传 `"idle"｜"active"｜"failed"｜"cooling"` 会渲染状态点；传节点则原样渲染 |
 | `tag` | `{ text, title?, testId? }`? | 标题后的一枚淡色等宽小字（技能的目录标签、仓库视图里的仓库名）；比标记更弱，不算进「最多 2 个」 |
 | `badges` | node[]? | **最多显示 2 个**（多的自动截掉）。用 `Badge` 造：`tone` 取 neutral/accent/warn/danger |
-| `trailing` | node? | 行尾控件（通常是一个 `Switch`）；**点它不会触发 `onOpen`** |
+| `note` | `{ text, title?, muted?, testId? }`? | 行尾控件左侧一小段文字（技能的调用权限），固定最小宽度右对齐成一列；`muted` = 最弱的说明色（常见的默认值用它） |
+| `trailing` | node? | 行尾控件（通常是一个 `Switch`）；**点它不会触发 `onOpen`**。不放控件但要与别的行对齐时放 `<span className={kit.trailingSpacer}>`（与开关同宽） |
 | `hoverActions` | `{ label, onClick, danger?, testId? }[]`? | 悬停 / 键盘聚焦时才淡入的文字按钮 |
 | `dragHandle` | `true` 或 node? | 悬停时出现的拖动把手（MCP 页排序用） |
 | `onOpen` | `() => void`? | 给了它就整行可点、可 Tab 聚焦、Enter 打开，行尾出现淡色「›」 |
