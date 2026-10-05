@@ -176,6 +176,9 @@ function McpTabInner(props: TabProps): React.ReactElement {
   const rows = React.useMemo(() => runtimeIndex(runtime), [runtime]);
   const visible = React.useMemo(() => visibleServers(servers, rows, query, filter), [servers, rows, query, filter]);
   const counts = React.useMemo(() => serverFilterCounts(servers, rows), [servers, rows]);
+  /** 有服务器处于「有错误」时让外壳在「MCP」标签旁画红点。 */
+  const reportAttention = props.reportAttention;
+  React.useEffect(() => reportAttention?.("mcp", counts.failing > 0), [reportAttention, counts.failing]);
 
   /** 冷却倒计时用的本地时钟：只在真的有冷却、或详情抽屉开着时走。 */
   const cooling = servers.some((view) => cooldownRemainingMs(rows.get(view.serverName)?.lastFailure, now) > 0);
@@ -423,7 +426,8 @@ function McpTabInner(props: TabProps): React.ReactElement {
         value: filter,
         onChange: (id: string) => setFilter(id as ServerFilterId),
         label: t("mcp.filter.label"),
-        items: SERVER_FILTERS.map((id) => ({ id, label: filterLabel(id), count: counts[id] })),
+        // 「有错误 0」调淡：没有错误时不抢眼。
+        items: SERVER_FILTERS.map((id) => ({ id, label: filterLabel(id), count: counts[id], quiet: id === "failing" && counts[id] === 0 })),
       },
       primary: { label: t("mcp.add.button"), menu: addMenu, testId: "mcp-add-menu" },
       more: [{ id: "mcp-settings-open", label: t("mcp.settings.title"), onClick: () => setSettingsOpen(true) }],

@@ -80,6 +80,10 @@ const CSS = [
   ".chk_segment[data-active]{background:var(--chk-hover);color:var(--chk-fg-primary);font-weight:500}",
   ".chk_segmentCount{font-variant-numeric:tabular-nums;color:var(--chk-fg-caption);font-size:var(--chk-fs-badge)}",
   ".chk_segment[data-active] .chk_segmentCount{color:var(--chk-fg-tertiary)}",
+  ".chk_segment[data-quiet]{color:var(--chk-fg-caption)}",
+  ".chk_segment[data-quiet]:hover{color:var(--chk-fg-secondary)}",
+  // 输入框占位文字：宿主默认的占位色太淡，在能力中心里统一提到次要色（满足对比度）。
+  "[data-dsh-capability-hub-view] input::placeholder,.chk_scope input::placeholder{color:var(--chk-fg-tertiary);opacity:1}",
 
   // ---- 列表容器 ------------------------------------------------------------
   ".chk_surface{display:flex;flex-direction:column;gap:var(--chk-sp5);min-height:0;flex:none}",
@@ -134,8 +138,10 @@ const CSS = [
   ".chk_rowSub[data-tone=danger]{color:var(--chk-danger)}",
   ".chk_rowSub[data-tone=warn]{color:var(--chk-warn)}",
   ".chk_rowEnd{display:flex;align-items:center;gap:var(--chk-sp3);flex:none}",
-  ".chk_rowNote{min-width:64px;text-align:right;font-size:var(--chk-fs-small);line-height:18px;color:var(--chk-fg-tertiary);white-space:nowrap;cursor:default}",
+  ".chk_rowNote{min-width:64px;text-align:right;font-size:var(--chk-fs-small);line-height:18px;color:var(--chk-fg-secondary);white-space:nowrap;cursor:default}",
   ".chk_rowNote[data-muted]{color:var(--chk-fg-caption)}",
+  // 没有开关的行（只读技能）用一个同宽的空位，让行尾文字仍与别的行对齐成一列。
+  ".chk_trailingSpacer{flex:none;width:var(--chk-switch-w)}",
   ".chk_rowActions{display:flex;align-items:center;gap:var(--chk-sp2);opacity:0;pointer-events:none;transition:opacity 120ms ease-out}",
   ".chk_row:hover .chk_rowActions,.chk_row:focus-within .chk_rowActions{opacity:1;pointer-events:auto}",
   ".chk_rowAction{cursor:pointer;background:0 0;border:none;border-radius:var(--chk-radius-control);padding:4px 6px;font:inherit;font-size:var(--chk-fs-small);color:var(--chk-fg-secondary)}",
@@ -280,6 +286,7 @@ export const kit = {
   rowTitle: PREFIX + "rowTitle",
   rowTag: PREFIX + "rowTag",
   rowNote: PREFIX + "rowNote",
+  trailingSpacer: PREFIX + "trailingSpacer",
   rowBadges: PREFIX + "rowBadges",
   rowSub: PREFIX + "rowSub",
   rowEnd: PREFIX + "rowEnd",

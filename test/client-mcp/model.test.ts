@@ -6,6 +6,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { compactSummaryText, isPathLike, shortPart } from "../../src/client/mcp/model.ts";
 import {
   HIDDEN_VALUE,
   SERVER_FIELD_ORDER,
@@ -382,4 +383,15 @@ test("formatClock：本地 HH:mm", () => {
   assert.match(formatClock(NOW), /^\d{2}:\d{2}$/);
   assert.equal(formatClock(undefined), "");
   assert.equal(formatClock(0), "");
+});
+
+test("列表行的紧凑命令：路径只留文件名，可执行文件去掉扩展名，包名与地址原样", () => {
+  assert.equal(compactSummaryText({ transport: "stdio", command: "D:\\Program Files\\nodejs\\node.exe", args: ["C:\\x\\y\\fake-mcp-server.mjs"] }), "node fake-mcp-server.mjs");
+  assert.equal(compactSummaryText({ transport: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-fetch"] }), "npx -y @modelcontextprotocol/server-fetch");
+  assert.equal(compactSummaryText({ transport: "stdio", command: "uvx", args: ["mcp-server-time", "--local-timezone=Asia/Shanghai"] }), "uvx mcp-server-time --local-timezone=Asia/Shanghai");
+  assert.equal(compactSummaryText({ transport: "stdio", command: "/usr/local/bin/python3", args: ["./server.py"] }), "python3 server.py");
+  assert.equal(compactSummaryText({ transport: "streamable-http", url: "https://example.com/mcp" }), "https://example.com/mcp");
+  assert.equal(isPathLike("@scope/pkg"), false);
+  assert.equal(isPathLike("~/bin/tool"), true);
+  assert.equal(shortPart("C:\\tools\\server.CMD", true), "server");
 });

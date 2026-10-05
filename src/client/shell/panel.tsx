@@ -64,7 +64,7 @@ export function kitPreviewEnabled(): boolean {
 }
 
 /** 标签栏（下划线式）。 */
-function TabBar({ active, onSelect }: { active: PanelTab; onSelect: (tab: PanelTab) => void }): React.ReactElement {
+function TabBar({ active, onSelect, attention }: { active: PanelTab; onSelect: (tab: PanelTab) => void; attention: ReadonlySet<PanelTab> }): React.ReactElement {
   return React.createElement("div", { className: styles.tabBar, role: "tablist", "data-dsh-part": "tab-bar" },
     TABS.map((tab) => React.createElement("button", {
       key: tab.id,
@@ -77,7 +77,17 @@ function TabBar({ active, onSelect }: { active: PanelTab; onSelect: (tab: PanelT
       "data-active": active === tab.id ? "" : undefined,
       className: styles.tab,
       onClick: () => onSelect(tab.id),
-    }, tt(tab.labelKey))));
+    },
+    tt(tab.labelKey),
+    // 红点：这个标签里有错误（例如 MCP 有服务器连接失败）；红色只表示错误（UI-DESIGN 原则 4）。
+    attention.has(tab.id)
+      ? React.createElement("span", {
+          className: styles.tabDot,
+          title: tt("tab.attention"),
+          "aria-label": tt("tab.attention"),
+          "data-testid": "capability-hub-tab-dot-" + tab.id,
+        })
+      : null)));
 }
 
 /**
@@ -140,6 +150,16 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
   const [health, setHealth] = React.useState<HealthPayload | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [loading, setLoading] = React.useState<boolean>(true);
+  const [attention, setAttention] = React.useState<ReadonlySet<PanelTab>>(() => new Set<PanelTab>());
+  const reportAttention = React.useCallback((target: PanelTab, flag: boolean): void => {
+    setAttention((current) => {
+      if (current.has(target) === flag) return current;
+      const next = new Set(current);
+      if (flag) next.add(target);
+      else next.delete(target);
+      return next;
+    });
+  }, []);
   const refresh = React.useCallback((): void => {
     setLoading(true);
     setError(undefined);
@@ -167,6 +187,7 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
     workspace: current.workspace,
     ...(current.sessionId === undefined ? {} : { sessionId: current.sessionId }),
     openTab: setTab,
+    reportAttention,
   };
   const closeDiagnostics = React.useCallback((): void => setDiagnosticsOpen(false), []);
   const openDiagnostics = React.useCallback((): void => setDiagnosticsOpen(true), []);
@@ -183,7 +204,7 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
           title: tt("env.title"),
           onClick: openDiagnostics,
         }, "\u24d8")),
-      React.createElement(TabBar, { active: tab, onSelect: setTab })),
+      React.createElement(TabBar, { active: tab, onSelect: setTab, attention })),
     React.createElement("div", { className: styles.content },
       // 升级后没重启：浏览器半已是新版本，宿主半还是旧的（新接口会 404）。
       staleHost === undefined

@@ -19,6 +19,7 @@ export const zh = {
   "running.title": "运行中",
   "running.count": "{count} 个实例",
   "running.none": "没有活跃实例",
+  "running.quiet": "运行中：没有活跃实例",
   "running.preview": "预览数据",
   "running.previewNoop": "预览数据不会断开任何实例。",
 

@@ -32,4 +32,9 @@ export interface TabProps {
    * 外壳保证这个回调稳定可调用，且在任意标签里都能用。
    */
   openTab(tab: PanelTab): void;
+  /**
+   * 0.3.4 起（可选）：告诉外壳这个标签现在有没有需要注意的错误（例如 MCP 有服务器连接失败），
+   * 外壳在标签文字旁画一个红点，在别的标签里也能察觉。
+   */
+  reportAttention?(tab: PanelTab, attention: boolean): void;
 }

@@ -56,6 +56,7 @@ export function Toolbar(props: ToolbarProps): React.ReactElement {
         type: "button",
         className: kit.segment,
         "data-active": filters.value === item.id ? "" : undefined,
+        "data-quiet": item.quiet === true && filters.value !== item.id ? "" : undefined,
         "aria-pressed": filters.value === item.id,
         "data-testid": filterTestId(props.testId, item.id),
         onClick: () => filters.onChange(item.id),

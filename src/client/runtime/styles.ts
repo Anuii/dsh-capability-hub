@@ -36,6 +36,7 @@ const CSS = [
   ".chrt_region{display:flex;flex-direction:column;margin-top:8px}",
   ".chrt_empty{margin:0;padding:12px 16px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}",
   ".chrt_pad{padding:12px 16px}",
+  ".chrt_quiet{margin:0;padding:0 2px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);cursor:default}",
 ].join("");
 
 /** 类名表。 */
@@ -56,6 +57,7 @@ export const styles = {
   region: PREFIX + "region",
   empty: PREFIX + "empty",
   pad: PREFIX + "pad",
+  quiet: PREFIX + "quiet",
 } as const;
 
 /** 把运行态页样式注入 <head>（幂等）。 */

@@ -4,6 +4,7 @@
  * 内容 = 按会话分组的实例：子代理会话缩进挂在父会话下；「只看当前会话」；实例行悬停「断开」。
  * 服务器级的「刷新缓存」「断开全部」在服务器详情抽屉里（mcp/detail.tsx），这里不再有服务器分组。
  *
+ * 没有活跃实例时整块只是一行淡色小字「运行中：没有活跃实例」，有实例时才是可折叠的面板。
  * 折叠（region.ts）：没有活跃实例时自动收起、有实例时默认展开；用户手动折叠 / 展开后尊重用户，
  * 直到实例数在 0 与非 0 之间跃迁。标题行显示实例数，展开时右侧有「只看当前会话」与刷新。
  *
@@ -247,17 +248,23 @@ function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
         }, React.createElement(RefreshIcon, null)))
     : undefined;
 
+  // 没有活跃实例（且没有报错）时只是一行淡色小字，有实例时才变成可折叠的面板（UI-DESIGN 原则 3）。
+  const quiet = status !== undefined && count === 0 && error === undefined && pollError === undefined && !preview;
   return React.createElement("div", { className: styles.region, "data-testid": "mcp-running", "data-dsh-part": "mcp-running" },
-    React.createElement(ListGroup, {
-      title: t("running.title"),
-      count: count > 0 ? t("running.count", { count }) : t("running.none"),
-      badges: preview ? React.createElement(Badge, { tone: "neutral" }, t("running.preview")) : undefined,
-      expanded,
-      onToggle: () => setRegion((prev) => runningRegionToggle(prev)),
-      nested: true,
-      end: headEnd,
-      testId: "running-group",
-    }, content),
+    status === undefined && error === undefined
+      ? null
+      : quiet
+        ? React.createElement("p", { className: styles.quiet, title: t("runtime.pollHint"), "data-testid": "running-quiet" }, t("running.quiet"))
+        : React.createElement(ListGroup, {
+          title: t("running.title"),
+          count: count > 0 ? t("running.count", { count }) : t("running.none"),
+          badges: preview ? React.createElement(Badge, { tone: "neutral" }, t("running.preview")) : undefined,
+          expanded,
+          onToggle: () => setRegion((prev) => runningRegionToggle(prev)),
+          nested: true,
+          end: headEnd,
+          testId: "running-group",
+        }, content),
 
     React.createElement(DisconnectDialog, {
       target: pending,

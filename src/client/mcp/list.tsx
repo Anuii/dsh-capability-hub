@@ -12,7 +12,7 @@
 import * as React from "react";
 import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, GripIcon, ListGroup, ListRow, ListSurface, StatusDot, kit } from "../shell/kit/index.ts";
-import { activeInstanceCount, cooldownRemainingMs, rowSubtitleText, serverStatusTone, statusTitle } from "./model.ts";
+import { activeInstanceCount, cooldownRemainingMs, rowSubtitleText, rowSubtitleTitle, serverStatusTone, statusTitle } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { RuntimeServerView, RuntimeStatus, ServerView } from "./types.ts";
@@ -68,6 +68,7 @@ function ServerRow(props: {
     testId: "mcp-row-" + name,
     title: name,
     subtitle: rowSubtitleText(view, row),
+    subtitleTitle: rowSubtitleTitle(view),
     subtitleMono: true,
     leading: dotTitle === undefined
       ? tone

@@ -18,7 +18,8 @@ const NS = "capability-hub";
 const CSS = [
   // 页面骨架：页头（标题 + ⓘ）+ 下划线式标签 + 内容区。
   ".ch_page{height:100%;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family);overflow:hidden}",
-  ".ch_header{flex:none;display:flex;flex-direction:column;gap:14px;padding:18px 20px 0}",
+  // 宽屏时页头与正文都限制在 1140px 以内（左对齐）：描述不会被拉得过长，开关也不会离名称太远。
+  ".ch_header{flex:none;display:flex;flex-direction:column;gap:14px;padding:18px 20px 0;width:100%;max-width:1180px;box-sizing:border-box}",
   ".ch_headerBar{display:flex;align-items:center;gap:8px}",
   ".ch_title{margin:0;flex:1;min-width:0;font-size:18px;font-weight:600;line-height:26px;color:var(--dsw-alias-label-primary)}",
   ".ch_infoButton{cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;background:0 0;border:none;border-radius:6px;color:var(--dsw-alias-label-tertiary);font-size:15px;line-height:1}",
@@ -29,8 +30,10 @@ const CSS = [
   ".ch_tab:hover{color:var(--dsw-alias-label-primary)}",
   ".ch_tab[data-active]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-state-business-primary);font-weight:500}",
   ".ch_tab:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px;border-radius:2px}",
+  ".ch_tab{display:inline-flex;align-items:center;gap:5px}",
+  ".ch_tabDot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-error-primary)}",
   // 内容区：横幅在最上，下面是真正可滚动的标签正文。
-  ".ch_content{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding:12px 20px 20px;overflow:hidden}",
+  ".ch_content{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding:12px 20px 20px;overflow:hidden;width:100%;max-width:1180px;box-sizing:border-box}",
   ".ch_tabPane{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:auto}",
   ".ch_tabPane[hidden]{display:none}",
   // 诊断模态框正文。
@@ -62,6 +65,7 @@ export const styles = {
   infoButton: PREFIX + "infoButton",
   tabBar: PREFIX + "tabBar",
   tab: PREFIX + "tab",
+  tabDot: PREFIX + "tabDot",
   content: PREFIX + "content",
   tabPane: PREFIX + "tabPane",
   diagModal: PREFIX + "diagModal",

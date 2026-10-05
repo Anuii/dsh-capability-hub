@@ -259,3 +259,12 @@ test("骨架屏是灰条而不是转圈", () => {
   assert.equal(/animation:[^;}]*spin/i.test(KIT_CSS), false);
   assert.ok(KIT_CSS.includes("." + kit.skeletonBar + "{"));
 });
+
+test("0.3.4 显示细节：调淡的分段、行尾文字、只读行的空位、占位文字对比度", () => {
+  assert.ok(KIT_CSS.includes("." + kit.segment + "[data-quiet]{color:var(--chk-fg-caption)}"));
+  assert.ok(KIT_CSS.includes("." + kit.rowNote + "[data-muted]{color:var(--chk-fg-caption)}"));
+  assert.ok(KIT_CSS.includes("." + kit.trailingSpacer + "{flex:none;width:var(--chk-switch-w)}"));
+  assert.ok(KIT_CSS.includes("input::placeholder"));
+  const toolbar = fs.readFileSync(path.join(shellDir, "kit", "Toolbar.tsx"), "utf8");
+  assert.ok(toolbar.includes('"data-quiet": item.quiet === true && filters.value !== item.id'), "选中的分段不调淡");
+});

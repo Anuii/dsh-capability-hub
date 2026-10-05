@@ -494,9 +494,37 @@ export function serverSummaryText(values: Record<string, unknown>): string {
   return [command, ...args].filter((part) => part !== "").join(" ");
 }
 
-/** 视图里的服务器摘要（列表用）。 */
+/** 视图里的服务器摘要（完整版：抽屉副标题、悬停提示用）。 */
 export function viewSummaryText(view: ServerView): string {
   return serverSummaryText(view as unknown as Record<string, unknown>);
+}
+
+/** 像本机路径的参数（含反斜杠，或以盘符 / 斜杠 / ./ / ../ / ~ 开头）；@scope/pkg 这类包名不算。 */
+export function isPathLike(part: string): boolean {
+  return part.includes("\\") || /^([A-Za-z]:|\/|\.{1,2}\/|~)/.test(part);
+}
+
+/** 路径只留文件名；可执行文件再去掉 .exe / .cmd / .bat。 */
+export function shortPart(part: string, executable = false): string {
+  let out = part;
+  if (isPathLike(part)) {
+    const base = part.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
+    if (base !== "") out = base;
+  }
+  return executable ? out.replace(/\.(exe|cmd|bat)$/i, "") : out;
+}
+
+/**
+ * 列表行里的紧凑摘要：stdio = 程序名 + 参数（路径只留文件名），http = 地址原样。
+ * 例：D:\\Program Files\\nodejs\\node.exe C:\\x\\server.mjs → node server.mjs；
+ *     npx -y @modelcontextprotocol/server-fetch 保持不变。完整命令走悬停提示与详情。
+ */
+export function compactSummaryText(values: Record<string, unknown>): string {
+  if (values.transport === "streamable-http") return serverSummaryText(values);
+  const command = typeof values.command === "string" ? values.command : "";
+  const args = Array.isArray(values.args) ? values.args.filter((item): item is string => typeof item === "string") : [];
+  if (command === "" && args.length === 0) return t("mcp.row.noCommand");
+  return [shortPart(command, true), ...args.map((arg) => shortPart(arg))].filter((part) => part !== "").join(" ");
 }
 
 export function lifecycleLabel(value: unknown): string {
@@ -789,11 +817,16 @@ export function formatClock(value: unknown): string {
   return String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
 }
 
-/** 行副标题：命令 / 地址，有缓存时接「 · 4 个工具」（UI-DESIGN §5）。 */
+/** 行副标题：紧凑的命令 / 地址，有缓存时接「 · 4 个工具」（UI-DESIGN §3）。 */
 export function rowSubtitleText(view: ServerView, row: RuntimeRow): string {
-  const base = viewSummaryText(view);
+  const base = compactSummaryText(view as unknown as Record<string, unknown>);
   if (row?.cache === undefined) return base;
   return base + " " + t("mcp.row.tools", { count: row.cache.toolCount });
+}
+
+/** 行副标题的悬停提示：完整命令 / 地址。 */
+export function rowSubtitleTitle(view: ServerView): string {
+  return viewSummaryText(view);
 }
 
 /** 抽屉「工具」小节的一行：缓存数量与更新时间。 */

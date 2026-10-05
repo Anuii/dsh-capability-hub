@@ -140,6 +140,8 @@ export interface ListRowProps {
   subtitle?: React.ReactNode;
   /** 副标题用等宽字体（路径 / 命令）。 */
   subtitleMono?: boolean;
+  /** 副标题的悬停提示（副标题是缩写时给完整内容）；省略时用副标题本身。 */
+  subtitleTitle?: string;
   /** 副标题的语义色（默认次要色；失败用红、冷却用琥珀）。 */
   subtitleTone?: "default" | "danger" | "warn";
   /** 行首：StatusTone 时渲染状态点，ReactNode 时原样渲染。 */
@@ -152,7 +154,7 @@ export interface ListRowProps {
   tag?: { text: string; title?: string; testId?: string };
   /**
    * 行尾控件左侧的一小段说明文字（技能的调用权限，如「仅用户」）：次要色、固定最小宽度右对齐，
-   * 多行之间上下对齐成一列；不是控件，不算进「每行最多 1 个可见控件」。muted = 更弱一级（例如「不可调用」）。
+   * 多行之间上下对齐成一列；不是控件，不算进「每行最多 1 个可见控件」。muted = 更弱一级（常见的默认值用它，例外才醒目）。
    */
   note?: { text: string; title?: string; testId?: string; muted?: boolean };
   trailing?: React.ReactNode;
@@ -222,7 +224,7 @@ export function ListRow(props: ListRowProps): React.ReactElement {
         className: kit.rowSub,
         "data-mono": props.subtitleMono === true ? "" : undefined,
         "data-tone": props.subtitleTone ?? "default",
-        title: typeof props.subtitle === "string" ? props.subtitle : undefined,
+        title: props.subtitleTitle ?? (typeof props.subtitle === "string" ? props.subtitle : undefined),
       }, props.subtitle)),
   React.createElement("span", { className: kit.rowEnd, onClick: stop, onKeyDown: stop },
     props.hoverActions === undefined || props.hoverActions.length === 0

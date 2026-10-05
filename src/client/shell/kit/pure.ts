@@ -11,6 +11,8 @@ export interface FilterItem {
   label: string;
   /** 该分段下的条目数；省略则不显示计数。 */
   count?: number;
+  /** 调淡（例如「需关注 0」：没有问题时不抢眼，有问题时恢复正常）；当前选中的分段不调淡。 */
+  quiet?: boolean;
 }
 
 /** 一次键盘决策。 */
