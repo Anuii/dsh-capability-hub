@@ -34,8 +34,7 @@
     }
   },
   "peerDependencies": {
-    "@modelcontextprotocol/client": "*",
-    "yaml": "*"
+    "@modelcontextprotocol/client": "*"
   },
   "dependencies": {
     "smol-toml": "^1.3.1"

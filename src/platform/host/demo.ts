@@ -55,7 +55,11 @@ export function createDemoModule(deps: DemoDeps): HubModule {
         : { status: "failed", message: deps.sdk.message },
     yaml:
       deps.yaml.status === "loaded"
-        ? { status: "loaded", ...(deps.yaml.version === undefined ? {} : { version: deps.yaml.version }) }
+        ? {
+            status: "loaded",
+            source: deps.yaml.source,
+            ...(deps.yaml.version === undefined ? {} : { version: deps.yaml.version }),
+          }
         : { status: "failed", message: deps.yaml.message },
     modules: deps.modules().map((entry) => ({
       name: entry.name,
