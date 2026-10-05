@@ -14,11 +14,12 @@ import { StatusDot, type StatusTone } from "./Badge.tsx";
 import { ChevronGlyph, GripIcon, SectionChevron } from "./icons.tsx";
 
 /** 列表容器：一个圆角面板，纵向排若干 ListGroup。 */
-export function ListSurface(props: {
-  children?: React.ReactNode;
-  testId?: string;
-}): React.ReactElement {
-  return React.createElement("div", { className: kit.surface, "data-testid": props.testId }, props.children);
+export function ListSurface(props: { children?: React.ReactNode; testId?: string }): React.ReactElement {
+  return (
+    <div className={kit.surface} data-testid={props.testId}>
+      {props.children}
+    </div>
+  );
 }
 
 /**
@@ -56,51 +57,74 @@ export function ListGroup(props: {
   const expanded = props.expanded !== false;
   const stop = (event: React.SyntheticEvent): void => event.stopPropagation();
   const headParts = [
-    foldable ? React.createElement(SectionChevron, { key: "chevron", open: expanded, className: kit.sectionChevron }) : null,
-    React.createElement("span", { key: "title", className: kit.groupTitle }, props.title),
-    props.meta === undefined ? null : React.createElement("span", {
-      key: "meta",
-      className: kit.groupMeta,
-      title: props.metaTitle ?? props.meta,
-    }, props.meta),
-    React.createElement("span", { key: "spacer", className: kit.groupSpacer }),
-    props.badges === undefined ? null : React.createElement("span", { key: "badges", className: kit.groupBadges }, props.badges),
-    props.count === undefined ? null : React.createElement("span", { key: "count", className: kit.groupCount }, String(props.count)),
+    foldable ? <SectionChevron key="chevron" open={expanded} className={kit.sectionChevron} /> : null,
+    <span key="title" className={kit.groupTitle}>
+      {props.title}
+    </span>,
+    props.meta === undefined ? null : (
+      <span key="meta" className={kit.groupMeta} title={props.metaTitle ?? props.meta}>
+        {props.meta}
+      </span>
+    ),
+    <span key="spacer" className={kit.groupSpacer} />,
+    props.badges === undefined ? null : (
+      <span key="badges" className={kit.groupBadges}>
+        {props.badges}
+      </span>
+    ),
+    props.count === undefined ? null : (
+      <span key="count" className={kit.groupCount}>
+        {String(props.count)}
+      </span>
+    ),
   ];
   const headTitle = props.meta === undefined ? props.headTitle : undefined;
-  const head = props.title === undefined
-    ? null
-    : foldable
-      ? React.createElement("div", { className: kit.groupHeadWrap },
-        React.createElement("button", {
-          type: "button",
-          className: kit.groupHead,
-          "data-fold": "",
-          "aria-expanded": expanded,
-          title: headTitle,
-          "data-testid": props.testId === undefined ? undefined : props.testId + "-toggle",
-          onClick: () => props.onToggle?.(),
-        }, headParts),
-        props.end === undefined ? null : React.createElement("span", { className: kit.groupEnd, onClick: stop, onKeyDown: stop }, props.end))
-      : React.createElement("header", { className: kit.groupHead, title: headTitle },
-        headParts,
-        props.end === undefined ? null : React.createElement("span", { className: kit.groupEnd }, props.end));
-  const body = !expanded
-    ? null
-    : props.nested === true
-      ? React.createElement("div", { className: kit.nested }, props.children)
-      : React.createElement("ul", { className: kit.rows },
-        props.children,
-        React.Children.count(props.children) === 0
-          ? React.createElement("li", { className: kit.rowsEmpty }, "\u2014")
-          : null);
-  return React.createElement("section", {
-    className: kit.group,
-    "data-testid": props.testId,
-    "data-depth": props.depth === 1 ? "1" : undefined,
-    "data-foldable": foldable ? "" : undefined,
-    "data-collapsed": expanded ? undefined : "",
-  }, head, body);
+  const head =
+    props.title === undefined ? null : foldable ? (
+      <div className={kit.groupHeadWrap}>
+        <button
+          type="button"
+          className={kit.groupHead}
+          data-fold=""
+          aria-expanded={expanded}
+          title={headTitle}
+          data-testid={props.testId === undefined ? undefined : props.testId + "-toggle"}
+          onClick={() => props.onToggle?.()}
+        >
+          {headParts}
+        </button>
+        {props.end === undefined ? null : (
+          <span className={kit.groupEnd} onClick={stop} onKeyDown={stop}>
+            {props.end}
+          </span>
+        )}
+      </div>
+    ) : (
+      <header className={kit.groupHead} title={headTitle}>
+        {headParts}
+        {props.end === undefined ? null : <span className={kit.groupEnd}>{props.end}</span>}
+      </header>
+    );
+  const body = !expanded ? null : props.nested === true ? (
+    <div className={kit.nested}>{props.children}</div>
+  ) : (
+    <ul className={kit.rows}>
+      {props.children}
+      {React.Children.count(props.children) === 0 ? <li className={kit.rowsEmpty}>{"\u2014"}</li> : null}
+    </ul>
+  );
+  return (
+    <section
+      className={kit.group}
+      data-testid={props.testId}
+      data-depth={props.depth === 1 ? "1" : undefined}
+      data-foldable={foldable ? "" : undefined}
+      data-collapsed={expanded ? undefined : ""}
+    >
+      {head}
+      {body}
+    </section>
+  );
 }
 
 /**
@@ -113,17 +137,24 @@ export function ListFoot(props: {
   testId?: string;
   textTestId?: string;
 }): React.ReactElement {
-  return React.createElement("div", { className: kit.foot, "data-testid": props.testId },
-    React.createElement("span", { className: kit.footText, "data-testid": props.textTestId }, props.text),
-    props.action === undefined
-      ? null
-      : React.createElement("button", {
-        type: "button",
-        className: kit.footAction,
-        "data-testid": props.action.testId,
-        "aria-expanded": props.action.expanded === true,
-        onClick: props.action.onClick,
-      }, props.action.label));
+  return (
+    <div className={kit.foot} data-testid={props.testId}>
+      <span className={kit.footText} data-testid={props.textTestId}>
+        {props.text}
+      </span>
+      {props.action === undefined ? null : (
+        <button
+          type="button"
+          className={kit.footAction}
+          data-testid={props.action.testId}
+          aria-expanded={props.action.expanded === true}
+          onClick={props.action.onClick}
+        >
+          {props.action.label}
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** 行尾的悬停操作。 */
@@ -187,69 +218,89 @@ export function ListRow(props: ListRowProps): React.ReactElement {
     props.onOpen?.();
   };
   const badges = clampBadges(props.badges);
-  return React.createElement("li", {
-    className: kit.row,
-    "data-testid": props.testId,
-    "data-openable": openable ? "" : undefined,
-    "data-selected": props.selected === true ? "" : undefined,
-    role: openable ? "button" : undefined,
-    tabIndex: openable ? 0 : undefined,
-    onClick: openable ? () => props.onOpen?.() : undefined,
-    onKeyDown,
-    ...passthroughAttrs(props.attrs),
-  },
-  props.dragHandle === undefined || props.dragHandle === false
-    ? null
-    : React.createElement("span", {
-      className: kit.dragHandle,
-      onClick: stop,
-      "data-testid": props.testId === undefined ? undefined : props.testId + "-drag",
-    }, React.isValidElement(props.dragHandle) ? props.dragHandle : React.createElement(GripIcon, null)),
-  props.leading === undefined
-    ? null
-    : React.createElement("span", { className: kit.rowLeading },
-      isStatusTone(props.leading) ? React.createElement(StatusDot, { tone: props.leading }) : props.leading),
-  React.createElement("span", { className: kit.rowMain },
-    React.createElement("span", { className: kit.rowTitleLine },
-      React.createElement("span", { className: kit.rowTitle, title: typeof props.title === "string" ? props.title : undefined }, props.title),
-      props.tag === undefined
-        ? null
-        : React.createElement("span", { className: kit.rowTag, title: props.tag.title, "data-testid": props.tag.testId }, props.tag.text),
-      badges.length === 0
-        ? null
-        : React.createElement("span", { className: kit.rowBadges }, badges)),
-    props.subtitle === undefined
-      ? null
-      : React.createElement("span", {
-        className: kit.rowSub,
-        "data-mono": props.subtitleMono === true ? "" : undefined,
-        "data-tone": props.subtitleTone ?? "default",
-        title: props.subtitleTitle ?? (typeof props.subtitle === "string" ? props.subtitle : undefined),
-      }, props.subtitle)),
-  React.createElement("span", { className: kit.rowEnd, onClick: stop, onKeyDown: stop },
-    props.hoverActions === undefined || props.hoverActions.length === 0
-      ? null
-      : React.createElement("span", { className: kit.rowActions },
-        props.hoverActions.map((action, index) => React.createElement("button", {
-          key: action.testId ?? String(index),
-          type: "button",
-          className: kit.rowAction,
-          "data-danger": action.danger === true ? "" : undefined,
-          "data-testid": action.testId,
-          title: action.label,
-          onClick: (event: React.MouseEvent) => {
-            event.stopPropagation();
-            action.onClick();
-          },
-        }, action.label))),
-    props.note === undefined
-      ? null
-      : React.createElement("span", {
-        className: kit.rowNote,
-        title: props.note.title,
-        "data-muted": props.note.muted === true ? "" : undefined,
-        "data-testid": props.note.testId,
-      }, props.note.text),
-    props.trailing),
-  openable ? React.createElement(ChevronGlyph, { className: kit.rowChevron }) : null);
+  return (
+    <li
+      className={kit.row}
+      data-testid={props.testId}
+      data-openable={openable ? "" : undefined}
+      data-selected={props.selected === true ? "" : undefined}
+      role={openable ? "button" : undefined}
+      tabIndex={openable ? 0 : undefined}
+      onClick={openable ? () => props.onOpen?.() : undefined}
+      onKeyDown={onKeyDown}
+      {...passthroughAttrs(props.attrs)}
+    >
+      {props.dragHandle === undefined || props.dragHandle === false ? null : (
+        <span
+          className={kit.dragHandle}
+          onClick={stop}
+          data-testid={props.testId === undefined ? undefined : props.testId + "-drag"}
+        >
+          {React.isValidElement(props.dragHandle) ? props.dragHandle : <GripIcon />}
+        </span>
+      )}
+      {props.leading === undefined ? null : (
+        <span className={kit.rowLeading}>
+          {isStatusTone(props.leading) ? <StatusDot tone={props.leading} /> : props.leading}
+        </span>
+      )}
+      <span className={kit.rowMain}>
+        <span className={kit.rowTitleLine}>
+          <span className={kit.rowTitle} title={typeof props.title === "string" ? props.title : undefined}>
+            {props.title}
+          </span>
+          {props.tag === undefined ? null : (
+            <span className={kit.rowTag} title={props.tag.title} data-testid={props.tag.testId}>
+              {props.tag.text}
+            </span>
+          )}
+          {badges.length === 0 ? null : <span className={kit.rowBadges}>{badges}</span>}
+        </span>
+        {props.subtitle === undefined ? null : (
+          <span
+            className={kit.rowSub}
+            data-mono={props.subtitleMono === true ? "" : undefined}
+            data-tone={props.subtitleTone ?? "default"}
+            title={props.subtitleTitle ?? (typeof props.subtitle === "string" ? props.subtitle : undefined)}
+          >
+            {props.subtitle}
+          </span>
+        )}
+      </span>
+      <span className={kit.rowEnd} onClick={stop} onKeyDown={stop}>
+        {props.hoverActions === undefined || props.hoverActions.length === 0 ? null : (
+          <span className={kit.rowActions}>
+            {props.hoverActions.map((action, index) => (
+              <button
+                key={action.testId ?? String(index)}
+                type="button"
+                className={kit.rowAction}
+                data-danger={action.danger === true ? "" : undefined}
+                data-testid={action.testId}
+                title={action.label}
+                onClick={(event: React.MouseEvent) => {
+                  event.stopPropagation();
+                  action.onClick();
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </span>
+        )}
+        {props.note === undefined ? null : (
+          <span
+            className={kit.rowNote}
+            title={props.note.title}
+            data-muted={props.note.muted === true ? "" : undefined}
+            data-testid={props.note.testId}
+          >
+            {props.note.text}
+          </span>
+        )}
+        {props.trailing}
+      </span>
+      {openable ? <ChevronGlyph className={kit.rowChevron} /> : null}
+    </li>
+  );
 }

@@ -79,39 +79,44 @@ function SkillRow(props: {
   const blocked = toggleBlockReason(skill);
   const badges = rowBadges(skill, props.context);
   const access = invocationAccess(skill);
-  return React.createElement(ListRow, {
-    testId: "skills-row-" + skill.id,
-    title: name.text,
-    ...(props.tag === undefined ? {} : { tag: { ...props.tag, testId: "skills-dir-tag-" + skill.id } }),
-    // 空描述也渲染副标题：行高保持 52px，列表看起来是一条直线（UI-DESIGN §1）
-    subtitle: skill.description ?? "",
-    badges: badges.map((badge) => React.createElement(Badge, {
-      key: badge.key,
-      tone: badge.tone,
-      ...(badge.title === undefined ? {} : { title: badge.title }),
-      testId: "skills-badge-" + badge.key + "-" + skill.id,
-    }, badge.label)),
-    // 调用权限（D-B17）：开关管模型调用，这段文字把两种调用一起说清楚，悬停看来源。
-    // 默认的「模型、用户」调淡，例外（仅模型 / 仅用户 / 不可调用）才醒目。
-    note: {
-      text: invocationLabel(access),
-      title: invocationTitle(access),
-      muted: access.model && access.user,
-      testId: "skills-access-" + skill.id,
-    },
-    // 只读技能（DSH 内置、自定义只读目录）不放开关——禁用的开关容易被看成「已关闭」；
-    // 留一个同宽空位让行尾文字仍对齐。层级标题上已标「只读」。
-    trailing: !skill.writable
-      ? React.createElement("span", { className: kit.trailingSpacer, "aria-hidden": "true" })
-      : React.createElement(Switch, {
-        checked: !skill.modelInvocationDisabled,
-        disabled: props.busy || blocked !== undefined,
-        label: toggleLabel(skill),
-        ...(blocked === undefined ? {} : { title: blocked }),
-        onChange: (next: boolean) => props.onToggle(skill, next),
-      }),
-    onOpen: () => props.onOpen(skill),
-  });
+  return (
+    <ListRow
+      testId={"skills-row-" + skill.id}
+      title={name.text}
+      {...(props.tag === undefined ? {} : { tag: { ...props.tag, testId: "skills-dir-tag-" + skill.id } })}
+      /* 空描述也渲染副标题：行高保持 52px，列表看起来是一条直线（UI-DESIGN §1） */ subtitle={skill.description ?? ""}
+      badges={badges.map((badge) => (
+        <Badge
+          key={badge.key}
+          tone={badge.tone}
+          {...(badge.title === undefined ? {} : { title: badge.title })}
+          testId={"skills-badge-" + badge.key + "-" + skill.id}
+        >
+          {badge.label}
+        </Badge>
+      ))}
+      /* 调用权限（D-B17）：开关管模型调用，这段文字把两种调用一起说清楚，悬停看来源。 */ /* 默认的「模型、用户」调淡，例外（仅模型 / 仅用户 / 不可调用）才醒目。 */ note={{
+        text: invocationLabel(access),
+        title: invocationTitle(access),
+        muted: access.model && access.user,
+        testId: "skills-access-" + skill.id,
+      }}
+      /* 只读技能（DSH 内置、自定义只读目录）不放开关——禁用的开关容易被看成「已关闭」； */ /* 留一个同宽空位让行尾文字仍对齐。层级标题上已标「只读」。 */ trailing={
+        !skill.writable ? (
+          <span className={kit.trailingSpacer} aria-hidden="true" />
+        ) : (
+          <Switch
+            checked={!skill.modelInvocationDisabled}
+            disabled={props.busy || blocked !== undefined}
+            label={toggleLabel(skill)}
+            {...(blocked === undefined ? {} : { title: blocked })}
+            onChange={(next: boolean) => props.onToggle(skill, next)}
+          />
+        )
+      }
+      onOpen={() => props.onOpen(skill)}
+    />
+  );
 }
 
 /** 工具栏里的「目录」筛选：原生下拉，按层级分段，含空目录与技能数。 */
@@ -121,26 +126,32 @@ export function DirFilter(props: {
   onChange(rootId: string): void;
 }): React.ReactElement {
   const options = dirOptions(props.list);
-  return React.createElement("select", {
-    className: kit.select,
-    value: props.value,
-    "aria-label": t("skills.dirFilter.label"),
-    title: options.find((option) => option.rootId === props.value)?.title ?? t("skills.dirFilter.label"),
-    "data-testid": "skills-dir-filter",
-    "data-active": props.value === "" ? undefined : "",
-    onChange: (event: React.ChangeEvent<HTMLSelectElement>) => props.onChange(event.target.value),
-  },
-  React.createElement("option", { value: "" }, t("skills.dirFilter.all")),
-  LEVELS.map((level) => {
-    const items = options.filter((option) => option.level === level);
-    if (items.length === 0) return null;
-    return React.createElement("optgroup", { key: level, label: levelLabel(level) },
-      items.map((option) => React.createElement("option", {
-        key: option.rootId,
-        value: option.rootId,
-        title: option.title,
-      }, t("skills.dirFilter.option", { tag: option.tag, count: option.count }))));
-  }));
+  return (
+    <select
+      className={kit.select}
+      value={props.value}
+      aria-label={t("skills.dirFilter.label")}
+      title={options.find((option) => option.rootId === props.value)?.title ?? t("skills.dirFilter.label")}
+      data-testid="skills-dir-filter"
+      data-active={props.value === "" ? undefined : ""}
+      onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.onChange(event.target.value)}
+    >
+      <option value="">{t("skills.dirFilter.all")}</option>
+      {LEVELS.map((level) => {
+        const items = options.filter((option) => option.level === level);
+        if (items.length === 0) return null;
+        return (
+          <optgroup key={level} label={levelLabel(level)}>
+            {items.map((option) => (
+              <option key={option.rootId} value={option.rootId} title={option.title}>
+                {t("skills.dirFilter.option", { tag: option.tag, count: option.count })}
+              </option>
+            ))}
+          </optgroup>
+        );
+      })}
+    </select>
+  );
 }
 
 /** 技能列表（工具栏由 index.tsx 渲染）。 */
@@ -165,18 +176,25 @@ export function SkillList(props: SkillListProps): React.ReactElement {
   const expanded = (key: string): boolean => isFoldExpanded(fold, filterKey, key);
 
   /** 一行；目录标签只在该层级里有不止一个技能目录时显示。 */
-  const rowIn = (level: LevelView) => (skill: SkillSummary): React.ReactElement => React.createElement(SkillRow, {
-    key: skill.id,
-    skill,
-    tag: level.multiDir ? tags.get(skill.rootId) : undefined,
-    context: props.context,
-    busy: props.busyIds.has(skill.id),
-    onToggle: props.onToggle,
-    onOpen: props.onOpen,
-  });
+  const rowIn =
+    (level: LevelView) =>
+    (skill: SkillSummary): React.ReactElement => (
+      <SkillRow
+        key={skill.id}
+        skill={skill}
+        tag={level.multiDir ? tags.get(skill.rootId) : undefined}
+        context={props.context}
+        busy={props.busyIds.has(skill.id)}
+        onToggle={props.onToggle}
+        onOpen={props.onOpen}
+      />
+    );
 
-  const note = (key: string, text: string): React.ReactElement =>
-    React.createElement("li", { key, className: styles.treeNote, "data-testid": "skills-tree-note-" + key }, text);
+  const note = (key: string, text: string): React.ReactElement => (
+    <li key={key} className={styles.treeNote} data-testid={"skills-tree-note-" + key}>
+      {text}
+    </li>
+  );
 
   const levelBody = (level: LevelView): React.ReactNode => {
     if (level.noWorkspace === true) return note(level.level, t("skills.tree.noWorkspace"));
@@ -184,51 +202,70 @@ export function SkillList(props: SkillListProps): React.ReactElement {
       if (level.skills.length > 0) return level.skills.map(rowIn(level));
       return note(level.level, level.level === "project" ? t("skills.tree.projectEmpty") : t("skills.tree.levelEmpty"));
     }
-    return level.repos.map((repo) => React.createElement(ListGroup, {
-      key: repo.key,
-      depth: 1,
-      title: repo.label,
-      count: repo.skills.length,
-      expanded: expanded(repo.key),
-      onToggle: () => toggle(repo.key),
-      testId: "skills-repo-" + level.level + "-" + (repo.repo ?? "none"),
-    }, repo.skills.map(rowIn(level))));
+    return level.repos.map((repo) => (
+      <ListGroup
+        key={repo.key}
+        depth={1}
+        title={repo.label}
+        count={repo.skills.length}
+        expanded={expanded(repo.key)}
+        onToggle={() => toggle(repo.key)}
+        testId={"skills-repo-" + level.level + "-" + (repo.repo ?? "none")}
+      >
+        {repo.skills.map(rowIn(level))}
+      </ListGroup>
+    ));
   };
 
   const empty = props.list.skills.length === 0 && !tree.filtering;
-  const surface = empty || (tree.filtering && tree.shown === 0)
-    ? React.createElement(EmptyState, {
-      testId: "skills-empty",
-      title: tree.filtering ? t("skills.emptyFiltered.title") : t("skills.empty.title"),
-      description: tree.filtering ? t("skills.emptyFiltered.description") : t("skills.empty.description"),
-      ...(tree.filtering
-        ? {}
-        : { action: { label: t("skills.addSkill"), onClick: props.onAdd, testId: "skills-empty-add" } }),
-    })
-    : React.createElement(ListSurface, { testId: "skills-surface" },
-      tree.levels.map((level) => React.createElement(ListGroup, {
-        key: level.key,
-        title: level.label,
-        count: t("skills.root.count", { count: tree.filtering ? level.shown : level.total }),
-        badges: level.level === "builtin"
-          ? React.createElement(Badge, { tone: "neutral", testId: "skills-level-readonly" }, t("skills.root.readonly"))
-          : undefined,
-        expanded: expanded(level.key),
-        onToggle: () => toggle(level.key),
-        nested: !level.flat,
-        testId: "skills-level-" + level.level,
-      }, levelBody(level))));
+  const surface =
+    empty || (tree.filtering && tree.shown === 0) ? (
+      <EmptyState
+        testId="skills-empty"
+        title={tree.filtering ? t("skills.emptyFiltered.title") : t("skills.empty.title")}
+        description={tree.filtering ? t("skills.emptyFiltered.description") : t("skills.empty.description")}
+        {...(tree.filtering
+          ? {}
+          : { action: { label: t("skills.addSkill"), onClick: props.onAdd, testId: "skills-empty-add" } })}
+      />
+    ) : (
+      <ListSurface testId="skills-surface">
+        {tree.levels.map((level) => (
+          <ListGroup
+            key={level.key}
+            title={level.label}
+            count={t("skills.root.count", { count: tree.filtering ? level.shown : level.total })}
+            badges={
+              level.level === "builtin" ? (
+                <Badge tone="neutral" testId="skills-level-readonly">
+                  {t("skills.root.readonly")}
+                </Badge>
+              ) : undefined
+            }
+            expanded={expanded(level.key)}
+            onToggle={() => toggle(level.key)}
+            nested={!level.flat}
+            testId={"skills-level-" + level.level}
+          >
+            {levelBody(level)}
+          </ListGroup>
+        ))}
+      </ListSurface>
+    );
 
-  return React.createElement("div", {
-    className: styles.root,
-    "data-testid": "skills-list",
-    "data-shown": String(tree.shown),
-    "data-total": String(tree.total),
-  },
-  props.error === undefined
-    ? null
-    : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-list-error" }, props.error),
-  props.loading && props.list.skills.length === 0
-    ? React.createElement(SkeletonRows, { testId: "skills-skeleton" })
-    : surface);
+  return (
+    <div
+      className={styles.root}
+      data-testid="skills-list"
+      data-shown={String(tree.shown)}
+      data-total={String(tree.total)}
+    >
+      {props.error === undefined ? null : (
+        <p className={styles.errorBox} data-testid="skills-list-error">
+          {props.error}
+        </p>
+      )}
+      {props.loading && props.list.skills.length === 0 ? <SkeletonRows testId="skills-skeleton" /> : surface}
+    </div>
+  );
 }

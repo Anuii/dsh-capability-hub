@@ -20,25 +20,22 @@ export function Badge(props: {
   title?: string;
   testId?: string;
 }): React.ReactElement {
-  return React.createElement("span", {
-    className: kit.badge,
-    "data-tone": props.tone ?? "neutral",
-    title: props.title,
-    "data-testid": props.testId,
-  }, props.children);
+  return (
+    <span className={kit.badge} data-tone={props.tone ?? "neutral"} title={props.title} data-testid={props.testId}>
+      {props.children}
+    </span>
+  );
 }
 
 /** 直径 7px 的状态点；无障碍名由调用方通过 title 给出。 */
-export function StatusDot(props: {
-  tone: StatusTone;
-  title?: string;
-  testId?: string;
-}): React.ReactElement {
-  return React.createElement("span", {
-    className: kit.dot,
-    "data-tone": props.tone,
-    "aria-hidden": "true",
-    title: props.title,
-    "data-testid": props.testId,
-  });
+export function StatusDot(props: { tone: StatusTone; title?: string; testId?: string }): React.ReactElement {
+  return (
+    <span
+      className={kit.dot}
+      data-tone={props.tone}
+      aria-hidden="true"
+      title={props.title}
+      data-testid={props.testId}
+    />
+  );
 }

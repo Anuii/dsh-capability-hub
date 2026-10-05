@@ -73,9 +73,12 @@ class SectionErrorBoundary extends React.Component<{ children: React.ReactNode }
 
   render(): React.ReactNode {
     if (this.state.error !== undefined) {
-      return React.createElement("div", { className: styles.root, "data-testid": "running-crash" },
-        React.createElement("p", { className: styles.failure }, t("runtime.crash.title")),
-        React.createElement("p", { className: styles.note }, t("runtime.crash.hint", { message: this.state.error })));
+      return (
+        <div className={styles.root} data-testid="running-crash">
+          <p className={styles.failure}>{t("runtime.crash.title")}</p>
+          <p className={styles.note}>{t("runtime.crash.hint", { message: this.state.error })}</p>
+        </div>
+      );
     }
     return this.props.children;
   }
@@ -99,27 +102,30 @@ function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
     setToast({ seq: seq.current, text, ...(tone === undefined ? {} : { tone }) });
   }, []);
 
-  const load = React.useCallback((silent: boolean): void => {
-    if (preview) {
-      hasData.current = true;
-      setStatus(runningPreviewStatus(Date.now()));
-      return;
-    }
-    if (!silent) setError(undefined);
-    void fetchRuntimeStatus().then(
-      (payload) => {
+  const load = React.useCallback(
+    (silent: boolean): void => {
+      if (preview) {
         hasData.current = true;
-        setStatus(payload);
-        setError(undefined);
-        setPollError(undefined);
-      },
-      (failure: unknown) => {
-        // 自动刷新失败时保留上一次的数据，只加一行提示
-        if (silent && hasData.current) setPollError(errorMessage(failure));
-        else setError(errorMessage(failure));
-      },
-    );
-  }, [preview]);
+        setStatus(runningPreviewStatus(Date.now()));
+        return;
+      }
+      if (!silent) setError(undefined);
+      void fetchRuntimeStatus().then(
+        (payload) => {
+          hasData.current = true;
+          setStatus(payload);
+          setError(undefined);
+          setPollError(undefined);
+        },
+        (failure: unknown) => {
+          // 自动刷新失败时保留上一次的数据，只加一行提示
+          if (silent && hasData.current) setPollError(errorMessage(failure));
+          else setError(errorMessage(failure));
+        },
+      );
+    },
+    [preview],
+  );
 
   React.useEffect(() => load(false), [load, props.reloadSignal]);
 
@@ -147,70 +153,93 @@ function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
       return;
     }
     setBusy(true);
-    void disconnectServer(target.name, target.sessionId).then(
-      (result) => {
-        setPending(undefined);
-        if (result.closed === 0) showToast(t("runtime.instance.disconnectNone"));
-        else showToast(t("runtime.instance.disconnectOk"), "success");
-        load(true);
-      },
-      (failure: unknown) => {
-        setPending(undefined);
-        showToast(t("runtime.instance.disconnectFailed", { message: errorMessage(failure) }));
-      },
-    ).finally(() => setBusy(false));
+    void disconnectServer(target.name, target.sessionId)
+      .then(
+        (result) => {
+          setPending(undefined);
+          if (result.closed === 0) showToast(t("runtime.instance.disconnectNone"));
+          else showToast(t("runtime.instance.disconnectOk"), "success");
+          load(true);
+        },
+        (failure: unknown) => {
+          setPending(undefined);
+          showToast(t("runtime.instance.disconnectFailed", { message: errorMessage(failure) }));
+        },
+      )
+      .finally(() => setBusy(false));
   };
 
-  const instanceRow = (session: RuntimeSessionView, instance: RuntimeInstanceView): React.ReactElement =>
-    React.createElement(ListRow, {
-      key: session.sessionId + ":" + instance.server,
-      testId: "running-instance-" + session.sessionId + "-" + instance.server,
-      title: instance.server,
-      subtitle: instanceSubtitleText(instance),
-      leading: instanceTone(instance.state),
-      hoverActions: [{
-        label: t("runtime.instance.disconnect"),
-        testId: "running-instance-disconnect-" + session.sessionId + "-" + instance.server,
-        onClick: () => setPending({ name: instance.server, sessionId: session.sessionId }),
-      }],
-    });
+  const instanceRow = (session: RuntimeSessionView, instance: RuntimeInstanceView): React.ReactElement => (
+    <ListRow
+      key={session.sessionId + ":" + instance.server}
+      testId={"running-instance-" + session.sessionId + "-" + instance.server}
+      title={instance.server}
+      subtitle={instanceSubtitleText(instance)}
+      leading={instanceTone(instance.state)}
+      hoverActions={[
+        {
+          label: t("runtime.instance.disconnect"),
+          testId: "running-instance-disconnect-" + session.sessionId + "-" + instance.server,
+          onClick: () => setPending({ name: instance.server, sessionId: session.sessionId }),
+        },
+      ]}
+    />
+  );
 
   const sessionGroup = (session: RuntimeSessionView, child: boolean): React.ReactElement => {
-    const group = React.createElement(ListGroup, {
-      key: session.sessionId,
-      depth: 1,
-      testId: "running-session-" + session.sessionId,
-      title: sessionTitleText(session),
-      meta: sessionIdText(session),
-      count: session.instances.length,
-      badges: child
-        ? React.createElement(Badge, { tone: "neutral" }, t("runtime.session.child"))
-        : undefined,
-    },
-    session.instances.map((instance) => instanceRow(session, instance)));
-    return child
-      ? React.createElement("div", { key: session.sessionId, className: styles.subGroup }, group)
-      : group;
+    const group = (
+      <ListGroup
+        key={session.sessionId}
+        depth={1}
+        testId={"running-session-" + session.sessionId}
+        title={sessionTitleText(session)}
+        meta={sessionIdText(session)}
+        count={session.instances.length}
+        badges={child ? <Badge tone="neutral">{t("runtime.session.child")}</Badge> : undefined}
+      >
+        {session.instances.map((instance) => instanceRow(session, instance))}
+      </ListGroup>
+    );
+    return child ? (
+      <div key={session.sessionId} className={styles.subGroup}>
+        {group}
+      </div>
+    ) : (
+      group
+    );
   };
 
   const content = ((): React.ReactNode => {
     if (error !== undefined && status === undefined) {
-      return React.createElement("div", { className: styles.pad },
-        React.createElement(Banner, {
-          tone: "danger",
-          testId: "running-load-error",
-          action: { label: t("runtime.retry"), onClick: () => load(false), testId: "running-retry" },
-        }, t("runtime.loadFailed", { message: error })));
+      return (
+        <div className={styles.pad}>
+          <Banner
+            tone="danger"
+            testId="running-load-error"
+            action={{ label: t("runtime.retry"), onClick: () => load(false), testId: "running-retry" }}
+          >
+            {t("runtime.loadFailed", { message: error })}
+          </Banner>
+        </div>
+      );
     }
-    if (status === undefined) return React.createElement(SkeletonRows, { testId: "running-loading", rows: 2 });
+    if (status === undefined) return <SkeletonRows testId="running-loading" rows={2} />;
     const nodes: React.ReactNode[] = [];
     if (pollError !== undefined) {
-      nodes.push(React.createElement("div", { key: "poll", className: styles.pad },
-        React.createElement(Banner, { tone: "warn", testId: "running-poll-error" }, t("runtime.pollFailed", { message: pollError }))));
+      nodes.push(
+        <div key="poll" className={styles.pad}>
+          <Banner tone="warn" testId="running-poll-error">
+            {t("runtime.pollFailed", { message: pollError })}
+          </Banner>
+        </div>,
+      );
     }
     if (sessions.length === 0) {
-      nodes.push(React.createElement("p", { key: "empty", className: styles.empty, "data-testid": "running-empty" },
-        allSessions.length > 0 ? t("runtime.sessions.filteredEmpty") : t("runtime.sessions.empty")));
+      nodes.push(
+        <p key="empty" className={styles.empty} data-testid="running-empty">
+          {allSessions.length > 0 ? t("runtime.sessions.filteredEmpty") : t("runtime.sessions.empty")}
+        </p>,
+      );
     } else {
       for (const group of sessionGroups(sessions)) {
         nodes.push(sessionGroup(group.parent, false));
@@ -220,70 +249,88 @@ function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
     return nodes;
   })();
 
-  const headEnd = expanded
-    ? React.createElement(React.Fragment, null,
-        React.createElement("span", { className: styles.switch, "data-testid": "running-only-current" },
-          React.createElement(Switch, {
-            checked: onlyCurrent,
-            disabled: props.sessionId === undefined,
-            label: t("runtime.onlyCurrent"),
-            ...(props.sessionId === undefined ? { title: t("runtime.onlyCurrentOff") } : {}),
-            onChange: (next: boolean) => setOnlyCurrent(next),
-          }),
-          React.createElement("button", {
-            type: "button",
-            className: styles.switchLabel,
-            "data-testid": "running-only-current-label",
-            disabled: props.sessionId === undefined,
-            ...(props.sessionId === undefined ? { title: t("runtime.onlyCurrentOff") } : {}),
-            onClick: () => setOnlyCurrent((prev) => !prev),
-          }, t("runtime.onlyCurrent"))),
-        React.createElement("button", {
-          type: "button",
-          className: styles.iconButton,
-          "data-testid": "running-refresh",
-          "aria-label": t("runtime.refresh"),
-          title: t("runtime.pollHint"),
-          onClick: () => load(false),
-        }, React.createElement(RefreshIcon, null)))
-    : undefined;
+  const headEnd = expanded ? (
+    <React.Fragment>
+      <span className={styles.switch} data-testid="running-only-current">
+        <Switch
+          checked={onlyCurrent}
+          disabled={props.sessionId === undefined}
+          label={t("runtime.onlyCurrent")}
+          {...(props.sessionId === undefined ? { title: t("runtime.onlyCurrentOff") } : {})}
+          onChange={(next: boolean) => setOnlyCurrent(next)}
+        />
+        <button
+          type="button"
+          className={styles.switchLabel}
+          data-testid="running-only-current-label"
+          disabled={props.sessionId === undefined}
+          {...(props.sessionId === undefined ? { title: t("runtime.onlyCurrentOff") } : {})}
+          onClick={() => setOnlyCurrent((prev) => !prev)}
+        >
+          {t("runtime.onlyCurrent")}
+        </button>
+      </span>
+      <button
+        type="button"
+        className={styles.iconButton}
+        data-testid="running-refresh"
+        aria-label={t("runtime.refresh")}
+        title={t("runtime.pollHint")}
+        onClick={() => load(false)}
+      >
+        <RefreshIcon />
+      </button>
+    </React.Fragment>
+  ) : undefined;
 
   // 没有活跃实例（且没有报错）时只是一行淡色小字，有实例时才变成可折叠的面板（UI-DESIGN 原则 3）。
   const quiet = status !== undefined && count === 0 && error === undefined && pollError === undefined && !preview;
-  return React.createElement("div", { className: styles.region, "data-testid": "mcp-running", "data-dsh-part": "mcp-running" },
-    status === undefined && error === undefined
-      ? null
-      : quiet
-        ? React.createElement("p", { className: styles.quiet, title: t("runtime.pollHint"), "data-testid": "running-quiet" }, t("running.quiet"))
-        : React.createElement(ListGroup, {
-          title: t("running.title"),
-          count: count > 0 ? t("running.count", { count }) : t("running.none"),
-          badges: preview ? React.createElement(Badge, { tone: "neutral" }, t("running.preview")) : undefined,
-          expanded,
-          onToggle: () => setRegion((prev) => runningRegionToggle(prev)),
-          nested: true,
-          end: headEnd,
-          testId: "running-group",
-        }, content),
-
-    React.createElement(DisconnectDialog, {
-      target: pending,
-      busy,
-      onConfirm: confirmDisconnect,
-      onCancel: () => setPending(undefined),
-    }),
-    toast === undefined
-      ? null
-      : React.createElement(Toast, {
-          key: toast.seq,
-          text: toast.text,
-          ...(toast.tone === undefined ? {} : { tone: toast.tone }),
-          holdMs: 4000,
-          onDone: () => setToast((current) => (current !== undefined && current.seq === toast.seq ? undefined : current)),
-        }));
+  return (
+    <div className={styles.region} data-testid="mcp-running" data-dsh-part="mcp-running">
+      {status === undefined && error === undefined ? null : quiet ? (
+        <p className={styles.quiet} title={t("runtime.pollHint")} data-testid="running-quiet">
+          {t("running.quiet")}
+        </p>
+      ) : (
+        <ListGroup
+          title={t("running.title")}
+          count={count > 0 ? t("running.count", { count }) : t("running.none")}
+          badges={preview ? <Badge tone="neutral">{t("running.preview")}</Badge> : undefined}
+          expanded={expanded}
+          onToggle={() => setRegion((prev) => runningRegionToggle(prev))}
+          nested
+          end={headEnd}
+          testId="running-group"
+        >
+          {content}
+        </ListGroup>
+      )}
+      <DisconnectDialog
+        target={pending}
+        busy={busy}
+        onConfirm={confirmDisconnect}
+        onCancel={() => setPending(undefined)}
+      />
+      {toast === undefined ? null : (
+        <Toast
+          key={toast.seq}
+          text={toast.text}
+          {...(toast.tone === undefined ? {} : { tone: toast.tone })}
+          holdMs={4000}
+          onDone={() =>
+            setToast((current) => (current !== undefined && current.seq === toast.seq ? undefined : current))
+          }
+        />
+      )}
+    </div>
+  );
 }
 
 /** 「运行中」区域（对外只导出这一个）。 */
 export function RunningSection(props: RunningSectionProps): React.ReactElement {
-  return React.createElement(SectionErrorBoundary, null, React.createElement(RunningSectionInner, props));
+  return (
+    <SectionErrorBoundary>
+      <RunningSectionInner {...props} />
+    </SectionErrorBoundary>
+  );
 }

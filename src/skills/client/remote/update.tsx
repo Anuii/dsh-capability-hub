@@ -57,7 +57,10 @@ export function SkillUpdateSection(props: SkillUpdateSectionProps): React.ReactE
     setError(undefined);
     void checkUpdates([skill.id], workspace).then(
       (payload) => {
-        remoteStore.setChecks(payload.results, { mode: payload.auth, ...(payload.rateLimitRemaining === undefined ? {} : { rateLimitRemaining: payload.rateLimitRemaining }) });
+        remoteStore.setChecks(payload.results, {
+          mode: payload.auth,
+          ...(payload.rateLimitRemaining === undefined ? {} : { rateLimitRemaining: payload.rateLimitRemaining }),
+        });
         if (payload.rateLimitRemaining === undefined) void loadAuth();
         setChecking(false);
       },
@@ -80,7 +83,11 @@ export function SkillUpdateSection(props: SkillUpdateSectionProps): React.ReactE
         remoteStore.setCheck(
           applied !== undefined && applied.ok
             ? { skillId: skill.id, status: "up-to-date" }
-            : { skillId: skill.id, status: "error", ...(applied?.message === undefined ? {} : { message: applied.message }) },
+            : {
+                skillId: skill.id,
+                status: "error",
+                ...(applied?.message === undefined ? {} : { message: applied.message }),
+              },
         );
         setUpdating(false);
         props.onChanged?.();
@@ -94,53 +101,77 @@ export function SkillUpdateSection(props: SkillUpdateSectionProps): React.ReactE
 
   const available = item?.status === "update-available";
   const actions: React.ReactNode[] = [
-    React.createElement(Button, {
-      key: "check",
-      size: "sm",
-      variant: "ghost",
-      disabled: busy,
-      "data-testid": "skills-remote-check-" + skill.id,
-      onClick: doCheck,
-    }, checking ? t("skills.remote.update.checking") : t("skills.remote.update.checkOne")),
+    <Button
+      key="check"
+      size="sm"
+      variant="ghost"
+      disabled={busy}
+      data-testid={"skills-remote-check-" + skill.id}
+      onClick={doCheck}
+    >
+      {checking ? t("skills.remote.update.checking") : t("skills.remote.update.checkOne")}
+    </Button>,
   ];
   if (available) {
-    actions.push(React.createElement(Button, {
-      key: "update",
-      size: "sm",
-      variant: "primary",
-      disabled: busy,
-      "data-testid": "skills-remote-update-" + skill.id,
-      onClick: doUpdate,
-    }, updating ? t("skills.remote.update.updating") : t("skills.remote.update.updateOne")));
+    actions.push(
+      <Button
+        key="update"
+        size="sm"
+        variant="primary"
+        disabled={busy}
+        data-testid={"skills-remote-update-" + skill.id}
+        onClick={doUpdate}
+      >
+        {updating ? t("skills.remote.update.updating") : t("skills.remote.update.updateOne")}
+      </Button>,
+    );
   }
   if (props.onUnregister !== undefined) {
-    actions.push(React.createElement(Button, {
-      key: "unregister",
-      size: "sm",
-      variant: "ghost",
-      disabled: busy,
-      "data-testid": "skills-remote-source-unregister",
-      onClick: props.onUnregister,
-    }, t("skills.remote.source.unregister")));
+    actions.push(
+      <Button
+        key="unregister"
+        size="sm"
+        variant="ghost"
+        disabled={busy}
+        data-testid="skills-remote-source-unregister"
+        onClick={props.onUnregister}
+      >
+        {t("skills.remote.source.unregister")}
+      </Button>,
+    );
   }
 
-  return React.createElement("div", { className: styles.form, "data-testid": "skills-remote-update-panel-" + skill.id },
-    // 状态只有一个载体：这一个标记（UI-C 之前同一个状态在标记 / 一句说明 / 键值表的「状态」行里出现了三次）。
-    React.createElement("div", { className: styles.slotRow },
-      React.createElement(Badge, {
-        tone: updateStatusBadgeTone(item?.status),
-        ...(updateStatusTitle(item) === undefined ? {} : { title: updateStatusTitle(item) }),
-        testId: "skills-remote-status-" + skill.id,
-      }, updateStatusLabel(item?.status))),
-    React.createElement("div", { className: styles.slotRow }, actions),
-    error === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-update-error-" + skill.id }, error),
-    result === undefined
-      ? null
-      : React.createElement("div", { className: styles.form, "data-testid": "skills-remote-update-result-" + skill.id },
-        React.createElement("p", { className: styles.note }, result),
-        React.createElement("p", { className: styles.note }, t("skills.remote.update.trashNote")),
-        props.onOpenTrash === undefined
-          ? null
-          : React.createElement("div", { className: styles.slotRow },
-            React.createElement(Button, { size: "sm", variant: "outline", "data-testid": "skills-remote-open-trash", onClick: props.onOpenTrash }, t("skills.remote.update.openTrash")))));
+  return (
+    <div className={styles.form} data-testid={"skills-remote-update-panel-" + skill.id}>
+      {/* 状态只有一个载体：这一个标记（UI-C 之前同一个状态在标记 / 一句说明 / 键值表的「状态」行里出现了三次）。 */}
+      <div className={styles.slotRow}>
+        <Badge
+          tone={updateStatusBadgeTone(item?.status)}
+          {...(updateStatusTitle(item) === undefined ? {} : { title: updateStatusTitle(item) })}
+          testId={"skills-remote-status-" + skill.id}
+        >
+          {updateStatusLabel(item?.status)}
+        </Badge>
+      </div>
+      <div className={styles.slotRow}>{actions}</div>
+      {error === undefined ? null : (
+        <p className={styles.errorBox} data-testid={"skills-remote-update-error-" + skill.id}>
+          {error}
+        </p>
+      )}
+      {result === undefined ? null : (
+        <div className={styles.form} data-testid={"skills-remote-update-result-" + skill.id}>
+          <p className={styles.note}>{result}</p>
+          <p className={styles.note}>{t("skills.remote.update.trashNote")}</p>
+          {props.onOpenTrash === undefined ? null : (
+            <div className={styles.slotRow}>
+              <Button size="sm" variant="outline" data-testid="skills-remote-open-trash" onClick={props.onOpenTrash}>
+                {t("skills.remote.update.openTrash")}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

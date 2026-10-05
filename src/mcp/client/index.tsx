@@ -21,30 +21,14 @@
 import * as React from "react";
 import { Button, Modal, Switch, Toast } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { TabProps } from "../../platform/client/tab-props.ts";
-import {
-  Banner,
-  Drawer,
-  EmptyState,
-  SkeletonRows,
-  Toolbar,
-  kit,
-  searchFlag,
-  type MenuItem,
-} from "../../kit/index.ts";
+import { Banner, Drawer, EmptyState, SkeletonRows, Toolbar, kit, searchFlag, type MenuItem } from "../../kit/index.ts";
 import { RunningSection } from "./running/index.tsx";
 import { disconnectServer } from "./running/data.ts";
 import { DisconnectDialog, type DisconnectTarget } from "./running/dialogs.tsx";
 import { ImportView } from "./intake/import.tsx";
 import { JsonPasteView } from "./intake/json-paste.tsx";
 import { PresetView } from "./intake/presets.tsx";
-import {
-  deleteServer,
-  fetchConfig,
-  fetchRuntime,
-  refreshServerCache,
-  reorderServers,
-  toggleServer,
-} from "./data.ts";
+import { deleteServer, fetchConfig, fetchRuntime, refreshServerCache, reorderServers, toggleServer } from "./data.ts";
 import { ServerDetailBody } from "./detail.tsx";
 import { DeleteServerDialog } from "./dialogs.tsx";
 import { JsonEditor } from "./json.tsx";
@@ -115,9 +99,12 @@ class TabErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 
   render(): React.ReactNode {
     if (this.state.error !== undefined) {
-      return React.createElement("div", { className: styles.root, "data-testid": "mcp-crash" },
-        React.createElement("p", { className: styles.fieldError }, t("mcp.crash.title")),
-        React.createElement("p", { className: styles.note }, t("mcp.crash.hint", { message: this.state.error })));
+      return (
+        <div className={styles.root} data-testid="mcp-crash">
+          <p className={styles.fieldError}>{t("mcp.crash.title")}</p>
+          <p className={styles.note}>{t("mcp.crash.hint", { message: this.state.error })}</p>
+        </div>
+      );
     }
     return this.props.children;
   }
@@ -250,7 +237,10 @@ function McpTabInner(props: TabProps): React.ReactElement {
     (server: ServerView, warnings: readonly string[]): void => {
       setPanel(undefined);
       load();
-      showToast(warnings.length > 0 ? warnings.join("；") : t("mcp.form.saved", { name: server.serverName }), "success");
+      showToast(
+        warnings.length > 0 ? warnings.join("；") : t("mcp.form.saved", { name: server.serverName }),
+        "success",
+      );
       probeTools(server.serverName, 0);
     },
     [load, probeTools, showToast],
@@ -264,8 +254,17 @@ function McpTabInner(props: TabProps): React.ReactElement {
           setConfig((prev) =>
             prev === undefined
               ? prev
-              : { ...prev, servers: prev.servers.map((item) => (item.serverName === server.serverName ? server : item)) });
-          showToast(disabled ? t("mcp.toast.toggleOff", { name: server.serverName }) : t("mcp.toast.toggleOn", { name: server.serverName }), "success");
+              : {
+                  ...prev,
+                  servers: prev.servers.map((item) => (item.serverName === server.serverName ? server : item)),
+                },
+          );
+          showToast(
+            disabled
+              ? t("mcp.toast.toggleOff", { name: server.serverName })
+              : t("mcp.toast.toggleOn", { name: server.serverName }),
+            "success",
+          );
         },
         (error: unknown) => showToast(t("mcp.toast.failed", { message: errorMessage(error) })),
       )
@@ -283,36 +282,53 @@ function McpTabInner(props: TabProps): React.ReactElement {
   };
 
   const onReorder = (from: number, to: number): void => {
-    reorder(reorderNames(servers.map((server) => server.serverName), from, to));
+    reorder(
+      reorderNames(
+        servers.map((server) => server.serverName),
+        from,
+        to,
+      ),
+    );
   };
 
   const refreshCache = (view: ServerView): void => {
     setRefreshing(view.serverName);
-    void refreshServerCache(view.serverName).then(
-      (result) => {
-        showToast(t("mcp.detail.refreshOk", { name: view.serverName, count: result.toolCount }), "success");
-        void fetchRuntime().then((payload) => setRuntime(payload), () => undefined);
-      },
-      (error: unknown) => showToast(t("mcp.detail.refreshFailed", { name: view.serverName, message: errorMessage(error) })),
-    ).finally(() => setRefreshing(undefined));
+    void refreshServerCache(view.serverName)
+      .then(
+        (result) => {
+          showToast(t("mcp.detail.refreshOk", { name: view.serverName, count: result.toolCount }), "success");
+          void fetchRuntime().then(
+            (payload) => setRuntime(payload),
+            () => undefined,
+          );
+        },
+        (error: unknown) =>
+          showToast(t("mcp.detail.refreshFailed", { name: view.serverName, message: errorMessage(error) })),
+      )
+      .finally(() => setRefreshing(undefined));
   };
 
   /** 抽屉里的「断开全部实例」：该服务器在全部会话里的实例（D-E1，0.3.0 从运行态移入）。 */
   const confirmDisconnectAll = (target: DisconnectTarget): void => {
     setDisconnecting(true);
-    void disconnectServer(target.name).then(
-      (result) => {
-        setPendingDisconnect(undefined);
-        if (result.closed === 0) showToast(t("mcp.detail.disconnectNone", { name: target.name }));
-        else showToast(t("mcp.detail.disconnectOk", { name: target.name, count: result.closed }), "success");
-        void fetchRuntime().then((payload) => setRuntime(payload), () => undefined);
-        setRunningTick((tick) => tick + 1);
-      },
-      (error: unknown) => {
-        setPendingDisconnect(undefined);
-        showToast(t("mcp.detail.disconnectFailed", { name: target.name, message: errorMessage(error) }));
-      },
-    ).finally(() => setDisconnecting(false));
+    void disconnectServer(target.name)
+      .then(
+        (result) => {
+          setPendingDisconnect(undefined);
+          if (result.closed === 0) showToast(t("mcp.detail.disconnectNone", { name: target.name }));
+          else showToast(t("mcp.detail.disconnectOk", { name: target.name, count: result.closed }), "success");
+          void fetchRuntime().then(
+            (payload) => setRuntime(payload),
+            () => undefined,
+          );
+          setRunningTick((tick) => tick + 1);
+        },
+        (error: unknown) => {
+          setPendingDisconnect(undefined);
+          showToast(t("mcp.detail.disconnectFailed", { name: target.name, message: errorMessage(error) }));
+        },
+      )
+      .finally(() => setDisconnecting(false));
   };
 
   const confirmDelete = (): void => {
@@ -323,7 +339,11 @@ function McpTabInner(props: TabProps): React.ReactElement {
       .then(
         () => {
           setPendingDelete(undefined);
-          setPanel((current) => (current !== undefined && current.kind === "detail" && current.name === server.serverName ? undefined : current));
+          setPanel((current) =>
+            current !== undefined && current.kind === "detail" && current.name === server.serverName
+              ? undefined
+              : current,
+          );
           load();
           showToast(t("mcp.delete.done", { name: server.serverName }), "success");
         },
@@ -333,248 +353,314 @@ function McpTabInner(props: TabProps): React.ReactElement {
   };
 
   const openNewForm = (): void => setPanel({ kind: "form", draft: emptyServerDraft("stdio") });
-  const openEdit = (view: ServerView): void => setPanel({ kind: "form", originalName: view.serverName, draft: draftFromView(view) });
+  const openEdit = (view: ServerView): void =>
+    setPanel({ kind: "form", originalName: view.serverName, draft: draftFromView(view) });
   const openJson = (view: ServerView): void =>
     setPanel({ kind: "json", originalName: view.serverName, text: draftToJsonText(draftFromView(view)) });
 
-  const detailView = panel !== undefined && panel.kind === "detail"
-    ? servers.find((server) => server.serverName === panel.name)
-    : undefined;
+  const detailView =
+    panel !== undefined && panel.kind === "detail"
+      ? servers.find((server) => server.serverName === panel.name)
+      : undefined;
 
   /** 抽屉/模态框的标题。 */
   const panelTitle = ((): string => {
     if (panel === undefined) return "";
     if (panel.kind === "detail") return panel.name;
     if (panel.kind === "form") {
-      return panel.originalName === undefined ? t("mcp.form.newTitle") : t("mcp.form.editTitle", { name: panel.originalName });
+      return panel.originalName === undefined
+        ? t("mcp.form.newTitle")
+        : t("mcp.form.editTitle", { name: panel.originalName });
     }
-    return panel.originalName === undefined ? t("mcp.json.newTitle") : t("mcp.json.title", { name: panel.originalName });
+    return panel.originalName === undefined
+      ? t("mcp.json.newTitle")
+      : t("mcp.json.title", { name: panel.originalName });
   })();
 
   const addMenu: MenuItem[] = [
     { id: "mcp-add-form", label: t("mcp.add.form"), hint: t("mcp.add.formHint"), onClick: openNewForm },
     { id: "mcp-add-json", label: t("mcp.add.json"), hint: t("mcp.add.jsonHint"), onClick: () => setIntake("json") },
-    { id: "mcp-add-preset", label: t("mcp.add.preset"), hint: t("mcp.add.presetHint"), onClick: () => setIntake("presets") },
-    { id: "mcp-add-import", label: t("mcp.add.import"), hint: t("mcp.add.importHint"), onClick: () => setIntake("import") },
+    {
+      id: "mcp-add-preset",
+      label: t("mcp.add.preset"),
+      hint: t("mcp.add.presetHint"),
+      onClick: () => setIntake("presets"),
+    },
+    {
+      id: "mcp-add-import",
+      label: t("mcp.add.import"),
+      hint: t("mcp.add.importHint"),
+      onClick: () => setIntake("import"),
+    },
   ];
 
-  const intakeNode = intake === undefined
-    ? null
-    : intake === "json"
-      ? React.createElement(JsonPasteView, {
-          existingNames: servers.map((server) => server.serverName),
-          onSaved: onIntakeSaved,
-          showToast: (text: string, tone?: "success") => showToast(text, tone),
-        })
-      : intake === "presets"
-        ? React.createElement(PresetView, {
-            onUsePreset: (draft: ServerDraft) => {
-              setIntake(undefined);
-              setPanel({ kind: "form", draft });
-            },
-          })
-        : React.createElement(ImportView, {
-            existingNames: servers.map((server) => server.serverName),
-            onImported: onIntakeImported,
-            showToast: (text: string, tone?: "success") => showToast(text, tone),
-          });
+  const intakeNode =
+    intake === undefined ? null : intake === "json" ? (
+      <JsonPasteView
+        existingNames={servers.map((server) => server.serverName)}
+        onSaved={onIntakeSaved}
+        showToast={(text: string, tone?: "success") => showToast(text, tone)}
+      />
+    ) : intake === "presets" ? (
+      <PresetView
+        onUsePreset={(draft: ServerDraft) => {
+          setIntake(undefined);
+          setPanel({ kind: "form", draft });
+        }}
+      />
+    ) : (
+      <ImportView
+        existingNames={servers.map((server) => server.serverName)}
+        onImported={onIntakeImported}
+        showToast={(text: string, tone?: "success") => showToast(text, tone)}
+      />
+    );
 
   /** 列表区：加载中骨架屏 / 读取失败横幅 / 空状态 / 真的列表。 */
   const body = ((): React.ReactElement => {
     if (configError !== undefined) {
-      return React.createElement(Banner, {
-        tone: "danger",
-        testId: "mcp-load-error",
-        action: { label: t("mcp.retry"), onClick: load, testId: "mcp-retry" },
-      }, t("mcp.loadFailed", { message: configError }));
+      return (
+        <Banner
+          tone="danger"
+          testId="mcp-load-error"
+          action={{ label: t("mcp.retry"), onClick: load, testId: "mcp-retry" }}
+        >
+          {t("mcp.loadFailed", { message: configError })}
+        </Banner>
+      );
     }
     if (config === undefined || loading) {
-      return React.createElement(SkeletonRows, { testId: "mcp-loading" });
+      return <SkeletonRows testId="mcp-loading" />;
     }
     if (servers.length === 0) {
-      return React.createElement(EmptyState, {
-        title: t("mcp.empty.title"),
-        description: t("mcp.empty.hint"),
-        action: { label: t("mcp.empty.add"), onClick: openNewForm, testId: "mcp-empty-add" },
-        testId: "mcp-empty",
-      });
+      return (
+        <EmptyState
+          title={t("mcp.empty.title")}
+          description={t("mcp.empty.hint")}
+          action={{ label: t("mcp.empty.add"), onClick: openNewForm, testId: "mcp-empty-add" }}
+          testId="mcp-empty"
+        />
+      );
     }
     if (visible.length === 0) {
-      return React.createElement("p", { className: styles.note, "data-testid": "mcp-empty-filtered" }, t("mcp.empty.filtered"));
+      return (
+        <p className={styles.note} data-testid="mcp-empty-filtered">
+          {t("mcp.empty.filtered")}
+        </p>
+      );
     }
-    return React.createElement(ServerList, {
-      servers: visible,
-      runtime,
-      busy,
-      now,
-      onToggle,
-      onOpen: (view: ServerView) => setPanel({ kind: "detail", name: view.serverName }),
-      onReorder,
-    });
+    return (
+      <ServerList
+        servers={visible}
+        runtime={runtime}
+        busy={busy}
+        now={now}
+        onToggle={onToggle}
+        onOpen={(view: ServerView) => setPanel({ kind: "detail", name: view.serverName })}
+        onReorder={onReorder}
+      />
+    );
   })();
 
   const warnings = config?.warnings ?? [];
 
-  return React.createElement("section", {
-      className: styles.root,
-      "data-testid": "capability-hub-tab-panel-mcp",
-      "data-dsh-part": "mcp-tab",
-    },
-    React.createElement(Toolbar, {
-      testId: "mcp-toolbar",
-      search: { value: query, onChange: setQuery, placeholder: t("mcp.search"), testId: "mcp-search" },
-      filters: {
-        value: filter,
-        onChange: (id: string) => setFilter(id as ServerFilterId),
-        label: t("mcp.filter.label"),
-        // 「有错误 0」调淡：没有错误时不抢眼。
-        items: SERVER_FILTERS.map((id) => ({ id, label: filterLabel(id), count: counts[id], quiet: id === "failing" && counts[id] === 0 })),
-      },
-      primary: { label: t("mcp.add.button"), menu: addMenu, testId: "mcp-add-menu" },
-      more: [{ id: "mcp-settings-open", label: t("mcp.settings.title"), onClick: () => setSettingsOpen(true) }],
-    }),
-    warnings.length === 0
-      ? null
-      : React.createElement(Banner, { tone: "warn", testId: "mcp-config-warnings" },
-          t("mcp.warnings.title", { count: warnings.length }) + " " + warnings.join("；")),
-    body,
-
-    // 0.3.0：原「运行态」标签并入这里，成为页面底部可折叠的「运行中」区域（D-E1）。
-    React.createElement(RunningSection, {
-      ...(props.sessionId === undefined ? {} : { sessionId: props.sessionId }),
-      preview: previewRunning,
-      reloadSignal: runningTick,
-    }),
-
-    // 详情 / 编辑抽屉（同一个抽屉，内容按 panel 切换）。
-    React.createElement(Drawer, {
-      open: panel !== undefined,
-      title: panelTitle,
-      // 抽屉头部的等宽副标题只放一行：命令可能很长，全文在「概览」里（UI-DESIGN §1「安静」）。
-      ...(detailView === undefined ? {} : { subtitle: drawerSubtitle(viewSummaryText(detailView)) }),
-      testId: "mcp-drawer",
-      onClose: () => setPanel(undefined),
-      ...(detailView === undefined
-        ? {}
-        : {
-            headerEnd: React.createElement(Switch, {
-              checked: !detailView.disabled,
-              disabled: busy.has(detailView.serverName),
-              label: t("mcp.row.toggleLabel", { name: detailView.serverName }),
-              onChange: (next: boolean) => onToggle(detailView, !next),
-            }),
-            footer: React.createElement(React.Fragment, null,
-              React.createElement(Button, {
-                variant: "ghost",
-                size: "sm",
-                className: kit.dangerButton,
-                "data-testid": "mcp-detail-delete",
-                title: t("mcp.detail.deleteTitle", { name: detailView.serverName }),
-                onClick: () => setPendingDelete(detailView),
-              }, t("mcp.delete")),
-              React.createElement("span", { className: kit.drawerFootSpacer }),
-              React.createElement(Button, {
-                variant: "outline",
-                size: "sm",
-                "data-testid": "mcp-detail-json",
-                title: t("mcp.detail.jsonTitle", { name: detailView.serverName }),
-                onClick: () => openJson(detailView),
-              }, t("mcp.jsonMode")),
-              React.createElement(Button, {
-                variant: "outline",
-                size: "sm",
-                "data-testid": "mcp-detail-edit",
-                title: t("mcp.detail.editTitle", { name: detailView.serverName }),
-                onClick: () => openEdit(detailView),
-              }, t("mcp.edit"))),
-          }),
-    },
-    detailView !== undefined
-      ? React.createElement(ServerDetailBody, {
-          view: detailView,
-          row: rows.get(detailView.serverName),
-          now,
-          refreshing: refreshing === detailView.serverName,
-          onRefresh: () => refreshCache(detailView),
-          instances: activeInstanceCount(runtime, detailView.serverName),
-          onDisconnectAll: () => setPendingDisconnect({ name: detailView.serverName }),
-          showToast: (text: string, tone?: "success") => showToast(text, tone),
-        })
-      : panel !== undefined && panel.kind === "form"
-        ? React.createElement(ServerForm, {
-            ...(panel.originalName === undefined ? {} : { originalName: panel.originalName }),
-            initial: panel.draft,
-            existingNames: servers.map((server) => server.serverName),
-            onSaved,
-            onCancel: () => setPanel(undefined),
-            onSwitchToJson: (draft: ServerDraft) =>
-              setPanel({ kind: "json", ...(panel.originalName === undefined ? {} : { originalName: panel.originalName }), text: draftToJsonText(draft) }),
-            showToast: (text: string) => showToast(text),
-          })
-        : panel !== undefined && panel.kind === "json"
-          ? React.createElement(JsonEditor, {
-              ...(panel.originalName === undefined ? {} : { originalName: panel.originalName }),
-              initialText: panel.text,
-              onSaved,
-              onCancel: () => setPanel(undefined),
-              onSwitchToForm: (values: Record<string, unknown>) =>
-                setPanel({ kind: "form", ...(panel.originalName === undefined ? {} : { originalName: panel.originalName }), draft: draftFromValues(values) }),
-            })
-          : null),
-
-    // 全局设置抽屉。
-    React.createElement(Drawer, {
-      open: settingsOpen && config !== undefined,
-      title: t("mcp.settings.title"),
-      testId: "mcp-settings-drawer",
-      onClose: () => setSettingsOpen(false),
-    },
-    config === undefined
-      ? null
-      : React.createElement(SettingsPanel, {
-          settings: config.settings,
-          settingsSet: config.settingsSet,
-          onSaved: (settings, settingsSet) => {
-            setConfig((prev) => (prev === undefined ? prev : { ...prev, settings, settingsSet: [...settingsSet] }));
-            showToast(t("mcp.settings.saved"), "success");
-          },
-        })),
-
-    // 三种添加方式（沿用 T4b-2 的视图）。
-    React.createElement(Modal, {
-      open: intake !== undefined,
-      onClose: () => setIntake(undefined),
-      title: intake === "json" ? t("mcp.paste.title") : intake === "presets" ? t("mcp.preset.title") : t("mcp.import.title"),
-      closeLabel: t("mcp.close"),
-      className: styles.intakeModal,
-    }, React.createElement("div", { className: kit.scope }, intakeNode)),
-
-    React.createElement(DisconnectDialog, {
-      target: pendingDisconnect,
-      busy: disconnecting,
-      onConfirm: confirmDisconnectAll,
-      onCancel: () => setPendingDisconnect(undefined),
-    }),
-
-    React.createElement(DeleteServerDialog, {
-      server: pendingDelete,
-      busy: deleting,
-      onConfirm: confirmDelete,
-      onCancel: () => setPendingDelete(undefined),
-    }),
-
-    toast === undefined
-      ? null
-      : React.createElement(Toast, {
-          key: toast.seq,
-          text: toast.text,
-          ...(toast.tone === undefined ? {} : { tone: toast.tone }),
-          holdMs: 5000,
-          onDone: () => setToast((current) => (current !== undefined && current.seq === toast.seq ? undefined : current)),
-        }));
+  return (
+    <section className={styles.root} data-testid="capability-hub-tab-panel-mcp" data-dsh-part="mcp-tab">
+      <Toolbar
+        testId="mcp-toolbar"
+        search={{ value: query, onChange: setQuery, placeholder: t("mcp.search"), testId: "mcp-search" }}
+        filters={{
+          value: filter,
+          onChange: (id: string) => setFilter(id as ServerFilterId),
+          label: t("mcp.filter.label"),
+          // 「有错误 0」调淡：没有错误时不抢眼。
+          items: SERVER_FILTERS.map((id) => ({
+            id,
+            label: filterLabel(id),
+            count: counts[id],
+            quiet: id === "failing" && counts[id] === 0,
+          })),
+        }}
+        primary={{ label: t("mcp.add.button"), menu: addMenu, testId: "mcp-add-menu" }}
+        more={[{ id: "mcp-settings-open", label: t("mcp.settings.title"), onClick: () => setSettingsOpen(true) }]}
+      />
+      {warnings.length === 0 ? null : (
+        <Banner tone="warn" testId="mcp-config-warnings">
+          {t("mcp.warnings.title", { count: warnings.length }) + " " + warnings.join("；")}
+        </Banner>
+      )}
+      {body}
+      {/* 0.3.0：原「运行态」标签并入这里，成为页面底部可折叠的「运行中」区域（D-E1）。 */}
+      <RunningSection
+        {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
+        preview={previewRunning}
+        reloadSignal={runningTick}
+      />
+      {/* 详情 / 编辑抽屉（同一个抽屉，内容按 panel 切换）。 */}
+      <Drawer
+        open={panel !== undefined}
+        title={panelTitle}
+        /* 抽屉头部的等宽副标题只放一行：命令可能很长，全文在「概览」里（UI-DESIGN §1「安静」）。 */ {...(detailView ===
+        undefined
+          ? {}
+          : { subtitle: drawerSubtitle(viewSummaryText(detailView)) })}
+        testId="mcp-drawer"
+        onClose={() => setPanel(undefined)}
+        {...(detailView === undefined
+          ? {}
+          : {
+              headerEnd: (
+                <Switch
+                  checked={!detailView.disabled}
+                  disabled={busy.has(detailView.serverName)}
+                  label={t("mcp.row.toggleLabel", { name: detailView.serverName })}
+                  onChange={(next: boolean) => onToggle(detailView, !next)}
+                />
+              ),
+              footer: (
+                <React.Fragment>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={kit.dangerButton}
+                    data-testid="mcp-detail-delete"
+                    title={t("mcp.detail.deleteTitle", { name: detailView.serverName })}
+                    onClick={() => setPendingDelete(detailView)}
+                  >
+                    {t("mcp.delete")}
+                  </Button>
+                  <span className={kit.drawerFootSpacer} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="mcp-detail-json"
+                    title={t("mcp.detail.jsonTitle", { name: detailView.serverName })}
+                    onClick={() => openJson(detailView)}
+                  >
+                    {t("mcp.jsonMode")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="mcp-detail-edit"
+                    title={t("mcp.detail.editTitle", { name: detailView.serverName })}
+                    onClick={() => openEdit(detailView)}
+                  >
+                    {t("mcp.edit")}
+                  </Button>
+                </React.Fragment>
+              ),
+            })}
+      >
+        {detailView !== undefined ? (
+          <ServerDetailBody
+            view={detailView}
+            row={rows.get(detailView.serverName)}
+            now={now}
+            refreshing={refreshing === detailView.serverName}
+            onRefresh={() => refreshCache(detailView)}
+            instances={activeInstanceCount(runtime, detailView.serverName)}
+            onDisconnectAll={() => setPendingDisconnect({ name: detailView.serverName })}
+            showToast={(text: string, tone?: "success") => showToast(text, tone)}
+          />
+        ) : panel !== undefined && panel.kind === "form" ? (
+          <ServerForm
+            {...(panel.originalName === undefined ? {} : { originalName: panel.originalName })}
+            initial={panel.draft}
+            existingNames={servers.map((server) => server.serverName)}
+            onSaved={onSaved}
+            onCancel={() => setPanel(undefined)}
+            onSwitchToJson={(draft: ServerDraft) =>
+              setPanel({
+                kind: "json",
+                ...(panel.originalName === undefined ? {} : { originalName: panel.originalName }),
+                text: draftToJsonText(draft),
+              })
+            }
+            showToast={(text: string) => showToast(text)}
+          />
+        ) : panel !== undefined && panel.kind === "json" ? (
+          <JsonEditor
+            {...(panel.originalName === undefined ? {} : { originalName: panel.originalName })}
+            initialText={panel.text}
+            onSaved={onSaved}
+            onCancel={() => setPanel(undefined)}
+            onSwitchToForm={(values: Record<string, unknown>) =>
+              setPanel({
+                kind: "form",
+                ...(panel.originalName === undefined ? {} : { originalName: panel.originalName }),
+                draft: draftFromValues(values),
+              })
+            }
+          />
+        ) : null}
+      </Drawer>
+      {/* 全局设置抽屉。 */}
+      <Drawer
+        open={settingsOpen && config !== undefined}
+        title={t("mcp.settings.title")}
+        testId="mcp-settings-drawer"
+        onClose={() => setSettingsOpen(false)}
+      >
+        {config === undefined ? null : (
+          <SettingsPanel
+            settings={config.settings}
+            settingsSet={config.settingsSet}
+            onSaved={(settings, settingsSet) => {
+              setConfig((prev) => (prev === undefined ? prev : { ...prev, settings, settingsSet: [...settingsSet] }));
+              showToast(t("mcp.settings.saved"), "success");
+            }}
+          />
+        )}
+      </Drawer>
+      {/* 三种添加方式（沿用 T4b-2 的视图）。 */}
+      <Modal
+        open={intake !== undefined}
+        onClose={() => setIntake(undefined)}
+        title={
+          intake === "json"
+            ? t("mcp.paste.title")
+            : intake === "presets"
+              ? t("mcp.preset.title")
+              : t("mcp.import.title")
+        }
+        closeLabel={t("mcp.close")}
+        className={styles.intakeModal}
+      >
+        <div className={kit.scope}>{intakeNode}</div>
+      </Modal>
+      <DisconnectDialog
+        target={pendingDisconnect}
+        busy={disconnecting}
+        onConfirm={confirmDisconnectAll}
+        onCancel={() => setPendingDisconnect(undefined)}
+      />
+      <DeleteServerDialog
+        server={pendingDelete}
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(undefined)}
+      />
+      {toast === undefined ? null : (
+        <Toast
+          key={toast.seq}
+          text={toast.text}
+          {...(toast.tone === undefined ? {} : { tone: toast.tone })}
+          holdMs={5000}
+          onDone={() =>
+            setToast((current) => (current !== undefined && current.seq === toast.seq ? undefined : current))
+          }
+        />
+      )}
+    </section>
+  );
 }
 
 /** MCP 标签页（对外只导出这一个）。 */
 export function McpTab(props: TabProps): React.ReactElement {
-  return React.createElement(TabErrorBoundary, null, React.createElement(McpTabInner, props));
+  return (
+    <TabErrorBoundary>
+      <McpTabInner {...props} />
+    </TabErrorBoundary>
+  );
 }

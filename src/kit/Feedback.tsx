@@ -21,19 +21,21 @@ export function Banner(props: {
   action?: { label: string; onClick(): void; testId?: string };
   testId?: string;
 }): React.ReactElement {
-  return React.createElement("div", {
-    className: kit.banner,
-    "data-tone": props.tone ?? "neutral",
-    role: "status",
-    "data-testid": props.testId,
-  },
-  React.createElement("span", { className: kit.bannerBody }, props.children),
-  props.action === undefined ? null : React.createElement("button", {
-    type: "button",
-    className: kit.bannerAction,
-    "data-testid": props.action.testId,
-    onClick: props.action.onClick,
-  }, props.action.label));
+  return (
+    <div className={kit.banner} data-tone={props.tone ?? "neutral"} role="status" data-testid={props.testId}>
+      <span className={kit.bannerBody}>{props.children}</span>
+      {props.action === undefined ? null : (
+        <button
+          type="button"
+          className={kit.bannerAction}
+          data-testid={props.action.testId}
+          onClick={props.action.onClick}
+        >
+          {props.action.label}
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** 居中空状态：一句标题 + 一句说明 + 一个按钮。 */
@@ -43,33 +45,36 @@ export function EmptyState(props: {
   action?: { label: string; onClick(): void; testId?: string };
   testId?: string;
 }): React.ReactElement {
-  return React.createElement("div", { className: kit.empty, "data-testid": props.testId },
-    React.createElement("p", { className: kit.emptyTitle }, props.title),
-    props.description === undefined ? null : React.createElement("p", { className: kit.emptyText }, props.description),
-    props.action === undefined ? null : React.createElement(Button, {
-      variant: "outline",
-      size: "sm",
-      "data-testid": props.action.testId,
-      onClick: props.action.onClick,
-    }, props.action.label));
+  return (
+    <div className={kit.empty} data-testid={props.testId}>
+      <p className={kit.emptyTitle}>{props.title}</p>
+      {props.description === undefined ? null : <p className={kit.emptyText}>{props.description}</p>}
+      {props.action === undefined ? null : (
+        <Button variant="outline" size="sm" data-testid={props.action.testId} onClick={props.action.onClick}>
+          {props.action.label}
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /** 加载占位：默认 6 行灰条，不用转圈。 */
-export function SkeletonRows(props: {
-  rows?: number;
-  testId?: string;
-}): React.ReactElement {
+export function SkeletonRows(props: { rows?: number; testId?: string }): React.ReactElement {
   const rows = props.rows ?? SKELETON_ROWS;
   const items: React.ReactElement[] = [];
   for (let index = 0; index < rows; index += 1) {
-    items.push(React.createElement("div", { className: kit.skeletonRow, key: index },
-      React.createElement("span", { className: kit.skeletonBar, "data-w": "title" }),
-      React.createElement("span", { className: kit.skeletonStack },
-        React.createElement("span", { className: kit.skeletonBar, "data-w": "sub" }))));
+    items.push(
+      <div className={kit.skeletonRow} key={index}>
+        <span className={kit.skeletonBar} data-w="title" />
+        <span className={kit.skeletonStack}>
+          <span className={kit.skeletonBar} data-w="sub" />
+        </span>
+      </div>,
+    );
   }
-  return React.createElement("div", {
-    className: kit.skeleton,
-    "aria-busy": "true",
-    "data-testid": props.testId,
-  }, items);
+  return (
+    <div className={kit.skeleton} aria-busy="true" data-testid={props.testId}>
+      {items}
+    </div>
+  );
 }

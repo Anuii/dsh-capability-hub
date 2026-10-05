@@ -65,70 +65,117 @@ export function SettingsPanel(props: SettingsPanelProps): React.ReactElement {
         },
         (error: unknown) => {
           const details = fieldErrorsOf(error);
-          setErrors(details.length > 0 ? details.map((item) => item.message) : [t("mcp.settings.saveFailed", { message: errorMessage(error) })]);
+          setErrors(
+            details.length > 0
+              ? details.map((item) => item.message)
+              : [t("mcp.settings.saveFailed", { message: errorMessage(error) })],
+          );
         },
       )
       .finally(() => setBusy(false));
   };
 
-  const row = (id: string, label: string, hint: string, control: React.ReactNode): React.ReactElement =>
-    React.createElement("div", { className: styles.settingRow, "data-testid": "mcp-setting-" + id },
-      React.createElement("div", { className: styles.fieldHead },
-        React.createElement("span", { className: styles.fieldLabel }, label),
-        React.createElement("span", { className: styles.fieldBadges },
-          settingsHas(draft, id)
-            ? React.createElement(Button, {
-                size: "sm",
-                variant: "ghost",
-                "data-testid": "mcp-settings-reset-" + id,
-                onClick: () => reset(id),
-              }, t("mcp.form.reset"))
-            : null)),
-      React.createElement("p", { className: styles.hint }, hint),
-      React.createElement("div", { className: styles.control }, control),
-      (groups[id] ?? []).map((text, index) =>
-        React.createElement("p", { key: index, className: styles.fieldError, "data-testid": "mcp-settings-error-" + id }, text)));
+  const row = (id: string, label: string, hint: string, control: React.ReactNode): React.ReactElement => (
+    <div className={styles.settingRow} data-testid={"mcp-setting-" + id}>
+      <div className={styles.fieldHead}>
+        <span className={styles.fieldLabel}>{label}</span>
+        <span className={styles.fieldBadges}>
+          {settingsHas(draft, id) ? (
+            <Button size="sm" variant="ghost" data-testid={"mcp-settings-reset-" + id} onClick={() => reset(id)}>
+              {t("mcp.form.reset")}
+            </Button>
+          ) : null}
+        </span>
+      </div>
+      <p className={styles.hint}>{hint}</p>
+      <div className={styles.control}>{control}</div>
+      {(groups[id] ?? []).map((text, index) => (
+        <p key={index} className={styles.fieldError} data-testid={"mcp-settings-error-" + id}>
+          {text}
+        </p>
+      ))}
+    </div>
+  );
 
-  return React.createElement("div", { className: styles.settings, "data-testid": "mcp-settings" },
-    React.createElement("p", { className: styles.note }, t("mcp.settings.hint")),
-    row("idleTimeout", t("mcp.settings.idleTimeout"), t("mcp.settings.idleTimeoutHint", { value: SETTINGS_DEFAULTS.idleTimeoutMin }),
-      React.createElement(Input, {
-        value: numericText(draft.values.idleTimeout),
-        placeholder: String(SETTINGS_DEFAULTS.idleTimeoutMin),
-        "data-testid": "mcp-settings-input-idleTimeout",
-        onChange: (event: { target: { value: string } }) => setValue("idleTimeout", event.target.value),
-      })),
-    row("outputGuard.enabled", t("mcp.settings.outputGuard"), t("mcp.settings.outputGuardHint", { bytes: SETTINGS_DEFAULTS.outputGuard.maxBytes, lines: SETTINGS_DEFAULTS.outputGuard.maxLines }),
-      React.createElement(Switch, {
-        checked: draft.values["outputGuard.enabled"] === undefined ? props.settings.outputGuard.enabled : draft.values["outputGuard.enabled"] === true,
-        label: t("mcp.settings.outputGuardEnabled"),
-        onChange: (next: boolean) => setValue("outputGuard.enabled", next),
-      })),
-    row("outputGuard.maxBytes", t("mcp.settings.maxBytes"), t("mcp.settings.maxBytesHint", { value: SETTINGS_DEFAULTS.outputGuard.maxBytes }),
-      React.createElement(Input, {
-        value: numericText(draft.values["outputGuard.maxBytes"]),
-        placeholder: String(SETTINGS_DEFAULTS.outputGuard.maxBytes),
-        "data-testid": "mcp-settings-input-outputGuard-maxBytes",
-        onChange: (event: { target: { value: string } }) => setValue("outputGuard.maxBytes", event.target.value),
-      })),
-    row("outputGuard.maxLines", t("mcp.settings.maxLines"), t("mcp.settings.maxLinesHint", { value: SETTINGS_DEFAULTS.outputGuard.maxLines }),
-      React.createElement(Input, {
-        value: numericText(draft.values["outputGuard.maxLines"]),
-        placeholder: String(SETTINGS_DEFAULTS.outputGuard.maxLines),
-        "data-testid": "mcp-settings-input-outputGuard-maxLines",
-        onChange: (event: { target: { value: string } }) => setValue("outputGuard.maxLines", event.target.value),
-      })),
-    row("failureBackoffMs", t("mcp.settings.failureBackoffMs"), t("mcp.settings.failureBackoffHint", { value: SETTINGS_DEFAULTS.failureBackoffMs }),
-      React.createElement(Input, {
-        value: numericText(draft.values.failureBackoffMs),
-        placeholder: String(SETTINGS_DEFAULTS.failureBackoffMs),
-        "data-testid": "mcp-settings-input-failureBackoffMs",
-        onChange: (event: { target: { value: string } }) => setValue("failureBackoffMs", event.target.value),
-      })),
-    errors.length === 0
-      ? null
-      : React.createElement(Banner, { tone: "danger", testId: "mcp-settings-errors" }, errors.join("；")),
-    React.createElement("div", { className: styles.actions },
-      React.createElement(Button, { variant: "primary", "data-testid": "mcp-settings-save", disabled: busy, onClick: save }, busy ? t("mcp.saving") : t("mcp.settings.save")),
-      message === undefined ? null : React.createElement("span", { className: styles.small, "data-testid": "mcp-settings-message" }, message)));
+  return (
+    <div className={styles.settings} data-testid="mcp-settings">
+      <p className={styles.note}>{t("mcp.settings.hint")}</p>
+      {row(
+        "idleTimeout",
+        t("mcp.settings.idleTimeout"),
+        t("mcp.settings.idleTimeoutHint", { value: SETTINGS_DEFAULTS.idleTimeoutMin }),
+        <Input
+          value={numericText(draft.values.idleTimeout)}
+          placeholder={String(SETTINGS_DEFAULTS.idleTimeoutMin)}
+          data-testid="mcp-settings-input-idleTimeout"
+          onChange={(event: { target: { value: string } }) => setValue("idleTimeout", event.target.value)}
+        />,
+      )}
+      {row(
+        "outputGuard.enabled",
+        t("mcp.settings.outputGuard"),
+        t("mcp.settings.outputGuardHint", {
+          bytes: SETTINGS_DEFAULTS.outputGuard.maxBytes,
+          lines: SETTINGS_DEFAULTS.outputGuard.maxLines,
+        }),
+        <Switch
+          checked={
+            draft.values["outputGuard.enabled"] === undefined
+              ? props.settings.outputGuard.enabled
+              : draft.values["outputGuard.enabled"] === true
+          }
+          label={t("mcp.settings.outputGuardEnabled")}
+          onChange={(next: boolean) => setValue("outputGuard.enabled", next)}
+        />,
+      )}
+      {row(
+        "outputGuard.maxBytes",
+        t("mcp.settings.maxBytes"),
+        t("mcp.settings.maxBytesHint", { value: SETTINGS_DEFAULTS.outputGuard.maxBytes }),
+        <Input
+          value={numericText(draft.values["outputGuard.maxBytes"])}
+          placeholder={String(SETTINGS_DEFAULTS.outputGuard.maxBytes)}
+          data-testid="mcp-settings-input-outputGuard-maxBytes"
+          onChange={(event: { target: { value: string } }) => setValue("outputGuard.maxBytes", event.target.value)}
+        />,
+      )}
+      {row(
+        "outputGuard.maxLines",
+        t("mcp.settings.maxLines"),
+        t("mcp.settings.maxLinesHint", { value: SETTINGS_DEFAULTS.outputGuard.maxLines }),
+        <Input
+          value={numericText(draft.values["outputGuard.maxLines"])}
+          placeholder={String(SETTINGS_DEFAULTS.outputGuard.maxLines)}
+          data-testid="mcp-settings-input-outputGuard-maxLines"
+          onChange={(event: { target: { value: string } }) => setValue("outputGuard.maxLines", event.target.value)}
+        />,
+      )}
+      {row(
+        "failureBackoffMs",
+        t("mcp.settings.failureBackoffMs"),
+        t("mcp.settings.failureBackoffHint", { value: SETTINGS_DEFAULTS.failureBackoffMs }),
+        <Input
+          value={numericText(draft.values.failureBackoffMs)}
+          placeholder={String(SETTINGS_DEFAULTS.failureBackoffMs)}
+          data-testid="mcp-settings-input-failureBackoffMs"
+          onChange={(event: { target: { value: string } }) => setValue("failureBackoffMs", event.target.value)}
+        />,
+      )}
+      {errors.length === 0 ? null : (
+        <Banner tone="danger" testId="mcp-settings-errors">
+          {errors.join("；")}
+        </Banner>
+      )}
+      <div className={styles.actions}>
+        <Button variant="primary" data-testid="mcp-settings-save" disabled={busy} onClick={save}>
+          {busy ? t("mcp.saving") : t("mcp.settings.save")}
+        </Button>
+        {message === undefined ? null : (
+          <span className={styles.small} data-testid="mcp-settings-message">
+            {message}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }

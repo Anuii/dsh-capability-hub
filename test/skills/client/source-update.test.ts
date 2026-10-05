@@ -34,7 +34,7 @@ test("无来源时才出现「推测来源」「手动登记」两个文字按�
 });
 
 test("状态只有一个标记：Badge 只在 update.tsx 里出现一次，且没有第二处状态文字", () => {
-  const badges = update.match(/React\.createElement\(Badge/g) ?? [];
+  const badges = update.match(/<Badge\b/g) ?? [];
   assert.equal(badges.length, 1, "状态标记只该有一个");
   assert.equal(update.includes("neverChecked"), false);
   assert.equal(/skills\.remote\.update\.status"/.test(update), false, "KeyValue 里那一行「状态」已经删掉");
@@ -49,14 +49,14 @@ test("GitHub 凭据与配额不在详情里重复出现", () => {
 
 test("有来源时才渲染更新那一段", () => {
   assert.ok(update.includes("hasSource"));
-  assert.ok(source.includes("hasSource: entry !== undefined"));
+  assert.ok(source.includes("hasSource={entry !== undefined"));
   assert.equal(detail.includes("SkillUpdateSection"), false, "detail.tsx 不再单独渲染更新那一段");
   assert.ok(source.includes("SkillUpdateSection"), "它由 source.tsx 接在来源信息下面");
 });
 
 test("抽屉副标题与「位置」都用缩写后的路径，完整路径走 title", () => {
   assert.ok(detail.includes("abbreviateHomePath(skill.path, props.homeDir)"));
-  assert.ok(detail.includes("subtitleTitle: skill.path"));
+  assert.ok(detail.includes("subtitleTitle={skill.path}"));
   assert.ok(detail.includes('title: skill.path'), "位置那一项要给出完整路径的悬停提示");
 });
 
@@ -68,8 +68,8 @@ test("添加技能 = 仓库视图：地址输入占满、分支固定 140px、�
   assert.ok(install.includes("React.useState<boolean>(false);\n  const [editing"), "仓库列表默认折叠");
   assert.ok(install.includes("shouldAutoScan(view)"), "第一次没有缓存时自动扫一次");
   assert.ok(install.includes("sliceVisible(group.skills, limitOf(group.repo))"), "上千行分批渲染（按仓库分组，每组 200 行）");
-  assert.ok(install.includes("groupDiscovered(all, filtered"), "汇总按仓库分组");
+  assert.ok(/groupDiscovered\(\s*all,\s*filtered/.test(install), "汇总按仓库分组");
   assert.ok(install.includes("inputIntent(entry)"), "仓库地址与搜索合成一个输入框");
   assert.ok(install.includes("installPlan(selected.values())"), "跨仓库按仓库分组安装");
-  assert.ok(install.includes("width: 860"), "宽抽屉");
+  assert.ok(install.includes("width={860}"), "宽抽屉");
 });

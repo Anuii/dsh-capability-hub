@@ -22,28 +22,31 @@ export const PANEL_ORDER = 30;
 
 /** 侧栏行里的字形（该行 DOM 中唯一由本插件拥有的节点）。 */
 export function CapabilityHubPanelIcon({ size, active }: { size: number; active?: boolean }): React.ReactElement {
-  return React.createElement("svg", {
-    "data-dsh-panel-entry": PANEL_ID,
-    viewBox: "0 0 16 16",
-    width: size,
-    height: size,
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.3",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    "aria-hidden": "true",
-    "data-active": active === true ? "" : undefined,
-  },
-  React.createElement("rect", { x: "2.2", y: "2.2", width: "11.6", height: "11.6", rx: "2.4" }),
-  React.createElement("path", { d: "M2.2 6.2h11.6" }),
-  React.createElement("path", { d: "M6.6 6.2v7.6" }),
-  React.createElement("circle", { cx: "4.3", cy: "4.2", r: "0.55", fill: "currentColor", stroke: "none" }));
+  return (
+    <svg
+      data-dsh-panel-entry={PANEL_ID}
+      viewBox="0 0 16 16"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      data-active={active === true ? "" : undefined}
+    >
+      <rect x="2.2" y="2.2" width="11.6" height="11.6" rx="2.4" />
+      <path d="M2.2 6.2h11.6" />
+      <path d="M6.6 6.2v7.6" />
+      <circle cx="4.3" cy="4.2" r="0.55" fill="currentColor" stroke="none" />
+    </svg>
+  );
 }
 
 /** 中央面板组件。 */
 function CapabilityHubMain(props: Record<string, unknown>): React.ReactElement {
-  return React.createElement(CapabilityHubPage, props);
+  return <CapabilityHubPage {...props} />;
 }
 
 /** 一个 slot 客户端面（便于测试注入替身）。 */
@@ -66,16 +69,30 @@ export interface LayoutFace {
 export function registerCapabilityHubPanel(slots: SlotsFace, layout: LayoutFace | undefined): () => void {
   const disposers: Array<() => void> = [];
   try {
-    disposers.push(slots.inject("sidebar.panellist", () => slots.register({
-      name: "sidebar.panellist",
-      id: PANEL_ID,
-      order: PANEL_ORDER,
-      label: () => tt("entry.label"),
-    }, CapabilityHubPanelIcon)));
-    disposers.push(slots.inject("main", () => slots.register({
-      name: "main",
-      key: PANEL_ID,
-    }, CapabilityHubMain)));
+    disposers.push(
+      slots.inject("sidebar.panellist", () =>
+        slots.register(
+          {
+            name: "sidebar.panellist",
+            id: PANEL_ID,
+            order: PANEL_ORDER,
+            label: () => tt("entry.label"),
+          },
+          CapabilityHubPanelIcon,
+        ),
+      ),
+    );
+    disposers.push(
+      slots.inject("main", () =>
+        slots.register(
+          {
+            name: "main",
+            key: PANEL_ID,
+          },
+          CapabilityHubMain,
+        ),
+      ),
+    );
   } catch (error) {
     console.warn("[capability-hub] 面板注册失败：", error);
   }

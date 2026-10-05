@@ -20,28 +20,30 @@ export function Section(props: {
   const [open, setOpen] = React.useState<boolean>(props.defaultCollapsed !== true);
   const collapsible = props.collapsible === true;
   const expanded = collapsible ? open : true;
-  const title = collapsible
-    ? React.createElement("button", {
-      type: "button",
-      className: kit.sectionTitle,
-      "data-collapsible": "",
-      "aria-expanded": expanded,
-      "data-testid": props.testId === undefined ? undefined : props.testId + "-toggle",
-      onClick: () => setOpen((prev) => !prev),
-    },
-    React.createElement(SectionChevron, { open: expanded, className: kit.sectionChevron }),
-    React.createElement("span", null, props.title))
-    : React.createElement("span", { className: kit.sectionTitle }, props.title);
-  return React.createElement("section", {
-    className: kit.section,
-    "data-testid": props.testId,
-  },
-  React.createElement("div", { className: kit.sectionHead },
-    title,
-    props.end === undefined ? null : React.createElement("span", { className: kit.sectionEnd }, props.end)),
-  expanded
-    ? React.createElement("div", { className: kit.sectionBody }, props.children)
-    : null);
+  const title = collapsible ? (
+    <button
+      type="button"
+      className={kit.sectionTitle}
+      data-collapsible=""
+      aria-expanded={expanded}
+      data-testid={props.testId === undefined ? undefined : props.testId + "-toggle"}
+      onClick={() => setOpen((prev) => !prev)}
+    >
+      <SectionChevron open={expanded} className={kit.sectionChevron} />
+      <span>{props.title}</span>
+    </button>
+  ) : (
+    <span className={kit.sectionTitle}>{props.title}</span>
+  );
+  return (
+    <section className={kit.section} data-testid={props.testId}>
+      <div className={kit.sectionHead}>
+        {title}
+        {props.end === undefined ? null : <span className={kit.sectionEnd}>{props.end}</span>}
+      </div>
+      {expanded ? <div className={kit.sectionBody}>{props.children}</div> : null}
+    </section>
+  );
 }
 
 /** 一项键值。 */
@@ -56,19 +58,23 @@ export interface KeyValueItem {
 }
 
 /** 键值网格。 */
-export function KeyValue(props: {
-  items: readonly KeyValueItem[];
-  testId?: string;
-}): React.ReactElement {
-  return React.createElement("dl", { className: kit.kv, "data-testid": props.testId },
-    props.items.flatMap((item, index) => [
-      React.createElement("dt", { key: "k" + String(index), className: kit.kvKey }, item.label),
-      React.createElement("dd", {
-        key: "v" + String(index),
-        className: kit.kvValue,
-        "data-mono": item.mono === true ? "" : undefined,
-        title: item.title,
-        "data-testid": item.testId,
-      }, item.value),
-    ]));
+export function KeyValue(props: { items: readonly KeyValueItem[]; testId?: string }): React.ReactElement {
+  return (
+    <dl className={kit.kv} data-testid={props.testId}>
+      {props.items.flatMap((item, index) => [
+        <dt key={"k" + String(index)} className={kit.kvKey}>
+          {item.label}
+        </dt>,
+        <dd
+          key={"v" + String(index)}
+          className={kit.kvValue}
+          data-mono={item.mono === true ? "" : undefined}
+          title={item.title}
+          data-testid={item.testId}
+        >
+          {item.value}
+        </dd>,
+      ])}
+    </dl>
+  );
 }

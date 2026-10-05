@@ -12,7 +12,14 @@
 import * as React from "react";
 import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, GripIcon, ListGroup, ListRow, ListSurface, StatusDot, kit } from "../../kit/index.ts";
-import { activeInstanceCount, cooldownRemainingMs, rowSubtitleText, rowSubtitleTitle, serverStatusTone, statusTitle } from "./model.ts";
+import {
+  activeInstanceCount,
+  cooldownRemainingMs,
+  rowSubtitleText,
+  rowSubtitleTitle,
+  serverStatusTone,
+  statusTitle,
+} from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { RuntimeServerView, RuntimeStatus } from "../contract/runtime.ts";
@@ -35,12 +42,11 @@ function runtimeOf(runtime: RuntimeStatus | undefined, name: string): RuntimeSer
 
 /** 拖动把手的节点（交给 kit 的行首插槽；只有它是 draggable，行本身不拖）。 */
 function dragHandle(name: string): React.ReactElement {
-  return React.createElement("span", {
-    className: styles.grip,
-    draggable: true,
-    title: t("mcp.row.dragHint"),
-    "data-testid": "mcp-grip-" + name,
-  }, React.createElement(GripIcon, null));
+  return (
+    <span className={styles.grip} draggable title={t("mcp.row.dragHint")} data-testid={"mcp-grip-" + name}>
+      <GripIcon />
+    </span>
+  );
 }
 
 function ServerRow(props: {
@@ -57,33 +63,50 @@ function ServerRow(props: {
   const row = props.row;
   const tone = serverStatusTone(row, props.instances, props.now);
   const cooling = cooldownRemainingMs(row?.lastFailure, props.now) > 0;
-  const badges = row?.lastFailure === undefined
-    ? []
-    : [
-        cooling
-          ? React.createElement(Badge, { key: "cooling", tone: "warn", testId: "mcp-badge-cooling-" + name }, t("mcp.row.badgeCooling"))
-          : React.createElement(Badge, { key: "failed", tone: "danger", testId: "mcp-badge-failed-" + name }, t("mcp.row.badgeFailed")),
-      ];
+  const badges =
+    row?.lastFailure === undefined
+      ? []
+      : [
+          cooling ? (
+            <Badge key="cooling" tone="warn" testId={"mcp-badge-cooling-" + name}>
+              {t("mcp.row.badgeCooling")}
+            </Badge>
+          ) : (
+            <Badge key="failed" tone="danger" testId={"mcp-badge-failed-" + name}>
+              {t("mcp.row.badgeFailed")}
+            </Badge>
+          ),
+        ];
   const dotTitle = statusTitle(tone);
-  return React.createElement(ListRow, {
-    testId: "mcp-row-" + name,
-    title: name,
-    subtitle: rowSubtitleText(view, row),
-    subtitleTitle: rowSubtitleTitle(view),
-    subtitleMono: true,
-    leading: dotTitle === undefined
-      ? tone
-      : React.createElement("span", { title: dotTitle, "data-testid": "mcp-dot-" + name }, React.createElement(StatusDot, { tone })),
-    badges,
-    dragHandle: dragHandle(name),
-    trailing: React.createElement(Switch, {
-      checked: !view.disabled,
-      disabled: props.busy,
-      label: t("mcp.row.toggleLabel", { name }),
-      onChange: (next: boolean) => props.onToggle(view, !next),
-    }),
-    onOpen: () => props.onOpen(view),
-  });
+  return (
+    <ListRow
+      testId={"mcp-row-" + name}
+      title={name}
+      subtitle={rowSubtitleText(view, row)}
+      subtitleTitle={rowSubtitleTitle(view)}
+      subtitleMono
+      leading={
+        dotTitle === undefined ? (
+          tone
+        ) : (
+          <span title={dotTitle} data-testid={"mcp-dot-" + name}>
+            <StatusDot tone={tone} />
+          </span>
+        )
+      }
+      badges={badges}
+      dragHandle={dragHandle(name)}
+      trailing={
+        <Switch
+          checked={!view.disabled}
+          disabled={props.busy}
+          label={t("mcp.row.toggleLabel", { name })}
+          onChange={(next: boolean) => props.onToggle(view, !next)}
+        />
+      }
+      onOpen={() => props.onOpen(view)}
+    />
+  );
 }
 
 export function ServerList(props: ServerListProps): React.ReactElement {
@@ -108,43 +131,50 @@ export function ServerList(props: ServerListProps): React.ReactElement {
     for (const node of Array.from(host.querySelectorAll("[data-dragging]"))) node.removeAttribute("data-dragging");
   };
 
-  return React.createElement("div", {
-    ref: containerRef,
-    onDragStart: (event: React.DragEvent) => {
-      const index = indexOfTarget(event.target);
-      if (index === undefined) return;
-      fromRef.current = index;
-      overRef.current = index;
-      const row = (event.target as HTMLElement).closest("." + kit.row);
-      row?.setAttribute("data-dragging", "");
-    },
-    onDragOver: (event: React.DragEvent) => {
-      if (fromRef.current === undefined) return;
-      event.preventDefault();
-      const index = indexOfTarget(event.target);
-      if (index !== undefined) overRef.current = index;
-    },
-    onDrop: (event: React.DragEvent) => {
-      const from = fromRef.current;
-      const to = indexOfTarget(event.target) ?? overRef.current;
-      event.preventDefault();
-      clearDragging();
-      if (from !== undefined && to !== undefined && from !== to) props.onReorder(from, to);
-    },
-    onDragEnd: clearDragging,
-  },
-  // 只有一组服务器时**不显示分组标题**：UI-C 起 ListGroup 的 title 可选，不传就只留面板外观
-  // （圆角 / 边框 / 底色仍由 kit 给）。之前这里手写了一份 .chmcp_panel，已删掉。
-  React.createElement(ListSurface, { testId: "mcp-list" },
-    React.createElement(ListGroup, { testId: "mcp-group" },
-      props.servers.map((view) => React.createElement(ServerRow, {
-        key: view.serverName,
-        view,
-        row: runtimeOf(props.runtime, view.serverName),
-        instances: activeInstanceCount(props.runtime, view.serverName),
-        busy: props.busy.has(view.serverName),
-        now: props.now,
-        onToggle: props.onToggle,
-        onOpen: props.onOpen,
-      })))));
+  return (
+    <div
+      ref={containerRef}
+      onDragStart={(event: React.DragEvent) => {
+        const index = indexOfTarget(event.target);
+        if (index === undefined) return;
+        fromRef.current = index;
+        overRef.current = index;
+        const row = (event.target as HTMLElement).closest("." + kit.row);
+        row?.setAttribute("data-dragging", "");
+      }}
+      onDragOver={(event: React.DragEvent) => {
+        if (fromRef.current === undefined) return;
+        event.preventDefault();
+        const index = indexOfTarget(event.target);
+        if (index !== undefined) overRef.current = index;
+      }}
+      onDrop={(event: React.DragEvent) => {
+        const from = fromRef.current;
+        const to = indexOfTarget(event.target) ?? overRef.current;
+        event.preventDefault();
+        clearDragging();
+        if (from !== undefined && to !== undefined && from !== to) props.onReorder(from, to);
+      }}
+      onDragEnd={clearDragging}
+    >
+      {/* 只有一组服务器时**不显示分组标题**：UI-C 起 ListGroup 的 title 可选，不传就只留面板外观 */}
+      {/* （圆角 / 边框 / 底色仍由 kit 给）。之前这里手写了一份 .chmcp_panel，已删掉。 */}
+      <ListSurface testId="mcp-list">
+        <ListGroup testId="mcp-group">
+          {props.servers.map((view) => (
+            <ServerRow
+              key={view.serverName}
+              view={view}
+              row={runtimeOf(props.runtime, view.serverName)}
+              instances={activeInstanceCount(props.runtime, view.serverName)}
+              busy={props.busy.has(view.serverName)}
+              now={props.now}
+              onToggle={props.onToggle}
+              onOpen={props.onOpen}
+            />
+          ))}
+        </ListGroup>
+      </ListSurface>
+    </div>
+  );
 }

@@ -86,18 +86,23 @@ export function SkillDetailDrawer(props: SkillDetailProps): React.ReactElement {
     { label: t("skills.detail.skillId"), value: skill.id, mono: true },
     {
       label: t("skills.detail.path"),
-      value: React.createElement("span", { className: styles.pathWrap, "data-testid": "skills-detail-path" }, detailPath),
+      value: (
+        <span className={styles.pathWrap} data-testid="skills-detail-path">
+          {detailPath}
+        </span>
+      ),
       ...(detailPath === skill.path ? {} : { title: skill.path }),
     },
     {
       label: t("skills.detail.root"),
-      value: root === undefined
-        ? skill.rootId
-        : t("skills.detail.rootValue", {
-          root: root.rootId,
-          path: abbreviateHomePath(root.path, props.homeDir),
-          mode: root.writable ? t("skills.root.writable") : t("skills.root.readonly"),
-        }),
+      value:
+        root === undefined
+          ? skill.rootId
+          : t("skills.detail.rootValue", {
+              root: root.rootId,
+              path: abbreviateHomePath(root.path, props.homeDir),
+              mode: root.writable ? t("skills.root.writable") : t("skills.root.readonly"),
+            }),
       ...(root === undefined ? {} : { title: root.path }),
     },
     {
@@ -109,101 +114,152 @@ export function SkillDetailDrawer(props: SkillDetailProps): React.ReactElement {
       }),
     },
     // 调用权限（D-B17）：模型调用由右上开关控制；用户调用只读展示（键缺省即允许）。
-    { label: t("skills.access.model"), value: modelAccessText(invocationAccess(skill)), testId: "skills-detail-access-model" },
-    { label: t("skills.access.user"), value: userAccessText(invocationAccess(skill)), testId: "skills-detail-access-user" },
-    { label: t("skills.detail.visibility"), value: skill.modelVisible ? t("skills.detail.visibleYes") : t("skills.detail.visibleNo") },
-    { label: t("skills.detail.mtime"), value: skill.mtimeMs > 0 ? formatDateTime(new Date(skill.mtimeMs).toISOString()) : t("skills.detail.none") },
-    ...(skill.extraKeys.length === 0 ? [] : [{ label: t("skills.detail.extraKeys"), value: skill.extraKeys.join("、"), mono: true }]),
+    {
+      label: t("skills.access.model"),
+      value: modelAccessText(invocationAccess(skill)),
+      testId: "skills-detail-access-model",
+    },
+    {
+      label: t("skills.access.user"),
+      value: userAccessText(invocationAccess(skill)),
+      testId: "skills-detail-access-user",
+    },
+    {
+      label: t("skills.detail.visibility"),
+      value: skill.modelVisible ? t("skills.detail.visibleYes") : t("skills.detail.visibleNo"),
+    },
+    {
+      label: t("skills.detail.mtime"),
+      value: skill.mtimeMs > 0 ? formatDateTime(new Date(skill.mtimeMs).toISOString()) : t("skills.detail.none"),
+    },
+    ...(skill.extraKeys.length === 0
+      ? []
+      : [{ label: t("skills.detail.extraKeys"), value: skill.extraKeys.join("、"), mono: true }]),
   ];
 
-  const health = skill.diagnostics.length === 0
-    ? React.createElement("p", { className: styles.note, "data-testid": "skills-detail-health-ok" }, t("skills.detail.healthOk"))
-    : React.createElement("ul", { className: styles.diag, "data-testid": "skills-detail-diagnostics" },
-      skill.diagnostics.map((diagnostic, index) => React.createElement("li", {
-        key: diagnostic.code + "-" + String(index),
-        className: styles.diagRow,
-        "data-diag-level": diagnostic.level,
-        "data-diag-code": diagnostic.code,
-      },
-      React.createElement(Badge, { tone: levelTone(diagnostic.level) }, levelLabel(diagnostic.level)),
-      React.createElement("span", { className: styles.diagText }, diagnostic.message),
-      React.createElement("code", { className: styles.code }, diagnostic.code))));
+  const health =
+    skill.diagnostics.length === 0 ? (
+      <p className={styles.note} data-testid="skills-detail-health-ok">
+        {t("skills.detail.healthOk")}
+      </p>
+    ) : (
+      <ul className={styles.diag} data-testid="skills-detail-diagnostics">
+        {skill.diagnostics.map((diagnostic, index) => (
+          <li
+            key={diagnostic.code + "-" + String(index)}
+            className={styles.diagRow}
+            data-diag-level={diagnostic.level}
+            data-diag-code={diagnostic.code}
+          >
+            <Badge tone={levelTone(diagnostic.level)}>{levelLabel(diagnostic.level)}</Badge>
+            <span className={styles.diagText}>{diagnostic.message}</span>
+            <code className={styles.code}>{diagnostic.code}</code>
+          </li>
+        ))}
+      </ul>
+    );
 
-  const filesNode = error !== undefined
-    ? React.createElement("p", { className: styles.errorBox, "data-testid": "skills-detail-error" }, t("skills.detail.failed", { message: error }))
-    : view === undefined
-      ? React.createElement(SkeletonRows, { rows: 3, testId: "skills-detail-loading" })
-      : files.length === 0
-        ? React.createElement("p", { className: styles.note }, t("skills.detail.none"))
-        : React.createElement("div", { className: styles.files, "data-testid": "skills-detail-files" },
-          files.map((file) => React.createElement("div", {
-            key: file.path,
-            className: styles.fileRow,
-            style: { paddingLeft: String(fileDepth(file.path) * 12) + "px" },
-          },
-          React.createElement("span", { className: file.isDir ? styles.fileName + " " + styles.fileDir : styles.fileName }, file.isDir ? fileName(file.path) + "/" : fileName(file.path)),
-          React.createElement("span", { className: styles.fileSize }, file.isDir ? "" : formatBytes(file.size)))));
+  const filesNode =
+    error !== undefined ? (
+      <p className={styles.errorBox} data-testid="skills-detail-error">
+        {t("skills.detail.failed", { message: error })}
+      </p>
+    ) : view === undefined ? (
+      <SkeletonRows rows={3} testId="skills-detail-loading" />
+    ) : files.length === 0 ? (
+      <p className={styles.note}>{t("skills.detail.none")}</p>
+    ) : (
+      <div className={styles.files} data-testid="skills-detail-files">
+        {files.map((file) => (
+          <div
+            key={file.path}
+            className={styles.fileRow}
+            style={{ paddingLeft: String(fileDepth(file.path) * 12) + "px" }}
+          >
+            <span className={file.isDir ? styles.fileName + " " + styles.fileDir : styles.fileName}>
+              {file.isDir ? fileName(file.path) + "/" : fileName(file.path)}
+            </span>
+            <span className={styles.fileSize}>{file.isDir ? "" : formatBytes(file.size)}</span>
+          </div>
+        ))}
+      </div>
+    );
 
-  return React.createElement(Drawer, {
-    open: true,
-    title: name,
-    subtitle: detailPath,
-    subtitleTitle: skill.path,
-    testId: "skills-detail",
-    onClose: props.onClose,
-    // 只读技能不放开关（与列表一致）：调用权限在「概览」里写明。
-    ...(!skill.writable
-      ? {}
-      : {
-          headerEnd: React.createElement(Switch, {
-            checked: !skill.modelInvocationDisabled,
-            disabled: props.busy || blocked !== undefined,
-            label: toggleLabel(skill),
-            ...(blocked === undefined ? {} : { title: blocked }),
-            onChange: (next: boolean) => props.onToggle(next),
-          }),
-        }),
-    footer: React.createElement(React.Fragment, null,
-      React.createElement(Button, {
-        variant: "ghost",
-        size: "sm",
-        className: kit.dangerButton,
-        "data-testid": "skills-detail-delete",
-        onClick: props.onDelete,
-      }, isFlatSkill(skill) ? t("skills.delete.buttonFlat") : t("skills.delete.button"))),
-  },
-  React.createElement(Section, { title: t("skills.detail.overview"), testId: "skills-detail-overview" },
-    React.createElement(KeyValue, { items: overviewItems, testId: "skills-detail-kv" })),
-  React.createElement(Section, { title: t("skills.detail.health"), testId: "skills-detail-health" }, health),
-  // 「来源与更新」是一整段：来源那部分渲染完之后，由它自己把「更新」接在下面（有来源时才出现）。
-  React.createElement(Section, { title: t("skills.detail.source"), testId: "skills-detail-source" },
-    React.createElement(SkillSourceSection, {
-      skill,
-      workspace: props.workspace,
-      onChanged: props.onChanged,
-      onOpenTrash: props.onOpenTrash,
-    })),
-  React.createElement(Section, {
-    title: t("skills.detail.files"),
-    end: view === undefined ? undefined : React.createElement("span", { className: styles.code }, t("skills.detail.filesCount", { count: files.length })),
-    testId: "skills-detail-files-section",
-  },
-  filesNode,
-  files.length >= 500 ? React.createElement("p", { className: styles.note }, t("skills.detail.filesTruncated")) : null),
-  React.createElement(Section, {
-    title: t("skills.detail.content"),
-    collapsible: true,
-    defaultCollapsed: true,
-    testId: "skills-detail-content",
-  },
-  view === undefined
-    ? null
-    : React.createElement("div", { className: styles.codeWrap },
-      React.createElement(CodeBlock, {
-        code: view.content,
-        lang: "markdown",
-        lineNumbers: true,
-        copyLabel: t("skills.detail.copy"),
-        copiedLabel: t("skills.detail.copied"),
-      }))));
+  return (
+    <Drawer
+      open
+      title={name}
+      subtitle={detailPath}
+      subtitleTitle={skill.path}
+      testId="skills-detail"
+      onClose={props.onClose}
+      /* 只读技能不放开关（与列表一致）：调用权限在「概览」里写明。 */ {...(!skill.writable
+        ? {}
+        : {
+            headerEnd: (
+              <Switch
+                checked={!skill.modelInvocationDisabled}
+                disabled={props.busy || blocked !== undefined}
+                label={toggleLabel(skill)}
+                {...(blocked === undefined ? {} : { title: blocked })}
+                onChange={(next: boolean) => props.onToggle(next)}
+              />
+            ),
+          })}
+      footer={
+        <React.Fragment>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={kit.dangerButton}
+            data-testid="skills-detail-delete"
+            onClick={props.onDelete}
+          >
+            {isFlatSkill(skill) ? t("skills.delete.buttonFlat") : t("skills.delete.button")}
+          </Button>
+        </React.Fragment>
+      }
+    >
+      <Section title={t("skills.detail.overview")} testId="skills-detail-overview">
+        <KeyValue items={overviewItems} testId="skills-detail-kv" />
+      </Section>
+      <Section title={t("skills.detail.health")} testId="skills-detail-health">
+        {health}
+      </Section>
+      {/* 「来源与更新」是一整段：来源那部分渲染完之后，由它自己把「更新」接在下面（有来源时才出现）。 */}
+      <Section title={t("skills.detail.source")} testId="skills-detail-source">
+        <SkillSourceSection
+          skill={skill}
+          workspace={props.workspace}
+          onChanged={props.onChanged}
+          onOpenTrash={props.onOpenTrash}
+        />
+      </Section>
+      <Section
+        title={t("skills.detail.files")}
+        end={
+          view === undefined ? undefined : (
+            <span className={styles.code}>{t("skills.detail.filesCount", { count: files.length })}</span>
+          )
+        }
+        testId="skills-detail-files-section"
+      >
+        {filesNode}
+        {files.length >= 500 ? <p className={styles.note}>{t("skills.detail.filesTruncated")}</p> : null}
+      </Section>
+      <Section title={t("skills.detail.content")} collapsible defaultCollapsed testId="skills-detail-content">
+        {view === undefined ? null : (
+          <div className={styles.codeWrap}>
+            <CodeBlock
+              code={view.content}
+              lang="markdown"
+              lineNumbers
+              copyLabel={t("skills.detail.copy")}
+              copiedLabel={t("skills.detail.copied")}
+            />
+          </div>
+        )}
+      </Section>
+    </Drawer>
+  );
 }

@@ -113,8 +113,12 @@ export function JsonPasteView(props: JsonPasteViewProps): React.ReactElement {
           okNames.push(row.name);
         } catch (error: unknown) {
           const details = fieldErrorsOf(error);
-          const detailText = details.length > 0 ? "（" + details.map((item) => item.path + " " + item.message).join("；") + "）" : "";
-          collected[row.index] = { ok: false, text: t("mcp.paste.resultFailed", { message: errorMessage(error) }) + detailText };
+          const detailText =
+            details.length > 0 ? "（" + details.map((item) => item.path + " " + item.message).join("；") + "）" : "";
+          collected[row.index] = {
+            ok: false,
+            text: t("mcp.paste.resultFailed", { message: errorMessage(error) }) + detailText,
+          };
         }
         setResults({ ...collected });
       }
@@ -131,140 +135,171 @@ export function JsonPasteView(props: JsonPasteViewProps): React.ReactElement {
 
   const list = rows ?? [];
   const blocked = blockedRows(list, selected);
-  const placeholders = rows === undefined ? [] : placeholderNames(list.map((row) => ({ ...row.server, serverName: row.name })));
+  const placeholders =
+    rows === undefined ? [] : placeholderNames(list.map((row) => ({ ...row.server, serverName: row.name })));
 
-  return React.createElement("div", { className: styles.intakeBody, "data-testid": "mcp-paste" },
-    React.createElement("p", { className: styles.intakeHint }, t("mcp.paste.hint")),
-    React.createElement("div", { className: styles.field },
-      React.createElement("label", { className: styles.fieldLabel, htmlFor: "mcp-paste-textarea" }, t("mcp.paste.textLabel")),
-      React.createElement("textarea", {
-        id: "mcp-paste-textarea",
-        "data-testid": "mcp-paste-textarea",
-        className: styles.jsonTextarea,
-        value: text,
-        placeholder: t("mcp.paste.placeholder"),
-        spellCheck: false,
-        onChange: (event: { target: { value: string } }) => setText(event.target.value),
-      })),
-    React.createElement("div", { className: styles.intakeToolbar },
-      React.createElement(Button, {
-        variant: "primary",
-        "data-testid": "mcp-paste-parse",
-        disabled: parsing,
-        onClick: parse,
-      }, parsing ? t("mcp.paste.parsing") : t("mcp.paste.parse")),
-      React.createElement(Button, {
-        variant: "outline",
-        "data-testid": "mcp-paste-clear",
-        onClick: clear,
-      }, t("mcp.paste.clear")),
-      rows === undefined || rows.length === 0
-        ? null
-        : React.createElement("span", { className: styles.small, "data-testid": "mcp-paste-selected" },
-            t("mcp.paste.found", { count: rows.length }) + " · " + t("mcp.paste.selected", { count: selected.length, total: rows.length }))),
-
-    rows !== undefined || parseError !== undefined
-      ? null
-      : React.createElement("p", { className: styles.intakeHint, "data-testid": "mcp-paste-empty" }, t("mcp.paste.empty")),
-
-    parseError === undefined
-      ? null
-      : React.createElement(Banner, { tone: "danger", testId: "mcp-paste-parse-error" },
-          React.createElement("span", null, t("mcp.paste.parseFailed")),
-          parseError.split("\n").map((line, index) =>
-            React.createElement("p", { key: index, className: styles.small, "data-testid": "mcp-paste-parse-error-line-" + index }, line))),
-
-    placeholders.length === 0
-      ? null
-      : React.createElement(Banner, { tone: "warn", testId: "mcp-paste-hidden-warning" },
-          t("mcp.paste.hiddenWarning", { names: placeholders.join("、") })),
-
-    warnings.length === 0
-      ? null
-      : React.createElement(Banner, { tone: "neutral", testId: "mcp-paste-warnings" },
-          React.createElement("span", null, t("mcp.paste.warnings", { count: warnings.length })),
-          React.createElement("ul", { className: styles.warnList },
-            warnings.map((warning, index) =>
-              React.createElement("li", { key: index, className: styles.warnItem }, t("mcp.paste.warningRow", { text: warning }))))),
-
-    rows === undefined
-      ? null
-      : rows.length === 0
-        ? null
-        : React.createElement("ul", { className: styles.pasteRows, "data-testid": "mcp-paste-rows" },
-            rows.map((row) => {
-              const result = results[row.index];
-              return React.createElement("li", {
-                  key: row.key,
-                  className: styles.pasteRow,
-                  "data-testid": "mcp-paste-row-" + row.index,
-                },
-                React.createElement("div", { className: styles.pasteRowHead },
-                  // 宿主 Checkbox 不转发未知 props，testid 只能挂在外层 span 上
-                  React.createElement("span", { className: styles.control, "data-testid": "mcp-paste-row-check-" + row.index },
-                    React.createElement(Checkbox, {
-                      checked: selected.includes(row.index),
-                      disabled: saving,
-                      label: t("mcp.paste.selectRow", { name: row.name }),
-                      onChange: () => setSelected((current) => toggleSelection(current, row.index)),
-                    })),
-                  row.status === "new"
-                    ? React.createElement("span", { className: styles.small, "data-testid": "mcp-paste-row-status-" + row.index }, t("mcp.paste.statusNew"))
-                    : React.createElement("span", { className: styles.warnItem, "data-testid": "mcp-paste-row-status-" + row.index },
-                        row.status === "conflict" ? t("mcp.paste.statusConflict") : t("mcp.paste.statusInvalid")),
-                  row.status === "new" || row.suggestedName === undefined
-                    ? null
-                    : React.createElement(Button, {
-                        size: "sm",
-                        variant: "outline",
-                        "data-testid": "mcp-paste-row-suggest-" + row.index,
-                        onClick: () => rename(row, row.suggestedName as string),
-                      }, t("mcp.paste.useSuggested", { name: row.suggestedName }))),
-                React.createElement("p", { className: styles.pasteRowSummary, "data-testid": "mcp-paste-row-summary-" + row.index }, row.summary),
-                React.createElement("div", { className: styles.field },
-                  React.createElement("label", { className: styles.fieldLabel }, t("mcp.paste.renameLabel")),
-                  React.createElement(Input, {
-                    "data-testid": "mcp-paste-row-name-" + row.index,
-                    value: row.name,
-                    disabled: saving,
-                    onChange: (event: { target: { value: string } }) => rename(row, event.target.value),
-                  }),
-                  React.createElement("p", { className: styles.hint }, t("mcp.paste.renameHint"))),
-                result === undefined
-                  ? null
-                  : React.createElement("p", {
-                      className: result.ok ? styles.resultOk : styles.resultFail,
-                      "data-testid": "mcp-paste-row-result-" + row.index,
-                    }, result.text));
-            })),
-
-    rows === undefined || rows.length === 0
-      ? null
-      : React.createElement("div", { className: styles.intakeToolbar },
-          React.createElement(Button, {
-            size: "sm",
-            variant: "outline",
-            "data-testid": "mcp-paste-select-all",
-            disabled: saving,
-            onClick: () => setSelected(defaultSelection(rows)),
-          }, t("mcp.paste.selectAll")),
-          React.createElement(Button, {
-            size: "sm",
-            variant: "outline",
-            "data-testid": "mcp-paste-clear-selection",
-            disabled: saving,
-            onClick: () => setSelected([]),
-          }, t("mcp.paste.clearSelection")),
-          React.createElement("span", { className: styles.spacer }),
-          React.createElement(Button, {
-            variant: "primary",
-            "data-testid": "mcp-paste-save",
-            disabled: saving || selected.length === 0 || blocked.length > 0,
-            onClick: save,
-          }, saving ? t("mcp.paste.saving") : t("mcp.paste.save", { count: selected.length }))),
-
-    blocked.length === 0
-      ? null
-      : React.createElement("p", { className: styles.warnItem, "data-testid": "mcp-paste-blocked" },
-          t("mcp.paste.blocked", { count: blocked.length })));
+  return (
+    <div className={styles.intakeBody} data-testid="mcp-paste">
+      <p className={styles.intakeHint}>{t("mcp.paste.hint")}</p>
+      <div className={styles.field}>
+        <label className={styles.fieldLabel} htmlFor="mcp-paste-textarea">
+          {t("mcp.paste.textLabel")}
+        </label>
+        <textarea
+          id="mcp-paste-textarea"
+          data-testid="mcp-paste-textarea"
+          className={styles.jsonTextarea}
+          value={text}
+          placeholder={t("mcp.paste.placeholder")}
+          spellCheck={false}
+          onChange={(event: { target: { value: string } }) => setText(event.target.value)}
+        />
+      </div>
+      <div className={styles.intakeToolbar}>
+        <Button variant="primary" data-testid="mcp-paste-parse" disabled={parsing} onClick={parse}>
+          {parsing ? t("mcp.paste.parsing") : t("mcp.paste.parse")}
+        </Button>
+        <Button variant="outline" data-testid="mcp-paste-clear" onClick={clear}>
+          {t("mcp.paste.clear")}
+        </Button>
+        {rows === undefined || rows.length === 0 ? null : (
+          <span className={styles.small} data-testid="mcp-paste-selected">
+            {t("mcp.paste.found", { count: rows.length }) +
+              " · " +
+              t("mcp.paste.selected", { count: selected.length, total: rows.length })}
+          </span>
+        )}
+      </div>
+      {rows !== undefined || parseError !== undefined ? null : (
+        <p className={styles.intakeHint} data-testid="mcp-paste-empty">
+          {t("mcp.paste.empty")}
+        </p>
+      )}
+      {parseError === undefined ? null : (
+        <Banner tone="danger" testId="mcp-paste-parse-error">
+          <span>{t("mcp.paste.parseFailed")}</span>
+          {parseError.split("\n").map((line, index) => (
+            <p key={index} className={styles.small} data-testid={"mcp-paste-parse-error-line-" + index}>
+              {line}
+            </p>
+          ))}
+        </Banner>
+      )}
+      {placeholders.length === 0 ? null : (
+        <Banner tone="warn" testId="mcp-paste-hidden-warning">
+          {t("mcp.paste.hiddenWarning", { names: placeholders.join("、") })}
+        </Banner>
+      )}
+      {warnings.length === 0 ? null : (
+        <Banner tone="neutral" testId="mcp-paste-warnings">
+          <span>{t("mcp.paste.warnings", { count: warnings.length })}</span>
+          <ul className={styles.warnList}>
+            {warnings.map((warning, index) => (
+              <li key={index} className={styles.warnItem}>
+                {t("mcp.paste.warningRow", { text: warning })}
+              </li>
+            ))}
+          </ul>
+        </Banner>
+      )}
+      {rows === undefined ? null : rows.length === 0 ? null : (
+        <ul className={styles.pasteRows} data-testid="mcp-paste-rows">
+          {rows.map((row) => {
+            const result = results[row.index];
+            return (
+              <li key={row.key} className={styles.pasteRow} data-testid={"mcp-paste-row-" + row.index}>
+                <div className={styles.pasteRowHead}>
+                  {/* 宿主 Checkbox 不转发未知 props，testid 只能挂在外层 span 上 */}
+                  <span className={styles.control} data-testid={"mcp-paste-row-check-" + row.index}>
+                    <Checkbox
+                      checked={selected.includes(row.index)}
+                      disabled={saving}
+                      label={t("mcp.paste.selectRow", { name: row.name })}
+                      onChange={() => setSelected((current) => toggleSelection(current, row.index))}
+                    />
+                  </span>
+                  {row.status === "new" ? (
+                    <span className={styles.small} data-testid={"mcp-paste-row-status-" + row.index}>
+                      {t("mcp.paste.statusNew")}
+                    </span>
+                  ) : (
+                    <span className={styles.warnItem} data-testid={"mcp-paste-row-status-" + row.index}>
+                      {row.status === "conflict" ? t("mcp.paste.statusConflict") : t("mcp.paste.statusInvalid")}
+                    </span>
+                  )}
+                  {row.status === "new" || row.suggestedName === undefined ? null : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid={"mcp-paste-row-suggest-" + row.index}
+                      onClick={() => rename(row, row.suggestedName as string)}
+                    >
+                      {t("mcp.paste.useSuggested", { name: row.suggestedName })}
+                    </Button>
+                  )}
+                </div>
+                <p className={styles.pasteRowSummary} data-testid={"mcp-paste-row-summary-" + row.index}>
+                  {row.summary}
+                </p>
+                <div className={styles.field}>
+                  <label className={styles.fieldLabel}>{t("mcp.paste.renameLabel")}</label>
+                  <Input
+                    data-testid={"mcp-paste-row-name-" + row.index}
+                    value={row.name}
+                    disabled={saving}
+                    onChange={(event: { target: { value: string } }) => rename(row, event.target.value)}
+                  />
+                  <p className={styles.hint}>{t("mcp.paste.renameHint")}</p>
+                </div>
+                {result === undefined ? null : (
+                  <p
+                    className={result.ok ? styles.resultOk : styles.resultFail}
+                    data-testid={"mcp-paste-row-result-" + row.index}
+                  >
+                    {result.text}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {rows === undefined || rows.length === 0 ? null : (
+        <div className={styles.intakeToolbar}>
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid="mcp-paste-select-all"
+            disabled={saving}
+            onClick={() => setSelected(defaultSelection(rows))}
+          >
+            {t("mcp.paste.selectAll")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid="mcp-paste-clear-selection"
+            disabled={saving}
+            onClick={() => setSelected([])}
+          >
+            {t("mcp.paste.clearSelection")}
+          </Button>
+          <span className={styles.spacer} />
+          <Button
+            variant="primary"
+            data-testid="mcp-paste-save"
+            disabled={saving || selected.length === 0 || blocked.length > 0}
+            onClick={save}
+          >
+            {saving ? t("mcp.paste.saving") : t("mcp.paste.save", { count: selected.length })}
+          </Button>
+        </div>
+      )}
+      {blocked.length === 0 ? null : (
+        <p className={styles.warnItem} data-testid="mcp-paste-blocked">
+          {t("mcp.paste.blocked", { count: blocked.length })}
+        </p>
+      )}
+    </div>
+  );
 }

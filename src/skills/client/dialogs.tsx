@@ -16,10 +16,13 @@ import type { SkillSummary, TrashItem } from "../contract/local.ts";
 /** 逐字段错误（服务端 VALIDATION 的 details）。 */
 function FieldErrorList({ errors }: { errors: readonly FieldError[] }): React.ReactElement | null {
   if (errors.length === 0) return null;
-  return React.createElement("div", { className: styles.form },
-    errors.map((entry) =>
-      React.createElement("p", { key: entry.path + entry.message, className: styles.fieldError }, `${entry.path}：${entry.message}`),
-    ));
+  return (
+    <div className={styles.form}>
+      {errors.map((entry) => (
+        <p key={entry.path + entry.message} className={styles.fieldError}>{`${entry.path}：${entry.message}`}</p>
+      ))}
+    </div>
+  );
 }
 
 export interface DeleteSkillDialogProps {
@@ -35,47 +38,41 @@ export function DeleteSkillDialog(props: DeleteSkillDialogProps): React.ReactEle
   const { skill } = props;
   if (skill === undefined) return null;
   const name = displayName(skill).text;
-  return React.createElement(
-    Modal,
-    {
-      open: true,
-      onClose: props.onCancel,
-      title: t("skills.delete.title"),
-      closeLabel: t("skills.close"),
-      footer: [
-        React.createElement(
-          Button,
-          { key: "cancel", variant: "outline", "data-testid": "skills-delete-cancel", onClick: props.onCancel },
-          t("skills.cancel"),
-        ),
-        React.createElement(
-          Button,
-          {
-            key: "ok",
-            variant: "primary",
-            "data-testid": "skills-delete-confirm",
-            onClick: props.onConfirm,
-            disabled: props.busy,
-          },
-          t("skills.delete.confirm"),
-        ),
-      ],
-    },
-    React.createElement(
-      "div",
-      { className: styles.modalBody, "data-testid": "skills-delete-dialog" },
-      // 平铺 .md 技能是一个文件（不是目录），文案要说实话
-      React.createElement(
-        "p",
-        { className: styles.note, "data-testid": "skills-delete-body" },
-        isFlatSkill(skill) ? t("skills.delete.bodyFlat", { name }) : t("skills.delete.body", { name }),
-      ),
-      skill.rootId === "user-agents" && !isFlatSkill(skill)
-        ? React.createElement("p", { className: styles.note }, t("skills.delete.lock"))
-        : null,
-      React.createElement("p", { className: styles.code, "data-testid": "skills-delete-path" }, skill.path),
-      React.createElement(FieldErrorList, { errors: props.errors }),
-    ),
+  return (
+    <Modal
+      open
+      onClose={props.onCancel}
+      title={t("skills.delete.title")}
+      closeLabel={t("skills.close")}
+      footer={[
+        <Button key="cancel" variant="outline" data-testid="skills-delete-cancel" onClick={props.onCancel}>
+          {t("skills.cancel")}
+        </Button>,
+        <Button
+          key="ok"
+          variant="primary"
+          data-testid="skills-delete-confirm"
+          onClick={props.onConfirm}
+          disabled={props.busy}
+        >
+          {t("skills.delete.confirm")}
+        </Button>,
+      ]}
+    >
+      <div className={styles.modalBody} data-testid="skills-delete-dialog">
+        {/* 平铺 .md 技能是一个文件（不是目录），文案要说实话 */}
+        <p className={styles.note} data-testid="skills-delete-body">
+          {isFlatSkill(skill) ? t("skills.delete.bodyFlat", { name }) : t("skills.delete.body", { name })}
+        </p>
+        {skill.rootId === "user-agents" && !isFlatSkill(skill) ? (
+          <p className={styles.note}>{t("skills.delete.lock")}</p>
+        ) : null}
+        <p className={styles.code} data-testid="skills-delete-path">
+          {skill.path}
+        </p>
+        <FieldErrorList errors={props.errors} />
+      </div>
+    </Modal>
   );
 }
 
@@ -91,38 +88,32 @@ export function PurgeOneDialog(props: PurgeOneDialogProps): React.ReactElement |
   const { item } = props;
   if (item === undefined) return null;
   const name = item.name ?? item.dirName;
-  return React.createElement(
-    Modal,
-    {
-      open: true,
-      onClose: props.onCancel,
-      title: t("skills.trash.purgeOne.title"),
-      closeLabel: t("skills.close"),
-      footer: [
-        React.createElement(
-          Button,
-          { key: "cancel", variant: "outline", "data-testid": "skills-purge-one-cancel", onClick: props.onCancel },
-          t("skills.cancel"),
-        ),
-        React.createElement(
-          Button,
-          {
-            key: "ok",
-            variant: "primary",
-            "data-testid": "skills-purge-one-confirm",
-            onClick: props.onConfirm,
-            disabled: props.busy,
-          },
-          t("skills.trash.purgeConfirm"),
-        ),
-      ],
-    },
-    React.createElement(
-      "div",
-      { className: styles.modalBody, "data-testid": "skills-purge-one-dialog" },
-      React.createElement("p", { className: styles.note }, t("skills.trash.purgeOne.body", { name })),
-      React.createElement("p", { className: styles.code }, item.originalPath),
-    ),
+  return (
+    <Modal
+      open
+      onClose={props.onCancel}
+      title={t("skills.trash.purgeOne.title")}
+      closeLabel={t("skills.close")}
+      footer={[
+        <Button key="cancel" variant="outline" data-testid="skills-purge-one-cancel" onClick={props.onCancel}>
+          {t("skills.cancel")}
+        </Button>,
+        <Button
+          key="ok"
+          variant="primary"
+          data-testid="skills-purge-one-confirm"
+          onClick={props.onConfirm}
+          disabled={props.busy}
+        >
+          {t("skills.trash.purgeConfirm")}
+        </Button>,
+      ]}
+    >
+      <div className={styles.modalBody} data-testid="skills-purge-one-dialog">
+        <p className={styles.note}>{t("skills.trash.purgeOne.body", { name })}</p>
+        <p className={styles.code}>{item.originalPath}</p>
+      </div>
+    </Modal>
   );
 }
 
@@ -139,20 +130,22 @@ export interface PurgeAllDialogProps {
 /** 清空回收站：危险操作，用宿主的 RiskConfirmation（勾选后才能确认）。 */
 export function PurgeAllDialog(props: PurgeAllDialogProps): React.ReactElement | null {
   if (!props.open) return null;
-  return React.createElement(RiskConfirmation, {
-    open: true,
-    title: t("skills.trash.purgeAll.title"),
-    description: t("skills.trash.purgeAll.body", { count: props.count }),
-    acknowledgeLabel: t("skills.trash.purgeAck"),
-    cancelLabel: t("skills.cancel"),
-    closeLabel: t("skills.close"),
-    confirmLabel: t("skills.trash.purgeConfirm"),
-    acknowledged: props.acknowledged,
-    disabled: props.busy,
-    onAcknowledgedChange: props.onAcknowledgedChange,
-    onCancel: props.onCancel,
-    onConfirm: props.onConfirm,
-  });
+  return (
+    <RiskConfirmation
+      open
+      title={t("skills.trash.purgeAll.title")}
+      description={t("skills.trash.purgeAll.body", { count: props.count })}
+      acknowledgeLabel={t("skills.trash.purgeAck")}
+      cancelLabel={t("skills.cancel")}
+      closeLabel={t("skills.close")}
+      confirmLabel={t("skills.trash.purgeConfirm")}
+      acknowledged={props.acknowledged}
+      disabled={props.busy}
+      onAcknowledgedChange={props.onAcknowledgedChange}
+      onCancel={props.onCancel}
+      onConfirm={props.onConfirm}
+    />
+  );
 }
 
 export interface RestoreConflictDialogProps {
@@ -168,39 +161,33 @@ export function RestoreConflictDialog(props: RestoreConflictDialogProps): React.
   const { item } = props;
   if (item === undefined) return null;
   const name = item.name ?? item.dirName;
-  return React.createElement(
-    Modal,
-    {
-      open: true,
-      onClose: props.onCancel,
-      title: t("skills.trash.conflict.title"),
-      closeLabel: t("skills.close"),
-      description: name,
-      footer: [
-        React.createElement(
-          Button,
-          { key: "cancel", variant: "outline", "data-testid": "skills-restore-cancel", onClick: props.onCancel },
-          t("skills.cancel"),
-        ),
-        React.createElement(
-          Button,
-          {
-            key: "ok",
-            variant: "primary",
-            "data-testid": "skills-restore-confirm",
-            onClick: props.onConfirm,
-            disabled: props.busy,
-          },
-          t("skills.trash.conflict.confirm"),
-        ),
-      ],
-    },
-    React.createElement(
-      "div",
-      { className: styles.modalBody, "data-testid": "skills-restore-conflict-dialog" },
-      React.createElement("p", { className: styles.note }, t("skills.trash.conflict.body", { path: item.originalPath })),
-      React.createElement("p", { className: styles.code }, fileName(item.originalPath)),
-      React.createElement(FieldErrorList, { errors: props.errors }),
-    ),
+  return (
+    <Modal
+      open
+      onClose={props.onCancel}
+      title={t("skills.trash.conflict.title")}
+      closeLabel={t("skills.close")}
+      description={name}
+      footer={[
+        <Button key="cancel" variant="outline" data-testid="skills-restore-cancel" onClick={props.onCancel}>
+          {t("skills.cancel")}
+        </Button>,
+        <Button
+          key="ok"
+          variant="primary"
+          data-testid="skills-restore-confirm"
+          onClick={props.onConfirm}
+          disabled={props.busy}
+        >
+          {t("skills.trash.conflict.confirm")}
+        </Button>,
+      ]}
+    >
+      <div className={styles.modalBody} data-testid="skills-restore-conflict-dialog">
+        <p className={styles.note}>{t("skills.trash.conflict.body", { path: item.originalPath })}</p>
+        <p className={styles.code}>{fileName(item.originalPath)}</p>
+        <FieldErrorList errors={props.errors} />
+      </div>
+    </Modal>
   );
 }

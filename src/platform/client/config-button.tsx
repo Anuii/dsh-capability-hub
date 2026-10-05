@@ -36,25 +36,30 @@ export interface ConfigViewProps {
 
 /** 摘要视图：一行说明。 */
 function Summary(): React.ReactElement {
-  return React.createElement("span", { "data-testid": "capability-hub-row-summary" }, tt("config.summary"));
+  return <span data-testid="capability-hub-row-summary">{tt("config.summary")}</span>;
 }
 
 /** 行页面：一个「打开能力中心（MCP 服务器）」按钮。 */
 function RowPage({ layout }: { layout: LayoutFace | undefined }): React.ReactElement {
-  return React.createElement("div", { className: styles.placeholder, "data-testid": "capability-hub-row-config" },
-    React.createElement("p", { className: styles.placeholderText }, tt("config.summary")),
-    React.createElement("button", {
-      type: "button",
-      className: styles.button,
-      "data-testid": "capability-hub-open-mcp",
-      onClick: () => openCapabilityHub(layout, "mcp"),
-    }, tt("config.openMcp")));
+  return (
+    <div className={styles.placeholder} data-testid="capability-hub-row-config">
+      <p className={styles.placeholderText}>{tt("config.summary")}</p>
+      <button
+        type="button"
+        className={styles.button}
+        data-testid="capability-hub-open-mcp"
+        onClick={() => openCapabilityHub(layout, "mcp")}
+      >
+        {tt("config.openMcp")}
+      </button>
+    </div>
+  );
 }
 
 /** 行配置组件（两种 view 共用一个组件）。 */
 export function CapabilityHubRowConfig(props: ConfigViewProps & { layout?: LayoutFace }): React.ReactElement {
   // view 缺省按 page 处理：行详情页才是这个控件的主场。
-  return props.view === "summary" ? React.createElement(Summary) : React.createElement(RowPage, { layout: props.layout });
+  return props.view === "summary" ? <Summary /> : <RowPage layout={props.layout} />;
 }
 
 /**
@@ -66,10 +71,15 @@ export function CapabilityHubRowConfig(props: ConfigViewProps & { layout?: Layou
 export function registerRowConfig(slots: SlotsFace, layout: LayoutFace | undefined): () => void {
   let dispose: (() => void) | undefined;
   try {
-    dispose = slots.inject("plugins.row.config", () => slots.register({
-      name: "plugins.row.config",
-      key: ROW_CONFIG_KEY,
-    }, (props: ConfigViewProps) => React.createElement(CapabilityHubRowConfig, { ...props, layout })));
+    dispose = slots.inject("plugins.row.config", () =>
+      slots.register(
+        {
+          name: "plugins.row.config",
+          key: ROW_CONFIG_KEY,
+        },
+        (props: ConfigViewProps) => <CapabilityHubRowConfig {...props} layout={layout} />,
+      ),
+    );
   } catch (error) {
     console.warn("[capability-hub] 行配置注册失败：", error);
   }

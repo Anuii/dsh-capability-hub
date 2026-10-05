@@ -26,31 +26,41 @@ export interface DisconnectDialogProps {
 
 export function DisconnectDialog(props: DisconnectDialogProps): React.ReactElement {
   const target = props.target;
-  const targetText = target === undefined
-    ? ""
-    : target.sessionId === undefined
-      ? t("runtime.dialog.targetServer", { name: target.name })
-      : t("runtime.dialog.targetInstance", { sessionId: short(target.sessionId), name: target.name });
-  return React.createElement(Modal, {
-    open: target !== undefined,
-    onClose: props.onCancel,
-    title: t("runtime.dialog.title"),
-    closeLabel: t("runtime.close"),
-    footer: [
-      React.createElement(Button, { key: "cancel", "data-testid": "runtime-disconnect-cancel", onClick: props.onCancel }, t("runtime.dialog.cancel")),
-      React.createElement(Button, {
-        key: "confirm",
-        variant: "primary",
-        "data-testid": "runtime-disconnect-confirm",
-        disabled: props.busy,
-        onClick: () => {
-          if (target !== undefined) props.onConfirm(target);
-        },
-      }, t("runtime.dialog.confirm")),
-    ],
-  }, React.createElement("div", { className: styles.dialogBody, "data-testid": "runtime-disconnect-dialog" },
-    React.createElement("p", { className: styles.dialogText }, t("runtime.dialog.body", { target: targetText })),
-    React.createElement("p", { className: styles.small }, targetText)));
+  const targetText =
+    target === undefined
+      ? ""
+      : target.sessionId === undefined
+        ? t("runtime.dialog.targetServer", { name: target.name })
+        : t("runtime.dialog.targetInstance", { sessionId: short(target.sessionId), name: target.name });
+  return (
+    <Modal
+      open={target !== undefined}
+      onClose={props.onCancel}
+      title={t("runtime.dialog.title")}
+      closeLabel={t("runtime.close")}
+      footer={[
+        <Button key="cancel" data-testid="runtime-disconnect-cancel" onClick={props.onCancel}>
+          {t("runtime.dialog.cancel")}
+        </Button>,
+        <Button
+          key="confirm"
+          variant="primary"
+          data-testid="runtime-disconnect-confirm"
+          disabled={props.busy}
+          onClick={() => {
+            if (target !== undefined) props.onConfirm(target);
+          }}
+        >
+          {t("runtime.dialog.confirm")}
+        </Button>,
+      ]}
+    >
+      <div className={styles.dialogBody} data-testid="runtime-disconnect-dialog">
+        <p className={styles.dialogText}>{t("runtime.dialog.body", { target: targetText })}</p>
+        <p className={styles.small}>{targetText}</p>
+      </div>
+    </Modal>
+  );
 }
 
 function short(sessionId: string): string {

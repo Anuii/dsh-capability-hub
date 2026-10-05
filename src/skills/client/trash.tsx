@@ -30,55 +30,84 @@ export interface TrashDrawerProps {
 /** 回收站。 */
 export function TrashDrawer(props: TrashDrawerProps): React.ReactElement {
   const items = sortTrash(props.items);
-  return React.createElement(Drawer, {
-    open: props.open,
-    title: t("skills.trash.title"),
-    testId: "skills-trash",
-    onClose: props.onClose,
-    footer: React.createElement(React.Fragment, null,
-      React.createElement(Button, {
-        variant: "ghost",
-        size: "sm",
-        className: kit.dangerButton,
-        disabled: items.length === 0 || props.purgingAll,
-        "data-testid": "skills-trash-purge-all",
-        onClick: props.onPurgeAll,
-      }, t("skills.trash.purgeAll")),
-      React.createElement("span", { className: kit.drawerFootSpacer }),
-      React.createElement("button", {
-        type: "button",
-        className: kit.iconButton,
-        "data-testid": "skills-trash-refresh",
-        onClick: props.onRefresh,
-        title: t("skills.retry"),
-      }, "\u21bb")),
-  },
-  props.error === undefined ? null : React.createElement("p", { className: styles.errorBox }, props.error),
-  props.loading && items.length === 0 ? React.createElement("p", { className: styles.loading }, t("skills.loading")) : null,
-  items.length === 0
-    ? React.createElement(EmptyState, { testId: "skills-trash-empty", title: t("skills.trash.empty") })
-    : React.createElement(ListSurface, { testId: "skills-trash-list" },
-      React.createElement(ListGroup, { title: t("skills.trash.subtitle", { count: items.length }), testId: "skills-trash-group" },
-      items.map((item) => React.createElement(ListRow, {
-        key: item.trashId,
-        testId: "skills-trash-row-" + item.trashId,
-        title: item.name ?? item.dirName,
-        subtitle: t("skills.trash.rowSub", { reason: trashReasonLabel(item.reason), time: formatDateTime(item.deletedAt) }),
-        badges: item.hasLockEntry
-          ? [React.createElement(Badge, { key: "lock", tone: "neutral", title: t("skills.trash.originalPath", { path: item.originalPath }) }, t("skills.trash.lock"))]
-          : [],
-        hoverActions: [
-          {
-            label: t("skills.trash.restore"),
-            testId: "skills-trash-restore-" + item.trashId,
-            onClick: () => props.onRestore(item),
-          },
-          {
-            label: t("skills.trash.purge"),
-            danger: true,
-            testId: "skills-trash-purge-" + item.trashId,
-            onClick: () => props.onPurgeOne(item),
-          },
-        ],
-      })))));
+  return (
+    <Drawer
+      open={props.open}
+      title={t("skills.trash.title")}
+      testId="skills-trash"
+      onClose={props.onClose}
+      footer={
+        <React.Fragment>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={kit.dangerButton}
+            disabled={items.length === 0 || props.purgingAll}
+            data-testid="skills-trash-purge-all"
+            onClick={props.onPurgeAll}
+          >
+            {t("skills.trash.purgeAll")}
+          </Button>
+          <span className={kit.drawerFootSpacer} />
+          <button
+            type="button"
+            className={kit.iconButton}
+            data-testid="skills-trash-refresh"
+            onClick={props.onRefresh}
+            title={t("skills.retry")}
+          >
+            {"\u21bb"}
+          </button>
+        </React.Fragment>
+      }
+    >
+      {props.error === undefined ? null : <p className={styles.errorBox}>{props.error}</p>}
+      {props.loading && items.length === 0 ? <p className={styles.loading}>{t("skills.loading")}</p> : null}
+      {items.length === 0 ? (
+        <EmptyState testId="skills-trash-empty" title={t("skills.trash.empty")} />
+      ) : (
+        <ListSurface testId="skills-trash-list">
+          <ListGroup title={t("skills.trash.subtitle", { count: items.length })} testId="skills-trash-group">
+            {items.map((item) => (
+              <ListRow
+                key={item.trashId}
+                testId={"skills-trash-row-" + item.trashId}
+                title={item.name ?? item.dirName}
+                subtitle={t("skills.trash.rowSub", {
+                  reason: trashReasonLabel(item.reason),
+                  time: formatDateTime(item.deletedAt),
+                })}
+                badges={
+                  item.hasLockEntry
+                    ? [
+                        <Badge
+                          key="lock"
+                          tone="neutral"
+                          title={t("skills.trash.originalPath", { path: item.originalPath })}
+                        >
+                          {t("skills.trash.lock")}
+                        </Badge>,
+                      ]
+                    : []
+                }
+                hoverActions={[
+                  {
+                    label: t("skills.trash.restore"),
+                    testId: "skills-trash-restore-" + item.trashId,
+                    onClick: () => props.onRestore(item),
+                  },
+                  {
+                    label: t("skills.trash.purge"),
+                    danger: true,
+                    testId: "skills-trash-purge-" + item.trashId,
+                    onClick: () => props.onPurgeOne(item),
+                  },
+                ]}
+              />
+            ))}
+          </ListGroup>
+        </ListSurface>
+      )}
+    </Drawer>
+  );
 }

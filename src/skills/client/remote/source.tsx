@@ -70,7 +70,11 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
   const entry = findSourceFor(skill, state.sources);
 
   if (flat) {
-    return React.createElement("p", { className: styles.note, "data-testid": "skills-remote-flat-source-" + skill.id }, flatUnsupportedText());
+    return (
+      <p className={styles.note} data-testid={"skills-remote-flat-source-" + skill.id}>
+        {flatUnsupportedText()}
+      </p>
+    );
   }
 
   const back = (): void => {
@@ -173,162 +177,302 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
 
   const body: React.ReactNode[] = [];
   if (state.sourcesError !== undefined) {
-    body.push(React.createElement("p", { key: "err", className: styles.errorBox }, t("skills.remote.source.loadFailed", { message: state.sourcesError })));
+    body.push(
+      <p key="err" className={styles.errorBox}>
+        {t("skills.remote.source.loadFailed", { message: state.sourcesError })}
+      </p>,
+    );
   } else if (!state.sourcesLoaded) {
-    body.push(React.createElement("p", { key: "loading", className: styles.loading }, t("skills.remote.source.loading")));
+    body.push(
+      <p key="loading" className={styles.loading}>
+        {t("skills.remote.source.loading")}
+      </p>,
+    );
   } else if (entry === undefined) {
     // 无来源：这里只有这**一句**（UI-C 之前这句解释与下面按钮上的「无来源」各出现一次）。
-    body.push(React.createElement("p", { key: "none", className: styles.note, "data-testid": "skills-remote-source-none-" + skill.id }, t("skills.remote.update.status.noSource")));
+    body.push(
+      <p key="none" className={styles.note} data-testid={"skills-remote-source-none-" + skill.id}>
+        {t("skills.remote.update.status.noSource")}
+      </p>,
+    );
   } else {
-    body.push(React.createElement(KeyValue, {
-      key: "kv",
-      testId: "skills-remote-source-kv-" + skill.id,
-      items: [
-        { label: t("skills.remote.source.origin"), value: sourceRepoRef(entry), mono: true, title: sourceTitle(entry), testId: "skills-remote-source-repo-" + skill.id },
-        { label: t("skills.remote.source.store"), value: storeLabel(entry.store) },
-        { label: t("skills.remote.source.updatedAt"), value: entry.updatedAt === undefined ? t("skills.detail.none") : formatDateTime(entry.updatedAt) },
-      ],
-    }));
+    body.push(
+      <KeyValue
+        key="kv"
+        testId={"skills-remote-source-kv-" + skill.id}
+        items={[
+          {
+            label: t("skills.remote.source.origin"),
+            value: sourceRepoRef(entry),
+            mono: true,
+            title: sourceTitle(entry),
+            testId: "skills-remote-source-repo-" + skill.id,
+          },
+          { label: t("skills.remote.source.store"), value: storeLabel(entry.store) },
+          {
+            label: t("skills.remote.source.updatedAt"),
+            value: entry.updatedAt === undefined ? t("skills.detail.none") : formatDateTime(entry.updatedAt),
+          },
+        ]}
+      />,
+    );
     if (entry.orphan === true) {
-      body.push(React.createElement("p", { key: "orphan", className: styles.note }, t("skills.remote.source.orphan")));
+      body.push(
+        <p key="orphan" className={styles.note}>
+          {t("skills.remote.source.orphan")}
+        </p>,
+      );
     }
   }
 
   const actions: React.ReactNode[] = [];
   // 「推测来源 / 手动登记」只在**无来源**时出现；有来源时想换来源先取消登记（下面那段里）。
   if (state.sourcesLoaded && state.sourcesError === undefined && step === "view" && entry === undefined) {
-    actions.push(React.createElement(Button, {
-      key: "discover",
-      size: "sm",
-      variant: "ghost",
-      disabled: busy,
-      "data-testid": "skills-remote-source-discover",
-      onClick: runDiscover,
-    }, t("skills.remote.source.discover")));
-    actions.push(React.createElement(Button, {
-      key: "manual",
-      size: "sm",
-      variant: "ghost",
-      disabled: busy,
-      "data-testid": "skills-remote-source-manual",
-      onClick: openManual,
-    }, t("skills.remote.source.manual")));
+    actions.push(
+      <Button
+        key="discover"
+        size="sm"
+        variant="ghost"
+        disabled={busy}
+        data-testid="skills-remote-source-discover"
+        onClick={runDiscover}
+      >
+        {t("skills.remote.source.discover")}
+      </Button>,
+    );
+    actions.push(
+      <Button
+        key="manual"
+        size="sm"
+        variant="ghost"
+        disabled={busy}
+        data-testid="skills-remote-source-manual"
+        onClick={openManual}
+      >
+        {t("skills.remote.source.manual")}
+      </Button>,
+    );
   }
 
   if (step === "discover") {
     const list = candidates ?? [];
-    body.push(React.createElement("div", { key: "discover", className: styles.inlineRow, "data-testid": "skills-remote-candidates" },
-      busy && candidates === undefined
-        ? React.createElement("p", { className: styles.loading }, t("skills.remote.source.discovering"))
-        : list.length === 0
-          ? React.createElement("p", { className: styles.note, "data-testid": "skills-remote-no-candidate" }, t("skills.remote.source.noCandidate"))
-          : React.createElement("div", { className: styles.candidate, "data-testid": "skills-remote-candidate-list" },
-            list.map((candidate) => React.createElement("div", { key: candidateKey(candidate), className: styles.resultRow, "data-testid": "skills-remote-candidate-" + candidate.skillId },
-              React.createElement(Checkbox, {
-                checked: selected.has(candidateKey(candidate)),
-                label: candidate.skillId,
-                className: styles.candidateLabel,
-                onChange: (next: boolean) =>
-                  setSelected((previous) => {
-                    const set = new Set(previous);
-                    if (next) set.add(candidateKey(candidate));
-                    else set.delete(candidateKey(candidate));
-                    return set;
-                  }),
-              }),
-              React.createElement(Badge, { tone: confidenceBadgeTone(candidate.confidence) }, confidenceLabel(candidate.confidence)),
-              React.createElement("span", { className: styles.candidateMain },
-                React.createElement("span", { className: styles.note }, `${sourceRepoRef(candidate)} · ${candidate.skillPath}`),
-                React.createElement("span", { className: styles.code }, candidate.reason)))))));
+    body.push(
+      <div key="discover" className={styles.inlineRow} data-testid="skills-remote-candidates">
+        {busy && candidates === undefined ? (
+          <p className={styles.loading}>{t("skills.remote.source.discovering")}</p>
+        ) : list.length === 0 ? (
+          <p className={styles.note} data-testid="skills-remote-no-candidate">
+            {t("skills.remote.source.noCandidate")}
+          </p>
+        ) : (
+          <div className={styles.candidate} data-testid="skills-remote-candidate-list">
+            {list.map((candidate) => (
+              <div
+                key={candidateKey(candidate)}
+                className={styles.resultRow}
+                data-testid={"skills-remote-candidate-" + candidate.skillId}
+              >
+                <Checkbox
+                  checked={selected.has(candidateKey(candidate))}
+                  label={candidate.skillId}
+                  className={styles.candidateLabel}
+                  onChange={(next: boolean) =>
+                    setSelected((previous) => {
+                      const set = new Set(previous);
+                      if (next) set.add(candidateKey(candidate));
+                      else set.delete(candidateKey(candidate));
+                      return set;
+                    })
+                  }
+                />
+                <Badge tone={confidenceBadgeTone(candidate.confidence)}>{confidenceLabel(candidate.confidence)}</Badge>
+                <span className={styles.candidateMain}>
+                  <span className={styles.note}>{`${sourceRepoRef(candidate)} · ${candidate.skillPath}`}</span>
+                  <span className={styles.code}>{candidate.reason}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>,
+    );
     actions.length = 0;
-    actions.push(React.createElement(Button, { key: "cancel", size: "sm", variant: "outline", disabled: busy, "data-testid": "skills-remote-register-cancel", onClick: back }, t("skills.cancel")));
-    actions.push(React.createElement(Button, {
-      key: "ok",
-      size: "sm",
-      variant: "primary",
-      disabled: busy || selected.size === 0,
-      "data-testid": "skills-remote-register-confirm",
-      onClick: doRegisterSelected,
-    }, t("skills.remote.source.register")));
+    actions.push(
+      <Button
+        key="cancel"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        data-testid="skills-remote-register-cancel"
+        onClick={back}
+      >
+        {t("skills.cancel")}
+      </Button>,
+    );
+    actions.push(
+      <Button
+        key="ok"
+        size="sm"
+        variant="primary"
+        disabled={busy || selected.size === 0}
+        data-testid="skills-remote-register-confirm"
+        onClick={doRegisterSelected}
+      >
+        {t("skills.remote.source.register")}
+      </Button>,
+    );
   }
 
   if (step === "manual") {
-    const field = (label: string, node: React.ReactNode): React.ReactNode =>
-      React.createElement("label", { className: styles.form, key: label },
-        React.createElement("span", { className: styles.fieldLabel }, label),
-        node);
-    body.push(React.createElement("div", { key: "manual", className: styles.form, "data-testid": "skills-remote-manual-form" },
-      field(t("skills.remote.form.repo"), React.createElement(Input, {
-        value: repo,
-        placeholder: t("skills.install.repoPlaceholder"),
-        "data-testid": "skills-remote-manual-repo",
-        onChange: (event: { target: { value: string } }) => setRepo(event.target.value),
-      })),
-      field(t("skills.remote.form.ref"), React.createElement(Input, {
-        value: ref,
-        placeholder: t("skills.install.refPlaceholder"),
-        "data-testid": "skills-remote-manual-ref",
-        onChange: (event: { target: { value: string } }) => setRef(event.target.value),
-      })),
-      field(t("skills.remote.form.skillPath"), React.createElement(Input, {
-        value: skillPath,
-        "data-testid": "skills-remote-manual-skillpath",
-        onChange: (event: { target: { value: string } }) => setSkillPath(event.target.value),
-      }))));
+    const field = (label: string, node: React.ReactNode): React.ReactNode => (
+      <label className={styles.form} key={label}>
+        <span className={styles.fieldLabel}>{label}</span>
+        {node}
+      </label>
+    );
+    body.push(
+      <div key="manual" className={styles.form} data-testid="skills-remote-manual-form">
+        {field(
+          t("skills.remote.form.repo"),
+          <Input
+            value={repo}
+            placeholder={t("skills.install.repoPlaceholder")}
+            data-testid="skills-remote-manual-repo"
+            onChange={(event: { target: { value: string } }) => setRepo(event.target.value)}
+          />,
+        )}
+        {field(
+          t("skills.remote.form.ref"),
+          <Input
+            value={ref}
+            placeholder={t("skills.install.refPlaceholder")}
+            data-testid="skills-remote-manual-ref"
+            onChange={(event: { target: { value: string } }) => setRef(event.target.value)}
+          />,
+        )}
+        {field(
+          t("skills.remote.form.skillPath"),
+          <Input
+            value={skillPath}
+            data-testid="skills-remote-manual-skillpath"
+            onChange={(event: { target: { value: string } }) => setSkillPath(event.target.value)}
+          />,
+        )}
+      </div>,
+    );
     actions.length = 0;
-    actions.push(React.createElement(Button, { key: "cancel", size: "sm", variant: "outline", disabled: busy, "data-testid": "skills-remote-manual-cancel", onClick: back }, t("skills.cancel")));
-    actions.push(React.createElement(Button, {
-      key: "ok",
-      size: "sm",
-      variant: "primary",
-      disabled: busy,
-      "data-testid": "skills-remote-manual-confirm",
-      onClick: () => {
-        if (repo.trim() === "") {
-          setErrors([{ path: "repo", message: t("skills.remote.form.required") }]);
-          return;
-        }
-        doRegister({ repo, ref, skillPath });
-      },
-    }, t("skills.remote.form.submit")));
+    actions.push(
+      <Button
+        key="cancel"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        data-testid="skills-remote-manual-cancel"
+        onClick={back}
+      >
+        {t("skills.cancel")}
+      </Button>,
+    );
+    actions.push(
+      <Button
+        key="ok"
+        size="sm"
+        variant="primary"
+        disabled={busy}
+        data-testid="skills-remote-manual-confirm"
+        onClick={() => {
+          if (repo.trim() === "") {
+            setErrors([{ path: "repo", message: t("skills.remote.form.required") }]);
+            return;
+          }
+          doRegister({ repo, ref, skillPath });
+        }}
+      >
+        {t("skills.remote.form.submit")}
+      </Button>,
+    );
   }
 
   if (step === "unregister") {
-    body.push(React.createElement("p", { key: "unreg", className: styles.note, "data-testid": "skills-remote-unregister-body" }, t("skills.remote.source.unregisterBody")));
+    body.push(
+      <p key="unreg" className={styles.note} data-testid="skills-remote-unregister-body">
+        {t("skills.remote.source.unregisterBody")}
+      </p>,
+    );
     actions.length = 0;
-    actions.push(React.createElement(Button, { key: "cancel", size: "sm", variant: "outline", disabled: busy, "data-testid": "skills-remote-unregister-cancel", onClick: back }, t("skills.cancel")));
-    actions.push(React.createElement(Button, { key: "ok", size: "sm", variant: "primary", disabled: busy, "data-testid": "skills-remote-unregister-confirm", onClick: doUnregister }, t("skills.remote.source.unregister")));
+    actions.push(
+      <Button
+        key="cancel"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        data-testid="skills-remote-unregister-cancel"
+        onClick={back}
+      >
+        {t("skills.cancel")}
+      </Button>,
+    );
+    actions.push(
+      <Button
+        key="ok"
+        size="sm"
+        variant="primary"
+        disabled={busy}
+        data-testid="skills-remote-unregister-confirm"
+        onClick={doUnregister}
+      >
+        {t("skills.remote.source.unregister")}
+      </Button>,
+    );
   }
 
   if (done !== undefined) {
-    body.push(React.createElement("p", { key: "done", className: styles.note, "data-testid": "skills-remote-source-done-" + skill.id }, done));
+    body.push(
+      <p key="done" className={styles.note} data-testid={"skills-remote-source-done-" + skill.id}>
+        {done}
+      </p>,
+    );
   }
   if (error !== undefined) {
-    body.push(React.createElement("p", { key: "error", className: styles.errorBox, "data-testid": "skills-remote-source-error" }, error));
+    body.push(
+      <p key="error" className={styles.errorBox} data-testid="skills-remote-source-error">
+        {error}
+      </p>,
+    );
   }
   for (const entryError of errors) {
-    body.push(React.createElement("p", { key: "fe-" + entryError.path + entryError.message, className: styles.fieldError }, `${entryError.path}：${entryError.message}`));
+    body.push(
+      <p
+        key={"fe-" + entryError.path + entryError.message}
+        className={styles.fieldError}
+      >{`${entryError.path}：${entryError.message}`}</p>,
+    );
   }
 
   // 有来源、且停在「查看」这一步时才把「更新」那段接在下面：
   // 调步骤（推测 / 手动 / 取消登记）时它会让位给表单，避免两排按钮打架。
   if (step === "view") {
-    body.push(React.createElement(SkillUpdateSection, {
-      key: "update",
-      skill,
-      workspace,
-      hasSource: entry !== undefined && state.sourcesLoaded && state.sourcesError === undefined,
-      ...(props.onChanged === undefined ? {} : { onChanged: props.onChanged }),
-      ...(props.onOpenTrash === undefined ? {} : { onOpenTrash: props.onOpenTrash }),
-      onUnregister: () => {
-        setStep("unregister");
-        setError(undefined);
-        setErrors([]);
-      },
-    }));
+    body.push(
+      <SkillUpdateSection
+        key="update"
+        skill={skill}
+        workspace={workspace}
+        hasSource={entry !== undefined && state.sourcesLoaded && state.sourcesError === undefined}
+        {...(props.onChanged === undefined ? {} : { onChanged: props.onChanged })}
+        {...(props.onOpenTrash === undefined ? {} : { onOpenTrash: props.onOpenTrash })}
+        onUnregister={() => {
+          setStep("unregister");
+          setError(undefined);
+          setErrors([]);
+        }}
+      />,
+    );
   }
 
-  return React.createElement("div", { className: styles.form, "data-testid": "skills-remote-source-panel-" + skill.id },
-    ...body,
-    actions.length === 0 ? null : React.createElement("div", { className: styles.slotRow }, actions));
+  return (
+    <div className={styles.form} data-testid={"skills-remote-source-panel-" + skill.id}>
+      {body}
+      {actions.length === 0 ? null : <div className={styles.slotRow}>{actions}</div>}
+    </div>
+  );
 }

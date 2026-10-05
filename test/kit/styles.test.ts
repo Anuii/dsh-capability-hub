@@ -144,7 +144,7 @@ test("可折叠小节的折角是 12px SVG，展开时旋转 90 度", () => {
   assert.ok(KIT_CSS.includes("width:12px;height:12px"));
   const icons = fs.readFileSync(path.join(kitDir, "icons.tsx"), "utf8");
   assert.ok(icons.includes("SectionChevron"));
-  assert.ok(icons.includes('d: "M4.5 2.5 L8 6 L4.5 9.5"'));
+  assert.ok(icons.includes('d="M4.5 2.5 L8 6 L4.5 9.5"'));
   const section = fs.readFileSync(path.join(kitDir, "Section.tsx"), "utf8");
   assert.ok(section.includes("SectionChevron"));
   assert.equal(section.includes("DisclosureGlyph"), false);
@@ -181,7 +181,7 @@ test("ListFoot 是 kit 的组件；技能页 0.3.0 起用目录筛选取代「�
 
 test("可折叠分组：标题行是按钮、带 aria-expanded，二级分组无外框", () => {
   const listSurface = fs.readFileSync(path.join(kitDir, "ListSurface.tsx"), "utf8");
-  assert.ok(listSurface.includes('"aria-expanded": expanded'));
+  assert.ok(listSurface.includes("aria-expanded={expanded}"));
   assert.ok(KIT_CSS.includes("." + kit.groupHead + "[data-fold]{cursor:pointer"));
   assert.ok(KIT_CSS.includes("." + kit.group + "[data-depth='1']{border:none"));
   assert.ok(KIT_CSS.includes("." + kit.rowTag + "{"), "目录标签有自己的最弱样式");
@@ -189,10 +189,9 @@ test("可折叠分组：标题行是按钮、带 aria-expanded，二级分组无
 
 test("菜单项的 data-testid 挂在包文字的 span 上（宿主 MenuItemButton 不透传未知 props）", () => {
   const menu = fs.readFileSync(path.join(kitDir, "menu.tsx"), "utf8");
-  assert.ok(menu.includes('React.createElement("span", {'), "菜单项文字要包一层 span");
-  assert.ok(menu.includes('"data-testid": item.testId ?? item.id'), "testid 挂在 span 上");
+  assert.ok(menu.includes("<span data-testid={item.testId ?? item.id}>"), "菜单项文字要包一层 span，testid 挂在 span 上");
   // MenuItemButton 自己不再收到未知属性
-  assert.equal(/React\.createElement\(MenuItemButton, \{[^}]*data-testid/s.test(menu), false);
+  assert.equal(/<MenuItemButton[^>]*data-testid/s.test(menu), false);
 });
 
 test("刷新字形收进 kit，运行态不再自己画一份", () => {
@@ -201,7 +200,7 @@ test("刷新字形收进 kit，运行态不再自己画一份", () => {
   const runtime = fs.readFileSync(path.join(srcDir, "mcp", "client", "running", "index.tsx"), "utf8");
   assert.ok(runtime.includes("RefreshIcon"));
   assert.equal(runtime.includes("RefreshGlyph"), false, "运行态手写的刷新 SVG 应当删掉");
-  assert.equal(/React\.createElement\("svg"/.test(runtime), false, "运行态里不该再有手写 SVG");
+  assert.equal(/<svg\b/.test(runtime), false, "运行态里不该再有手写 SVG");
 });
 
 test("抽屉副标题单行截断（完整内容走 title 提示）", () => {
@@ -268,5 +267,5 @@ test("0.3.4 显示细节：调淡的分段、行尾文字、只读行的空位�
   assert.ok(KIT_CSS.includes("." + kit.trailingSpacer + "{flex:none;width:var(--chk-switch-w)}"));
   assert.ok(KIT_CSS.includes("input::placeholder"));
   const toolbar = fs.readFileSync(path.join(kitDir, "Toolbar.tsx"), "utf8");
-  assert.ok(toolbar.includes('"data-quiet": item.quiet === true && filters.value !== item.id'), "选中的分段不调淡");
+  assert.ok(toolbar.includes("data-quiet={item.quiet === true && filters.value !== item.id"), "选中的分段不调淡");
 });

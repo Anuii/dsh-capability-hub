@@ -27,22 +27,22 @@ test("页头不再有副标题", () => {
 });
 
 test("页头有「ⓘ」，它打开诊断模态框", () => {
-  assert.ok(panel.includes('"data-testid": "capability-hub-info"'));
+  assert.ok(panel.includes('data-testid="capability-hub-info"'));
   assert.ok(panel.includes("setDiagnosticsOpen(true)"));
   assert.ok(panel.includes("Modal"));
 });
 
 test("诊断信息不再常驻：只有模态框正文带 data-testid=capability-hub-env", () => {
-  const hits = panel.split('"data-testid": "capability-hub-env"').length - 1;
+  const hits = panel.split('data-testid="capability-hub-env">').length - 1;
   assert.equal(hits, 1);
   // 它出现在 DiagnosticsBody 里，而 DiagnosticsBody 只被 Modal 使用
-  assert.ok(panel.indexOf("function DiagnosticsBody") < panel.indexOf('"data-testid": "capability-hub-env"'));
-  assert.ok(panel.includes("}, React.createElement(DiagnosticsBody, {"));
+  assert.ok(panel.indexOf("function DiagnosticsBody") < panel.indexOf('data-testid="capability-hub-env">'));
+  assert.equal(panel.split("<DiagnosticsBody").length - 1, 1, "DiagnosticsBody 只在模态框里用一次");
 });
 
 test("三个标签同时挂载，切换只改 hidden（状态不丢）", () => {
-  assert.ok(panel.includes("hidden: tab !== entry.id"));
-  assert.ok(panel.includes("role: \"tabpanel\""));
+  assert.ok(panel.includes("hidden={tab !== entry.id}"));
+  assert.ok(panel.includes('role="tabpanel"'));
   assert.ok(panel.includes("aria-labelledby"));
   // 没有任何「按 tab 条件渲染」的写法
   assert.equal(/tab === "skills"\s*\?/.test(panel), false);

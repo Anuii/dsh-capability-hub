@@ -31,29 +31,44 @@ export function FieldShell(props: {
 }): React.ReactElement {
   const badges: React.ReactNode[] = [];
   if (props.set) {
-    badges.push(React.createElement(Badge, { key: "set", tone: "neutral", testId: "mcp-set-" + props.field }, t("mcp.form.set")));
+    badges.push(
+      <Badge key="set" tone="neutral" testId={"mcp-set-" + props.field}>
+        {t("mcp.form.set")}
+      </Badge>,
+    );
   }
   if (props.set && props.onReset !== undefined) {
-    badges.push(React.createElement(Button, {
-      key: "reset",
-      size: "sm",
-      variant: "ghost",
-      title: t("mcp.form.resetTitle"),
-      "data-testid": "mcp-reset-" + props.field,
-      onClick: props.onReset,
-    }, t("mcp.form.reset")));
+    badges.push(
+      <Button
+        key="reset"
+        size="sm"
+        variant="ghost"
+        title={t("mcp.form.resetTitle")}
+        data-testid={"mcp-reset-" + props.field}
+        onClick={props.onReset}
+      >
+        {t("mcp.form.reset")}
+      </Button>,
+    );
   }
-  return React.createElement("div", { className: styles.field, "data-testid": "mcp-field-" + props.field },
-    React.createElement("div", { className: styles.fieldHead },
-      React.createElement("span", { className: styles.fieldLabel }, props.label),
-      props.required === true ? React.createElement(Badge, { tone: "neutral" }, t("mcp.form.required")) : null,
-      badges.length === 0 ? null : React.createElement("span", { className: styles.fieldBadges }, badges)),
-    props.hint === undefined ? null : React.createElement("p", { className: styles.hint }, props.hint),
-    props.children,
-    props.showErrors
-      ? props.errors.map((message, index) =>
-          React.createElement("p", { key: index, className: styles.fieldError, "data-testid": "mcp-error-" + props.field }, message))
-      : null);
+  return (
+    <div className={styles.field} data-testid={"mcp-field-" + props.field}>
+      <div className={styles.fieldHead}>
+        <span className={styles.fieldLabel}>{props.label}</span>
+        {props.required === true ? <Badge tone="neutral">{t("mcp.form.required")}</Badge> : null}
+        {badges.length === 0 ? null : <span className={styles.fieldBadges}>{badges}</span>}
+      </div>
+      {props.hint === undefined ? null : <p className={styles.hint}>{props.hint}</p>}
+      {props.children}
+      {props.showErrors
+        ? props.errors.map((message, index) => (
+            <p key={index} className={styles.fieldError} data-testid={"mcp-error-" + props.field}>
+              {message}
+            </p>
+          ))
+        : null}
+    </div>
+  );
 }
 
 /** 单行文本。 */
@@ -64,15 +79,19 @@ export function TextField(props: {
   disabled?: boolean;
   onChange(value: string): void;
 }): React.ReactElement {
-  return React.createElement("div", { className: styles.control },
-    React.createElement("div", { className: styles.controlGrow },
-      React.createElement(Input, {
-        value: props.value,
-        "data-testid": "mcp-input-" + props.field,
-        ...(props.placeholder === undefined ? {} : { placeholder: props.placeholder }),
-        ...(props.disabled === true ? { disabled: true } : {}),
-        onChange: (event: { target: { value: string } }) => props.onChange(event.target.value),
-      })));
+  return (
+    <div className={styles.control}>
+      <div className={styles.controlGrow}>
+        <Input
+          value={props.value}
+          data-testid={"mcp-input-" + props.field}
+          {...(props.placeholder === undefined ? {} : { placeholder: props.placeholder })}
+          {...(props.disabled === true ? { disabled: true } : {})}
+          onChange={(event: { target: { value: string } }) => props.onChange(event.target.value)}
+        />
+      </div>
+    </div>
+  );
 }
 
 /** 数值文本（草稿里存字符串，保存时转数字）。 */
@@ -83,16 +102,20 @@ export function NumberField(props: {
   disabled?: boolean;
   onChange(value: string): void;
 }): React.ReactElement {
-  return React.createElement("div", { className: styles.control },
-    React.createElement("div", { className: styles.controlGrow },
-      React.createElement(Input, {
-        value: props.value,
-        inputMode: "numeric",
-        "data-testid": "mcp-input-" + props.field,
-        ...(props.placeholder === undefined ? {} : { placeholder: props.placeholder }),
-        ...(props.disabled === true ? { disabled: true } : {}),
-        onChange: (event: { target: { value: string } }) => props.onChange(event.target.value),
-      })));
+  return (
+    <div className={styles.control}>
+      <div className={styles.controlGrow}>
+        <Input
+          value={props.value}
+          inputMode="numeric"
+          data-testid={"mcp-input-" + props.field}
+          {...(props.placeholder === undefined ? {} : { placeholder: props.placeholder })}
+          {...(props.disabled === true ? { disabled: true } : {})}
+          onChange={(event: { target: { value: string } }) => props.onChange(event.target.value)}
+        />
+      </div>
+    </div>
+  );
 }
 
 /** 枚举下拉（宿主 primitives 没有 Select，用原生 select + 主题变量）。 */
@@ -103,14 +126,23 @@ export function SelectField(props: {
   disabled?: boolean;
   onChange(value: string): void;
 }): React.ReactElement {
-  return React.createElement("div", { className: styles.control },
-    React.createElement("select", {
-      className: styles.select,
-      value: props.value,
-      "data-testid": "mcp-input-" + props.field,
-      ...(props.disabled === true ? { disabled: true } : {}),
-      onChange: (event: { target: { value: string } }) => props.onChange(event.target.value),
-    }, props.options.map((option) => React.createElement("option", { key: option.value, value: option.value }, option.label))));
+  return (
+    <div className={styles.control}>
+      <select
+        className={styles.select}
+        value={props.value}
+        data-testid={"mcp-input-" + props.field}
+        {...(props.disabled === true ? { disabled: true } : {})}
+        onChange={(event: { target: { value: string } }) => props.onChange(event.target.value)}
+      >
+        {props.options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 /** 布尔开关。 */
@@ -121,13 +153,16 @@ export function SwitchField(props: {
   disabled?: boolean;
   onChange(next: boolean): void;
 }): React.ReactElement {
-  return React.createElement("div", { className: styles.control },
-    React.createElement(Switch, {
-      checked: props.checked,
-      label: props.label,
-      ...(props.disabled === true ? { disabled: true } : {}),
-      onChange: (next: boolean) => props.onChange(next),
-    }));
+  return (
+    <div className={styles.control}>
+      <Switch
+        checked={props.checked}
+        label={props.label}
+        {...(props.disabled === true ? { disabled: true } : {})}
+        onChange={(next: boolean) => props.onChange(next)}
+      />
+    </div>
+  );
 }
 
 /** 字符串数组：一行一项（空行不会提交）。 */
@@ -149,37 +184,48 @@ export function ArrayField(props: {
     props.onChange(next.filter((item) => item.trim() !== ""));
   };
   const list = rows.length === 0 ? [""] : rows;
-  return React.createElement("div", { className: styles.control },
-    React.createElement("div", { className: styles.controlGrow },
-      list.map((item, index) =>
-        React.createElement("div", { key: index, className: styles.recordRow },
-          React.createElement("div", { className: styles.recordValue },
-            React.createElement(Input, {
-              value: item,
-              "data-testid": "mcp-array-" + props.field + "-" + String(index),
-              ...(props.placeholder === undefined ? {} : { placeholder: props.placeholder }),
-              ...(props.disabled === true ? { disabled: true } : {}),
-              onChange: (event: { target: { value: string } }) => {
-                const next = [...list];
-                next[index] = event.target.value;
-                commit(next);
-              },
-            })),
-          React.createElement(Button, {
-            size: "sm",
-            variant: "ghost",
-            title: t("mcp.editor.remove"),
-            "data-testid": "mcp-array-" + props.field + "-remove-" + String(index),
-            ...(props.disabled === true ? { disabled: true } : {}),
-            onClick: () => commit(list.filter((_, at) => at !== index)),
-          }, "×"))),
-      React.createElement(Button, {
-        size: "sm",
-        variant: "outline",
-        "data-testid": "mcp-array-" + props.field + "-add",
-        ...(props.disabled === true ? { disabled: true } : {}),
-        onClick: () => commit([...list, ""]),
-      }, t("mcp.editor.add"))));
+  return (
+    <div className={styles.control}>
+      <div className={styles.controlGrow}>
+        {list.map((item, index) => (
+          <div key={index} className={styles.recordRow}>
+            <div className={styles.recordValue}>
+              <Input
+                value={item}
+                data-testid={"mcp-array-" + props.field + "-" + String(index)}
+                {...(props.placeholder === undefined ? {} : { placeholder: props.placeholder })}
+                {...(props.disabled === true ? { disabled: true } : {})}
+                onChange={(event: { target: { value: string } }) => {
+                  const next = [...list];
+                  next[index] = event.target.value;
+                  commit(next);
+                }}
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              title={t("mcp.editor.remove")}
+              data-testid={"mcp-array-" + props.field + "-remove-" + String(index)}
+              {...(props.disabled === true ? { disabled: true } : {})}
+              onClick={() => commit(list.filter((_, at) => at !== index))}
+            >
+              ×
+            </Button>
+          </div>
+        ))}
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid={"mcp-array-" + props.field + "-add"}
+          {...(props.disabled === true ? { disabled: true } : {})}
+          onClick={() => commit([...list, ""])}
+        >
+          {t("mcp.editor.add")}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** 键值编辑器（env / envFrom / headers / searchKeywords）。 */
@@ -219,61 +265,82 @@ export function RecordField(props: {
 
   const shown = props.revealed === true || props.secret !== true;
   const list = rows.length === 0 ? [] : rows;
-  return React.createElement("div", { className: styles.control },
-    React.createElement("div", { className: styles.controlGrow },
-      list.map((row, index) =>
-        React.createElement("div", { key: index, className: styles.recordRow },
-          React.createElement("div", { className: styles.recordKey },
-            React.createElement(Input, {
-              value: row.key,
-              placeholder: props.keyPlaceholder ?? t("mcp.editor.keyPlaceholder"),
-              "data-testid": "mcp-record-" + props.field + "-key-" + String(index),
-              ...(props.disabled === true ? { disabled: true } : {}),
-              onChange: (event: { target: { value: string } }) => {
-                const next = [...list];
-                next[index] = { key: event.target.value, value: row.value };
-                commit(next);
-              },
-            })),
-          React.createElement("div", { className: styles.recordValue },
-            React.createElement(Input, {
-              value: row.value,
-              placeholder: props.valuePlaceholder ?? t("mcp.editor.valuePlaceholder"),
-              "data-testid": "mcp-record-" + props.field + "-value-" + String(index),
-              ...(props.disabled === true ? { disabled: true } : {}),
-              onChange: (event: { target: { value: string } }) => {
-                const next = [...list];
-                next[index] = { key: row.key, value: event.target.value };
-                commit(next);
-              },
-            })),
-          React.createElement(Button, {
-            size: "sm",
-            variant: "ghost",
-            title: t("mcp.editor.remove"),
-            "data-testid": "mcp-record-" + props.field + "-remove-" + String(index),
-            ...(props.disabled === true ? { disabled: true } : {}),
-            onClick: () => commit(list.filter((_, at) => at !== index)),
-          }, "×"))),
-      React.createElement("div", { className: styles.control },
-        React.createElement(Button, {
-          size: "sm",
-          variant: "outline",
-          "data-testid": "mcp-record-" + props.field + "-add",
-          ...(props.disabled === true ? { disabled: true } : {}),
-          onClick: () => commit([...list, { key: "", value: "" }]),
-        }, t("mcp.editor.add")),
-        props.secret === true && props.onReveal !== undefined
-          ? React.createElement(Button, {
-              size: "sm",
-              variant: "outline",
-              title: t("mcp.editor.revealTitle"),
-              "data-testid": "mcp-reveal-" + props.field,
-              ...(props.revealBusy === true ? { disabled: true } : {}),
-              onClick: props.onReveal,
-            }, props.revealBusy === true ? t("mcp.editor.revealing") : props.revealed === true ? t("mcp.editor.hide") : t("mcp.editor.reveal"))
-          : null,
-        props.secret === true && props.revealed !== true && list.length > 0
-          ? React.createElement("span", { className: styles.small, "data-testid": "mcp-hidden-" + props.field }, t("mcp.editor.hidden") + " · " + HIDDEN_VALUE)
-          : null)));
+  return (
+    <div className={styles.control}>
+      <div className={styles.controlGrow}>
+        {list.map((row, index) => (
+          <div key={index} className={styles.recordRow}>
+            <div className={styles.recordKey}>
+              <Input
+                value={row.key}
+                placeholder={props.keyPlaceholder ?? t("mcp.editor.keyPlaceholder")}
+                data-testid={"mcp-record-" + props.field + "-key-" + String(index)}
+                {...(props.disabled === true ? { disabled: true } : {})}
+                onChange={(event: { target: { value: string } }) => {
+                  const next = [...list];
+                  next[index] = { key: event.target.value, value: row.value };
+                  commit(next);
+                }}
+              />
+            </div>
+            <div className={styles.recordValue}>
+              <Input
+                value={row.value}
+                placeholder={props.valuePlaceholder ?? t("mcp.editor.valuePlaceholder")}
+                data-testid={"mcp-record-" + props.field + "-value-" + String(index)}
+                {...(props.disabled === true ? { disabled: true } : {})}
+                onChange={(event: { target: { value: string } }) => {
+                  const next = [...list];
+                  next[index] = { key: row.key, value: event.target.value };
+                  commit(next);
+                }}
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              title={t("mcp.editor.remove")}
+              data-testid={"mcp-record-" + props.field + "-remove-" + String(index)}
+              {...(props.disabled === true ? { disabled: true } : {})}
+              onClick={() => commit(list.filter((_, at) => at !== index))}
+            >
+              ×
+            </Button>
+          </div>
+        ))}
+        <div className={styles.control}>
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid={"mcp-record-" + props.field + "-add"}
+            {...(props.disabled === true ? { disabled: true } : {})}
+            onClick={() => commit([...list, { key: "", value: "" }])}
+          >
+            {t("mcp.editor.add")}
+          </Button>
+          {props.secret === true && props.onReveal !== undefined ? (
+            <Button
+              size="sm"
+              variant="outline"
+              title={t("mcp.editor.revealTitle")}
+              data-testid={"mcp-reveal-" + props.field}
+              {...(props.revealBusy === true ? { disabled: true } : {})}
+              onClick={props.onReveal}
+            >
+              {props.revealBusy === true
+                ? t("mcp.editor.revealing")
+                : props.revealed === true
+                  ? t("mcp.editor.hide")
+                  : t("mcp.editor.reveal")}
+            </Button>
+          ) : null}
+          {props.secret === true && props.revealed !== true && list.length > 0 ? (
+            <span className={styles.small} data-testid={"mcp-hidden-" + props.field}>
+              {t("mcp.editor.hidden") + " · " + HIDDEN_VALUE}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -25,7 +25,8 @@ function commandText(preset: PresetView): string {
   const command = preset.server.command;
   if (typeof command !== "string" || command === "") return t("mcp.preset.depends") + "：" + rawSummary(preset.server);
   if (preset.commandFound === false) return t("mcp.preset.commandMissing", { command });
-  if (typeof preset.resolvedPath === "string" && preset.resolvedPath !== "") return t("mcp.preset.commandFound", { path: preset.resolvedPath });
+  if (typeof preset.resolvedPath === "string" && preset.resolvedPath !== "")
+    return t("mcp.preset.commandFound", { path: preset.resolvedPath });
   return t("mcp.preset.depends") + "：" + rawSummary(preset.server);
 }
 
@@ -54,52 +55,72 @@ export function PresetView(props: PresetViewProps): React.ReactElement {
 
   const body = ((): React.ReactElement => {
     if (error !== undefined) {
-      return React.createElement(Banner, {
-        tone: "danger",
-        testId: "mcp-preset-error",
-        action: { label: t("mcp.preset.retry"), onClick: load, testId: "mcp-preset-retry" },
-      }, t("mcp.preset.loadFailed", { message: error }));
+      return (
+        <Banner
+          tone="danger"
+          testId="mcp-preset-error"
+          action={{ label: t("mcp.preset.retry"), onClick: load, testId: "mcp-preset-retry" }}
+        >
+          {t("mcp.preset.loadFailed", { message: error })}
+        </Banner>
+      );
     }
     if (presets === undefined || loading) {
-      return React.createElement(SkeletonRows, { rows: 3, testId: "mcp-preset-loading" });
+      return <SkeletonRows rows={3} testId="mcp-preset-loading" />;
     }
     if (presets.length === 0) {
-      return React.createElement("p", { className: styles.intakeHint, "data-testid": "mcp-preset-empty" }, t("mcp.preset.empty"));
+      return (
+        <p className={styles.intakeHint} data-testid="mcp-preset-empty">
+          {t("mcp.preset.empty")}
+        </p>
+      );
     }
-    return React.createElement("ul", { className: styles.presetList, "data-testid": "mcp-presets" },
-      presets.map((preset) =>
-        React.createElement("li", {
-            key: preset.id,
-            className: styles.presetCard,
-            "data-testid": "mcp-preset-" + preset.id,
-          },
-          React.createElement("p", { className: styles.presetTitle }, preset.title),
-          React.createElement("p", { className: styles.presetDesc }, preset.description),
-          React.createElement("p", { className: styles.small, "data-testid": "mcp-preset-command-" + preset.id }, commandText(preset)),
-          React.createElement("div", { className: styles.presetFoot },
-            React.createElement(Button, {
-              variant: "primary",
-              "data-testid": "mcp-preset-use-" + preset.id,
-              onClick: () => props.onUsePreset(draftFromValues(rawToSubmit(preset.server)), preset),
-            }, t("mcp.preset.use")),
-            React.createElement(Button, {
-              size: "sm",
-              variant: "outline",
-              "data-testid": "mcp-preset-json-" + preset.id,
-              onClick: () => setExpanded((current) => (current === preset.id ? undefined : preset.id)),
-            }, expanded === preset.id ? t("mcp.preset.hideJson") : t("mcp.preset.showJson"))),
-          expanded === preset.id
-            ? React.createElement("div", { className: styles.presetCard, "data-testid": "mcp-preset-json-body-" + preset.id },
-                React.createElement(CodeBlock, {
-                  code: JSON.stringify(rawToSubmit(preset.server), null, 2),
-                  lang: "json",
-                  showHeader: false,
-                  wrap: true,
-                }))
-            : null)));
+    return (
+      <ul className={styles.presetList} data-testid="mcp-presets">
+        {presets.map((preset) => (
+          <li key={preset.id} className={styles.presetCard} data-testid={"mcp-preset-" + preset.id}>
+            <p className={styles.presetTitle}>{preset.title}</p>
+            <p className={styles.presetDesc}>{preset.description}</p>
+            <p className={styles.small} data-testid={"mcp-preset-command-" + preset.id}>
+              {commandText(preset)}
+            </p>
+            <div className={styles.presetFoot}>
+              <Button
+                variant="primary"
+                data-testid={"mcp-preset-use-" + preset.id}
+                onClick={() => props.onUsePreset(draftFromValues(rawToSubmit(preset.server)), preset)}
+              >
+                {t("mcp.preset.use")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid={"mcp-preset-json-" + preset.id}
+                onClick={() => setExpanded((current) => (current === preset.id ? undefined : preset.id))}
+              >
+                {expanded === preset.id ? t("mcp.preset.hideJson") : t("mcp.preset.showJson")}
+              </Button>
+            </div>
+            {expanded === preset.id ? (
+              <div className={styles.presetCard} data-testid={"mcp-preset-json-body-" + preset.id}>
+                <CodeBlock
+                  code={JSON.stringify(rawToSubmit(preset.server), null, 2)}
+                  lang="json"
+                  showHeader={false}
+                  wrap
+                />
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
   })();
 
-  return React.createElement("div", { className: styles.intakeBody, "data-testid": "mcp-preset-view" },
-    React.createElement("p", { className: styles.intakeHint }, t("mcp.preset.hint")),
-    body);
+  return (
+    <div className={styles.intakeBody} data-testid="mcp-preset-view">
+      <p className={styles.intakeHint}>{t("mcp.preset.hint")}</p>
+      {body}
+    </div>
+  );
 }

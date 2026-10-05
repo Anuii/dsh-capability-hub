@@ -19,7 +19,9 @@ export interface ToolbarProps {
   /** 紧跟在筛选分段之后的额外筛选（例如技能页的「目录」下拉）。 */
   afterFilters?: React.ReactNode;
   /** 主按钮：直接执行，或者展开一个菜单。 */
-  primary?: { label: string; onClick(): void; testId?: string } | { label: string; menu: readonly MenuItem[]; testId?: string };
+  primary?:
+    | { label: string; onClick(): void; testId?: string }
+    | { label: string; menu: readonly MenuItem[]; testId?: string };
   /** 右侧「⋯」。 */
   more?: readonly MenuItem[];
   /** 最左侧（筛选分段之前）的额外内容。 */
@@ -33,54 +35,61 @@ export interface ToolbarProps {
 export function Toolbar(props: ToolbarProps): React.ReactElement {
   const { search, filters, primary, more } = props;
   const primaryHasMenu = primary !== undefined && "menu" in primary;
-  return React.createElement("div", { className: kit.toolbar, "data-testid": props.testId },
-    props.start === undefined ? null : React.createElement("span", { className: kit.toolbarStart }, props.start),
-    search === undefined
-      ? null
-      : React.createElement("span", { className: kit.search },
-        React.createElement(Input, {
-          value: search.value,
-          placeholder: search.placeholder,
-          "aria-label": search.placeholder,
-          "data-testid": search.testId,
-          onChange: (event: React.ChangeEvent<HTMLInputElement>) => search.onChange(event.target.value),
-        })),
-    filters === undefined
-      ? null
-      : React.createElement("div", {
-        className: kit.segments,
-        role: "group",
-        "aria-label": filters.label,
-      }, filters.items.map((item) => React.createElement("button", {
-        key: item.id,
-        type: "button",
-        className: kit.segment,
-        "data-active": filters.value === item.id ? "" : undefined,
-        "data-quiet": item.quiet === true && filters.value !== item.id ? "" : undefined,
-        "aria-pressed": filters.value === item.id,
-        "data-testid": filterTestId(props.testId, item.id),
-        onClick: () => filters.onChange(item.id),
-      },
-      React.createElement("span", null, item.label),
-      item.count === undefined ? null : React.createElement("span", { className: kit.segmentCount }, String(item.count))))),
-    props.afterFilters === undefined ? null : React.createElement("span", { className: kit.toolbarAfterFilters }, props.afterFilters),
-    React.createElement("span", { className: kit.toolbarSpacer }),
-    props.end === undefined ? null : React.createElement("span", { className: kit.toolbarEnd }, props.end),
-    primary === undefined
-      ? null
-      : primaryHasMenu
-        ? React.createElement(PrimaryMenuButton, {
-          label: primary.label,
-          items: (primary as { menu: readonly MenuItem[] }).menu,
-          menuLabel: primary.label,
-          testId: primary.testId,
-        })
-        : React.createElement(Button, {
-          variant: "primary",
-          "data-testid": primary.testId,
-          onClick: (primary as { onClick(): void }).onClick,
-        }, primary.label),
-    more === undefined || more.length === 0
-      ? null
-      : React.createElement(MoreMenu, { items: more, label: props.testId === undefined ? "更多操作" : props.testId + "-more", testId: props.testId === undefined ? undefined : props.testId + "-more" }));
+  return (
+    <div className={kit.toolbar} data-testid={props.testId}>
+      {props.start === undefined ? null : <span className={kit.toolbarStart}>{props.start}</span>}
+      {search === undefined ? null : (
+        <span className={kit.search}>
+          <Input
+            value={search.value}
+            placeholder={search.placeholder}
+            aria-label={search.placeholder}
+            data-testid={search.testId}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => search.onChange(event.target.value)}
+          />
+        </span>
+      )}
+      {filters === undefined ? null : (
+        <div className={kit.segments} role="group" aria-label={filters.label}>
+          {filters.items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={kit.segment}
+              data-active={filters.value === item.id ? "" : undefined}
+              data-quiet={item.quiet === true && filters.value !== item.id ? "" : undefined}
+              aria-pressed={filters.value === item.id}
+              data-testid={filterTestId(props.testId, item.id)}
+              onClick={() => filters.onChange(item.id)}
+            >
+              <span>{item.label}</span>
+              {item.count === undefined ? null : <span className={kit.segmentCount}>{String(item.count)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {props.afterFilters === undefined ? null : <span className={kit.toolbarAfterFilters}>{props.afterFilters}</span>}
+      <span className={kit.toolbarSpacer} />
+      {props.end === undefined ? null : <span className={kit.toolbarEnd}>{props.end}</span>}
+      {primary === undefined ? null : primaryHasMenu ? (
+        <PrimaryMenuButton
+          label={primary.label}
+          items={(primary as { menu: readonly MenuItem[] }).menu}
+          menuLabel={primary.label}
+          testId={primary.testId}
+        />
+      ) : (
+        <Button variant="primary" data-testid={primary.testId} onClick={(primary as { onClick(): void }).onClick}>
+          {primary.label}
+        </Button>
+      )}
+      {more === undefined || more.length === 0 ? null : (
+        <MoreMenu
+          items={more}
+          label={props.testId === undefined ? "更多操作" : props.testId + "-more"}
+          testId={props.testId === undefined ? undefined : props.testId + "-more"}
+        />
+      )}
+    </div>
+  );
 }

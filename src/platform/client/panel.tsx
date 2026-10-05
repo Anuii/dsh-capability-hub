@@ -64,30 +64,44 @@ export function kitPreviewEnabled(): boolean {
 }
 
 /** 标签栏（下划线式）。 */
-function TabBar({ active, onSelect, attention }: { active: PanelTab; onSelect: (tab: PanelTab) => void; attention: ReadonlySet<PanelTab> }): React.ReactElement {
-  return React.createElement("div", { className: styles.tabBar, role: "tablist", "data-dsh-part": "tab-bar" },
-    TABS.map((tab) => React.createElement("button", {
-      key: tab.id,
-      type: "button",
-      role: "tab",
-      id: "capability-hub-tab-" + tab.id,
-      "aria-selected": active === tab.id,
-      "aria-controls": "capability-hub-panel-" + tab.id,
-      "data-testid": "capability-hub-tab-" + tab.id,
-      "data-active": active === tab.id ? "" : undefined,
-      className: styles.tab,
-      onClick: () => onSelect(tab.id),
-    },
-    tt(tab.labelKey),
-    // 红点：这个标签里有错误（例如 MCP 有服务器连接失败）；红色只表示错误（UI-DESIGN 原则 4）。
-    attention.has(tab.id)
-      ? React.createElement("span", {
-          className: styles.tabDot,
-          title: tt("tab.attention"),
-          "aria-label": tt("tab.attention"),
-          "data-testid": "capability-hub-tab-dot-" + tab.id,
-        })
-      : null)));
+function TabBar({
+  active,
+  onSelect,
+  attention,
+}: {
+  active: PanelTab;
+  onSelect: (tab: PanelTab) => void;
+  attention: ReadonlySet<PanelTab>;
+}): React.ReactElement {
+  return (
+    <div className={styles.tabBar} role="tablist" data-dsh-part="tab-bar">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          id={"capability-hub-tab-" + tab.id}
+          aria-selected={active === tab.id}
+          aria-controls={"capability-hub-panel-" + tab.id}
+          data-testid={"capability-hub-tab-" + tab.id}
+          data-active={active === tab.id ? "" : undefined}
+          className={styles.tab}
+          onClick={() => onSelect(tab.id)}
+        >
+          {tt(tab.labelKey)}
+          {/* 红点：这个标签里有错误（例如 MCP 有服务器连接失败）；红色只表示错误（UI-DESIGN 原则 4）。 */}
+          {attention.has(tab.id) ? (
+            <span
+              className={styles.tabDot}
+              title={tt("tab.attention")}
+              aria-label={tt("tab.attention")}
+              data-testid={"capability-hub-tab-dot-" + tab.id}
+            />
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -109,23 +123,35 @@ function DiagnosticsBody(props: {
     rows.push([tt("env.home"), health.homeDir]);
     rows.push([tt("env.dshHome"), health.dshHome]);
     rows.push([tt("env.hubHome"), health.hubHome]);
-    rows.push([tt("env.sdk"), health.sdk.status === "loaded"
-      ? "v" + (health.sdk.version ?? "?") + " — " + (health.sdk.mainResolved ?? "")
-      : "失败：" + (health.sdk.message ?? "")]);
+    rows.push([
+      tt("env.sdk"),
+      health.sdk.status === "loaded"
+        ? "v" + (health.sdk.version ?? "?") + " — " + (health.sdk.mainResolved ?? "")
+        : "失败：" + (health.sdk.message ?? ""),
+    ]);
     rows.push([tt("env.modules"), health.modules.map((m) => m.name + "=" + m.status).join("，")]);
-    rows.push([tt("env.tool"), health.tool.name + "（" + (health.tool.registered ? tt("status.ok") : tt("status.degraded")) + "）"]);
+    rows.push([
+      tt("env.tool"),
+      health.tool.name + "（" + (health.tool.registered ? tt("status.ok") : tt("status.degraded")) + "）",
+    ]);
   }
   rows.push([tt("env.workspace"), props.workspace ?? tt("env.workspaceNone")]);
-  return React.createElement("div", { className: styles.diagBody, "data-testid": "capability-hub-env" },
-    props.loading ? React.createElement("p", { className: styles.muted }, tt("env.loading")) : null,
-    props.error !== undefined
-      ? React.createElement("p", { className: styles.error }, tt("env.failed", { message: props.error }))
-      : null,
-    React.createElement("dl", { className: styles.kv },
-      rows.flatMap(([label, value]) => [
-        React.createElement("dt", { key: "k-" + label, className: styles.kvKey }, label),
-        React.createElement("dd", { key: "v-" + label, className: styles.kvValue, title: value }, value),
-      ])));
+  return (
+    <div className={styles.diagBody} data-testid="capability-hub-env">
+      {props.loading ? <p className={styles.muted}>{tt("env.loading")}</p> : null}
+      {props.error !== undefined ? <p className={styles.error}>{tt("env.failed", { message: props.error })}</p> : null}
+      <dl className={styles.kv}>
+        {rows.flatMap(([label, value]) => [
+          <dt key={"k-" + label} className={styles.kvKey}>
+            {label}
+          </dt>,
+          <dd key={"v-" + label} className={styles.kvValue} title={value}>
+            {value}
+          </dd>,
+        ])}
+      </dl>
+    </div>
+  );
 }
 
 /**
@@ -135,9 +161,9 @@ function DiagnosticsBody(props: {
 function TabBody({ tab, props }: { tab: PanelTab; props: TabProps }): React.ReactElement {
   switch (tab) {
     case "skills":
-      return React.createElement(SkillsTab, props);
+      return <SkillsTab {...props} />;
     case "mcp":
-      return React.createElement(McpTab, props);
+      return <McpTab {...props} />;
   }
 }
 
@@ -175,10 +201,14 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
     );
   }, []);
   React.useEffect(() => refresh(), [refresh]);
-  React.useEffect(() => onRequestTab((next) => {
-    pendingTab = undefined;
-    setTab(next);
-  }), []);
+  React.useEffect(
+    () =>
+      onRequestTab((next) => {
+        pendingTab = undefined;
+        setTab(next);
+      }),
+    [],
+  );
 
   const preview = kitPreviewEnabled();
   const degrade = degradeInfo(health);
@@ -192,60 +222,78 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
   const closeDiagnostics = React.useCallback((): void => setDiagnosticsOpen(false), []);
   const openDiagnostics = React.useCallback((): void => setDiagnosticsOpen(true), []);
 
-  return React.createElement("div", { className: styles.page, "data-dsh-capability-hub-view": "", "data-testid": "capability-hub-page" },
-    React.createElement("header", { className: styles.header },
-      React.createElement("div", { className: styles.headerBar },
-        React.createElement("h2", { className: styles.title }, tt("panel.title")),
-        React.createElement("button", {
-          type: "button",
-          className: styles.infoButton,
-          "data-testid": "capability-hub-info",
-          "aria-label": tt("env.open"),
-          title: tt("env.title"),
-          onClick: openDiagnostics,
-        }, "\u24d8")),
-      React.createElement(TabBar, { active: tab, onSelect: setTab, attention })),
-    React.createElement("div", { className: styles.content },
-      // 升级后没重启：浏览器半已是新版本，宿主半还是旧的（新接口会 404）。
-      staleHost === undefined
-        ? null
-        : React.createElement(Banner, { tone: "warn", testId: "capability-hub-stale-host" },
-          tt("env.staleHost", { client: HUB_VERSION, host: staleHost })),
-      // 降级横幅：只在「某个模块降级」或「mcp 工具退回桩」时出现（UI-DESIGN §2）。
-      degrade === undefined
-        ? null
-        : React.createElement(Banner, {
-          tone: "warn",
-          testId: "capability-hub-degraded",
-          action: { label: tt("env.viewDetails"), onClick: openDiagnostics, testId: "capability-hub-degraded-details" },
-        }, tt("env.degraded", { modules: degradeNames(degrade, tt("env.mcpTool")).join("、") })),
-      preview
-        ? React.createElement(KitPreview, null)
-        : TABS.map((entry) => React.createElement("div", {
-          key: entry.id,
-          className: styles.tabPane,
-          role: "tabpanel",
-          id: "capability-hub-panel-" + entry.id,
-          "aria-labelledby": "capability-hub-tab-" + entry.id,
-          hidden: tab !== entry.id,
-          "data-testid": "capability-hub-panel-" + entry.id,
-        }, React.createElement(TabBody, { tab: entry.id, props: tabProps }))),
-      React.createElement(Modal, {
-        open: diagnosticsOpen,
-        onClose: closeDiagnostics,
-        title: tt("env.title"),
-        closeLabel: tt("action.close"),
-        className: styles.diagModal,
-        contentClassName: styles.diagContent,
-        footer: React.createElement(Button, {
-          variant: "outline",
-          "data-testid": "capability-hub-refresh",
-          onClick: refresh,
-        }, tt("action.refresh")),
-      }, React.createElement(DiagnosticsBody, {
-        health,
-        error,
-        loading,
-        workspace: current.workspace,
-      }))));
+  return (
+    <div className={styles.page} data-dsh-capability-hub-view="" data-testid="capability-hub-page">
+      <header className={styles.header}>
+        <div className={styles.headerBar}>
+          <h2 className={styles.title}>{tt("panel.title")}</h2>
+          <button
+            type="button"
+            className={styles.infoButton}
+            data-testid="capability-hub-info"
+            aria-label={tt("env.open")}
+            title={tt("env.title")}
+            onClick={openDiagnostics}
+          >
+            {"\u24d8"}
+          </button>
+        </div>
+        <TabBar active={tab} onSelect={setTab} attention={attention} />
+      </header>
+      <div className={styles.content}>
+        {/* 升级后没重启：浏览器半已是新版本，宿主半还是旧的（新接口会 404）。 */}
+        {staleHost === undefined ? null : (
+          <Banner tone="warn" testId="capability-hub-stale-host">
+            {tt("env.staleHost", { client: HUB_VERSION, host: staleHost })}
+          </Banner>
+        )}
+        {/* 降级横幅：只在「某个模块降级」或「mcp 工具退回桩」时出现（UI-DESIGN §2）。 */}
+        {degrade === undefined ? null : (
+          <Banner
+            tone="warn"
+            testId="capability-hub-degraded"
+            action={{
+              label: tt("env.viewDetails"),
+              onClick: openDiagnostics,
+              testId: "capability-hub-degraded-details",
+            }}
+          >
+            {tt("env.degraded", { modules: degradeNames(degrade, tt("env.mcpTool")).join("、") })}
+          </Banner>
+        )}
+        {preview ? (
+          <KitPreview />
+        ) : (
+          TABS.map((entry) => (
+            <div
+              key={entry.id}
+              className={styles.tabPane}
+              role="tabpanel"
+              id={"capability-hub-panel-" + entry.id}
+              aria-labelledby={"capability-hub-tab-" + entry.id}
+              hidden={tab !== entry.id}
+              data-testid={"capability-hub-panel-" + entry.id}
+            >
+              <TabBody tab={entry.id} props={tabProps} />
+            </div>
+          ))
+        )}
+        <Modal
+          open={diagnosticsOpen}
+          onClose={closeDiagnostics}
+          title={tt("env.title")}
+          closeLabel={tt("action.close")}
+          className={styles.diagModal}
+          contentClassName={styles.diagContent}
+          footer={
+            <Button variant="outline" data-testid="capability-hub-refresh" onClick={refresh}>
+              {tt("action.refresh")}
+            </Button>
+          }
+        >
+          <DiagnosticsBody health={health} error={error} loading={loading} workspace={current.workspace} />
+        </Modal>
+      </div>
+    </div>
+  );
 }

@@ -112,97 +112,136 @@ export function ImportView(props: ImportViewProps): React.ReactElement {
   const sourceBody = (source: ImportSourceView): React.ReactElement => {
     const result = results[source.id];
     const picked = selected[source.id] ?? [];
-    return React.createElement("section", {
-        key: source.id,
-        className: styles.importSection,
-        "data-testid": "mcp-import-source-" + source.id,
-      },
-      React.createElement("div", { className: styles.importHead },
-        React.createElement("p", { className: styles.importTitle, "data-testid": "mcp-import-label-" + source.id }, source.label),
-        React.createElement("span", { "data-testid": "mcp-import-found-" + source.id },
-          React.createElement(Badge, { tone: source.found ? "neutral" : "neutral" },
-            source.found ? t("mcp.import.found", { count: source.servers.length }) : t("mcp.import.notFound")))),
-      React.createElement("p", { className: styles.importMeta, "data-testid": "mcp-import-path-" + source.id },
-        t("mcp.import.path") + "：" + source.path),
-
-      source.warnings.length === 0
-        ? null
-        : React.createElement(Banner, { tone: "neutral", testId: "mcp-import-warnings-" + source.id },
-            React.createElement("span", null, t("mcp.import.warnings", { count: source.warnings.length })),
-            React.createElement("ul", { className: styles.warnList },
-              source.warnings.map((warning, index) =>
-                React.createElement("li", { key: index, className: styles.warnItem }, t("mcp.import.warningRow", { text: warning }))))),
-
-      source.found && source.servers.length === 0
-        ? React.createElement("p", { className: styles.intakeHint, "data-testid": "mcp-import-empty-" + source.id }, t("mcp.import.empty"))
-        : null,
-
-      React.createElement("ul", { className: styles.importList },
-        source.servers.map((server) =>
-          React.createElement("li", {
-              key: server.serverName,
-              className: styles.importRow,
-              "data-testid": "mcp-import-row-" + source.id + "-" + server.serverName,
-            },
-            // 宿主 Checkbox 不转发未知 props，testid 挂在包裹的 span 上
-            React.createElement("span", { className: styles.control, "data-testid": "mcp-import-check-" + source.id + "-" + server.serverName },
-              React.createElement(Checkbox, {
-                checked: picked.includes(server.serverName),
-                disabled: !source.found || busy !== undefined,
-                label: t("mcp.import.selectRow", { name: server.serverName }),
-                onChange: () => toggle(source.id, server.serverName),
-              })),
-            React.createElement("p", { className: styles.pasteRowSummary, "data-testid": "mcp-import-summary-" + source.id + "-" + server.serverName }, rawSummary(server)),
-            React.createElement("p", { className: styles.importMeta }, t("mcp.import.origin", { origin: rowOrigin(source, server) })),
-            hiddenKeys(server).length === 0 && secretSummary(server) === ""
-              ? null
-              : React.createElement("p", { className: styles.importMeta, "data-testid": "mcp-import-masked-" + source.id + "-" + server.serverName },
-                  (secretSummary(server) === "" ? "" : secretSummary(server) + " · ") + t("mcp.import.masked"))))),
-
-      source.found
-        ? React.createElement("div", { className: styles.intakeToolbar },
-            React.createElement("span", { className: styles.small, "data-testid": "mcp-import-selected-" + source.id },
-              t("mcp.import.selected", { count: picked.length, total: source.servers.length })),
-            React.createElement(Button, {
-              variant: "primary",
-              "data-testid": "mcp-import-apply-" + source.id,
-              disabled: busy !== undefined || picked.length === 0,
-              onClick: () => apply(source),
-            }, busy === source.id ? t("mcp.import.applying") : t("mcp.import.apply", { count: picked.length })))
-        : null,
-
-      result === undefined
-        ? null
-        : React.createElement("div", { className: styles.importResult, "data-testid": "mcp-import-result-" + source.id },
-            React.createElement("p", { className: styles.resultOk, "data-testid": "mcp-import-imported-" + source.id },
-              t("mcp.import.imported", { names: result.imported.length === 0 ? "—" : result.imported.join("、") })),
-            result.skipped.length === 0
-              ? null
-              : React.createElement("p", { className: styles.small }, t("mcp.import.skipped", { count: result.skipped.length })),
-            result.skipped.map((item, index) =>
-              React.createElement("p", {
-                key: index,
-                className: styles.skippedRow,
-                "data-testid": "mcp-import-skipped-" + source.id + "-" + index,
-              }, t("mcp.import.skippedRow", { name: item.name, reason: item.reason })))));
+    return (
+      <section key={source.id} className={styles.importSection} data-testid={"mcp-import-source-" + source.id}>
+        <div className={styles.importHead}>
+          <p className={styles.importTitle} data-testid={"mcp-import-label-" + source.id}>
+            {source.label}
+          </p>
+          <span data-testid={"mcp-import-found-" + source.id}>
+            <Badge tone={source.found ? "neutral" : "neutral"}>
+              {source.found ? t("mcp.import.found", { count: source.servers.length }) : t("mcp.import.notFound")}
+            </Badge>
+          </span>
+        </div>
+        <p className={styles.importMeta} data-testid={"mcp-import-path-" + source.id}>
+          {t("mcp.import.path") + "：" + source.path}
+        </p>
+        {source.warnings.length === 0 ? null : (
+          <Banner tone="neutral" testId={"mcp-import-warnings-" + source.id}>
+            <span>{t("mcp.import.warnings", { count: source.warnings.length })}</span>
+            <ul className={styles.warnList}>
+              {source.warnings.map((warning, index) => (
+                <li key={index} className={styles.warnItem}>
+                  {t("mcp.import.warningRow", { text: warning })}
+                </li>
+              ))}
+            </ul>
+          </Banner>
+        )}
+        {source.found && source.servers.length === 0 ? (
+          <p className={styles.intakeHint} data-testid={"mcp-import-empty-" + source.id}>
+            {t("mcp.import.empty")}
+          </p>
+        ) : null}
+        <ul className={styles.importList}>
+          {source.servers.map((server) => (
+            <li
+              key={server.serverName}
+              className={styles.importRow}
+              data-testid={"mcp-import-row-" + source.id + "-" + server.serverName}
+            >
+              {/* 宿主 Checkbox 不转发未知 props，testid 挂在包裹的 span 上 */}
+              <span className={styles.control} data-testid={"mcp-import-check-" + source.id + "-" + server.serverName}>
+                <Checkbox
+                  checked={picked.includes(server.serverName)}
+                  disabled={!source.found || busy !== undefined}
+                  label={t("mcp.import.selectRow", { name: server.serverName })}
+                  onChange={() => toggle(source.id, server.serverName)}
+                />
+              </span>
+              <p
+                className={styles.pasteRowSummary}
+                data-testid={"mcp-import-summary-" + source.id + "-" + server.serverName}
+              >
+                {rawSummary(server)}
+              </p>
+              <p className={styles.importMeta}>{t("mcp.import.origin", { origin: rowOrigin(source, server) })}</p>
+              {hiddenKeys(server).length === 0 && secretSummary(server) === "" ? null : (
+                <p
+                  className={styles.importMeta}
+                  data-testid={"mcp-import-masked-" + source.id + "-" + server.serverName}
+                >
+                  {(secretSummary(server) === "" ? "" : secretSummary(server) + " · ") + t("mcp.import.masked")}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+        {source.found ? (
+          <div className={styles.intakeToolbar}>
+            <span className={styles.small} data-testid={"mcp-import-selected-" + source.id}>
+              {t("mcp.import.selected", { count: picked.length, total: source.servers.length })}
+            </span>
+            <Button
+              variant="primary"
+              data-testid={"mcp-import-apply-" + source.id}
+              disabled={busy !== undefined || picked.length === 0}
+              onClick={() => apply(source)}
+            >
+              {busy === source.id ? t("mcp.import.applying") : t("mcp.import.apply", { count: picked.length })}
+            </Button>
+          </div>
+        ) : null}
+        {result === undefined ? null : (
+          <div className={styles.importResult} data-testid={"mcp-import-result-" + source.id}>
+            <p className={styles.resultOk} data-testid={"mcp-import-imported-" + source.id}>
+              {t("mcp.import.imported", { names: result.imported.length === 0 ? "—" : result.imported.join("、") })}
+            </p>
+            {result.skipped.length === 0 ? null : (
+              <p className={styles.small}>{t("mcp.import.skipped", { count: result.skipped.length })}</p>
+            )}
+            {result.skipped.map((item, index) => (
+              <p
+                key={index}
+                className={styles.skippedRow}
+                data-testid={"mcp-import-skipped-" + source.id + "-" + index}
+              >
+                {t("mcp.import.skippedRow", { name: item.name, reason: item.reason })}
+              </p>
+            ))}
+          </div>
+        )}
+      </section>
+    );
   };
 
   const body = ((): React.ReactElement => {
     if (error !== undefined) {
-      return React.createElement(Banner, {
-        tone: "danger",
-        testId: "mcp-import-error",
-        action: { label: t("mcp.import.retry"), onClick: () => setReloadToken((token) => token + 1), testId: "mcp-import-retry" },
-      }, t("mcp.import.loadFailed", { message: error }));
+      return (
+        <Banner
+          tone="danger"
+          testId="mcp-import-error"
+          action={{
+            label: t("mcp.import.retry"),
+            onClick: () => setReloadToken((token) => token + 1),
+            testId: "mcp-import-retry",
+          }}
+        >
+          {t("mcp.import.loadFailed", { message: error })}
+        </Banner>
+      );
     }
     if (sources === undefined || loading) {
-      return React.createElement(SkeletonRows, { rows: 3, testId: "mcp-import-loading" });
+      return <SkeletonRows rows={3} testId="mcp-import-loading" />;
     }
-    return React.createElement("div", { className: styles.intakeBody },
-      sources.map((source) => sourceBody(source)));
+    return <div className={styles.intakeBody}>{sources.map((source) => sourceBody(source))}</div>;
   })();
 
-  return React.createElement("div", { className: styles.intakeBody, "data-testid": "mcp-import-view" },
-    React.createElement("p", { className: styles.intakeHint }, t("mcp.import.hint")),
-    body);
+  return (
+    <div className={styles.intakeBody} data-testid="mcp-import-view">
+      <p className={styles.intakeHint}>{t("mcp.import.hint")}</p>
+      {body}
+    </div>
+  );
 }

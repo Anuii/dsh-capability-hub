@@ -65,11 +65,11 @@ class TabErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 
   render(): React.ReactNode {
     if (this.state.error !== undefined) {
-      return React.createElement(
-        "div",
-        { className: styles.root, "data-testid": "skills-crash" },
-        React.createElement("p", { className: styles.errorBox }, t("skills.crash.title")),
-        React.createElement("p", { className: styles.note }, t("skills.crash.hint", { message: this.state.error })),
+      return (
+        <div className={styles.root} data-testid="skills-crash">
+          <p className={styles.errorBox}>{t("skills.crash.title")}</p>
+          <p className={styles.note}>{t("skills.crash.hint", { message: this.state.error })}</p>
+        </div>
       );
     }
     return this.props.children;
@@ -104,10 +104,13 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
   const [toast, setToast] = React.useState<ToastState | undefined>(undefined);
   const toastSeq = React.useRef<number>(0);
 
-  const showToast = React.useCallback((text: string, extra?: { action?: { label: string; onClick: () => void } }): void => {
-    toastSeq.current += 1;
-    setToast({ seq: toastSeq.current, text, ...(extra ?? {}) });
-  }, []);
+  const showToast = React.useCallback(
+    (text: string, extra?: { action?: { label: string; onClick: () => void } }): void => {
+      toastSeq.current += 1;
+      setToast({ seq: toastSeq.current, text, ...(extra ?? {}) });
+    },
+    [],
+  );
 
   const reload = React.useCallback((): void => {
     setLoading(true);
@@ -292,151 +295,165 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
     remote.authItem,
   ];
 
-  const toolbar = React.createElement(Toolbar, {
-    testId: "skills-toolbar",
-    search: { value: query, onChange: setQuery, placeholder: t("skills.searchPlaceholder"), testId: "skills-search" },
-    filters: {
-      // 「需关注 0」调淡：没有问题时不抢眼，有问题时恢复正常。
-      items: FILTERS.map((id) => ({ id, label: filterLabel(id), count: counts[id], quiet: id === "attention" && counts[id] === 0 })),
-      value: filter,
-      onChange: (next: string) => setFilter(next as FilterId),
-      label: t("skills.filterLabel"),
-    },
-    afterFilters: React.createElement(DirFilter, { list: list ?? EMPTY, value: dir, onChange: setDir }),
-    primary: { label: t("skills.addSkill"), onClick: () => setAddOpen(true), testId: "skills-add-button" },
-    more,
-  });
+  const toolbar = (
+    <Toolbar
+      testId="skills-toolbar"
+      search={{ value: query, onChange: setQuery, placeholder: t("skills.searchPlaceholder"), testId: "skills-search" }}
+      filters={{
+        // 「需关注 0」调淡：没有问题时不抢眼，有问题时恢复正常。
+        items: FILTERS.map((id) => ({
+          id,
+          label: filterLabel(id),
+          count: counts[id],
+          quiet: id === "attention" && counts[id] === 0,
+        })),
+        value: filter,
+        onChange: (next: string) => setFilter(next as FilterId),
+        label: t("skills.filterLabel"),
+      }}
+      afterFilters={<DirFilter list={list ?? EMPTY} value={dir} onChange={setDir} />}
+      primary={{ label: t("skills.addSkill"), onClick: () => setAddOpen(true), testId: "skills-add-button" }}
+      more={more}
+    />
+  );
 
-  const warningsBanner = list !== undefined && list.warnings.length > 0
-    ? React.createElement(Banner, { tone: "warn", testId: "skills-warnings" },
-      React.createElement("span", null, t("skills.warnings.title") + "：" + list.warnings.join("；")))
-    : null;
+  const warningsBanner =
+    list !== undefined && list.warnings.length > 0 ? (
+      <Banner tone="warn" testId="skills-warnings">
+        <span>{t("skills.warnings.title") + "：" + list.warnings.join("；")}</span>
+      </Banner>
+    ) : null;
 
-  const body = listError !== undefined && list === undefined
-    ? React.createElement("div", { className: styles.root, "data-testid": "skills-list-error" },
-      React.createElement("p", { className: styles.errorBox }, t("skills.loadFailed", { message: listError })),
-      React.createElement(Button, { size: "sm", variant: "outline", "data-testid": "skills-retry", onClick: reload }, t("skills.retry")))
-    : React.createElement(SkillList, {
-      list: list ?? EMPTY,
-      workspace,
-      ...(homeDir === undefined ? {} : { homeDir }),
-      query,
-      filter,
-      dir,
-      context,
-      busyIds,
-      error: listError,
-      loading,
-      onToggle,
-      onOpen: (skill: SkillSummary) => setDetailId(skill.id),
-      onAdd: () => setAddOpen(true),
-    });
+  const body =
+    listError !== undefined && list === undefined ? (
+      <div className={styles.root} data-testid="skills-list-error">
+        <p className={styles.errorBox}>{t("skills.loadFailed", { message: listError })}</p>
+        <Button size="sm" variant="outline" data-testid="skills-retry" onClick={reload}>
+          {t("skills.retry")}
+        </Button>
+      </div>
+    ) : (
+      <SkillList
+        list={list ?? EMPTY}
+        workspace={workspace}
+        {...(homeDir === undefined ? {} : { homeDir })}
+        query={query}
+        filter={filter}
+        dir={dir}
+        context={context}
+        busyIds={busyIds}
+        error={listError}
+        loading={loading}
+        onToggle={onToggle}
+        onOpen={(skill: SkillSummary) => setDetailId(skill.id)}
+        onAdd={() => setAddOpen(true)}
+      />
+    );
 
-  return React.createElement("section", {
-    className: styles.root,
-    "data-testid": "capability-hub-tab-panel-skills",
-    "data-dsh-part": "skills-tab",
-  },
-  toolbar,
-  warningsBanner,
-  body,
-  detail === undefined
-    ? null
-    : React.createElement(SkillDetailDrawer, {
-      skill: detail,
-      root: list?.roots.find((entry) => entry.rootId === detail.rootId),
-      workspace,
-      ...(homeDir === undefined ? {} : { homeDir }),
-      busy: busyIds.has(detail.id),
-      onToggle: (next: boolean) => onToggle(detail, next),
-      onChanged: reloadAll,
-      onOpenTrash: openTrash,
-      onDelete: () => {
-        setDeleteErrors([]);
-        setPendingDelete(detail);
-      },
-      onClose: () => setDetailId(undefined),
-    }),
-  React.createElement(AddSkillDrawer, {
-    open: addOpen,
-    workspace,
-    onInstalled: reloadAll,
-    onClose: () => setAddOpen(false),
-  }),
-  React.createElement(TrashDrawer, {
-    open: trashOpen,
-    items: trash ?? [],
-    loading: trashLoading,
-    error: trashError,
-    busyIds: trashBusyIds,
-    purgingAll,
-    onRestore: (item: TrashItem) => doRestore(item, false),
-    onPurgeOne: (item: TrashItem) => setPendingPurgeOne(item),
-    onPurgeAll: () => {
-      setPurgeAck(false);
-      setPurgeAllOpen(true);
-    },
-    onRefresh: reloadTrash,
-    onClose: () => setTrashOpen(false),
-  }),
-  React.createElement(DeleteSkillDialog, {
-    skill: pendingDelete,
-    busy: pendingDelete !== undefined && busyIds.has(pendingDelete.id),
-    errors: deleteErrors,
-    onConfirm: confirmDelete,
-    onCancel: () => {
-      setPendingDelete(undefined);
-      setDeleteErrors([]);
-    },
-  }),
-  React.createElement(PurgeOneDialog, {
-    item: pendingPurgeOne,
-    busy: pendingPurgeOne !== undefined && trashBusyIds.has(pendingPurgeOne.trashId),
-    onConfirm: () => {
-      if (pendingPurgeOne !== undefined) doPurgeOne(pendingPurgeOne);
-    },
-    onCancel: () => setPendingPurgeOne(undefined),
-  }),
-  React.createElement(PurgeAllDialog, {
-    open: purgeAllOpen,
-    count: trashCount,
-    acknowledged: purgeAck,
-    busy: purgingAll,
-    onAcknowledgedChange: setPurgeAck,
-    onConfirm: doPurgeAll,
-    onCancel: () => {
-      setPurgeAllOpen(false);
-      setPurgeAck(false);
-    },
-  }),
-  React.createElement(RestoreConflictDialog, {
-    item: pendingConflict,
-    busy: pendingConflict !== undefined && trashBusyIds.has(pendingConflict.trashId),
-    errors: conflictErrors,
-    onConfirm: () => {
-      if (pendingConflict !== undefined) doRestore(pendingConflict, true);
-    },
-    onCancel: () => {
-      setPendingConflict(undefined);
-      setConflictErrors([]);
-    },
-  }),
-  remote.dialogs,
-  toast === undefined
-    ? null
-    : React.createElement(Toast, {
-      key: toast.seq,
-      text: toast.text,
-      holdMs: 4000,
-      ...(toast.action === undefined
-        ? {}
-        : { actions: [{ prefix: "", label: toast.action.label, onClick: toast.action.onClick }] }),
-      onDone: () =>
-        setToast((current) => (current !== undefined && current.seq === toast.seq ? undefined : current)),
-    }));
+  return (
+    <section className={styles.root} data-testid="capability-hub-tab-panel-skills" data-dsh-part="skills-tab">
+      {toolbar}
+      {warningsBanner}
+      {body}
+      {detail === undefined ? null : (
+        <SkillDetailDrawer
+          skill={detail}
+          root={list?.roots.find((entry) => entry.rootId === detail.rootId)}
+          workspace={workspace}
+          {...(homeDir === undefined ? {} : { homeDir })}
+          busy={busyIds.has(detail.id)}
+          onToggle={(next: boolean) => onToggle(detail, next)}
+          onChanged={reloadAll}
+          onOpenTrash={openTrash}
+          onDelete={() => {
+            setDeleteErrors([]);
+            setPendingDelete(detail);
+          }}
+          onClose={() => setDetailId(undefined)}
+        />
+      )}
+      <AddSkillDrawer open={addOpen} workspace={workspace} onInstalled={reloadAll} onClose={() => setAddOpen(false)} />
+      <TrashDrawer
+        open={trashOpen}
+        items={trash ?? []}
+        loading={trashLoading}
+        error={trashError}
+        busyIds={trashBusyIds}
+        purgingAll={purgingAll}
+        onRestore={(item: TrashItem) => doRestore(item, false)}
+        onPurgeOne={(item: TrashItem) => setPendingPurgeOne(item)}
+        onPurgeAll={() => {
+          setPurgeAck(false);
+          setPurgeAllOpen(true);
+        }}
+        onRefresh={reloadTrash}
+        onClose={() => setTrashOpen(false)}
+      />
+      <DeleteSkillDialog
+        skill={pendingDelete}
+        busy={pendingDelete !== undefined && busyIds.has(pendingDelete.id)}
+        errors={deleteErrors}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setPendingDelete(undefined);
+          setDeleteErrors([]);
+        }}
+      />
+      <PurgeOneDialog
+        item={pendingPurgeOne}
+        busy={pendingPurgeOne !== undefined && trashBusyIds.has(pendingPurgeOne.trashId)}
+        onConfirm={() => {
+          if (pendingPurgeOne !== undefined) doPurgeOne(pendingPurgeOne);
+        }}
+        onCancel={() => setPendingPurgeOne(undefined)}
+      />
+      <PurgeAllDialog
+        open={purgeAllOpen}
+        count={trashCount}
+        acknowledged={purgeAck}
+        busy={purgingAll}
+        onAcknowledgedChange={setPurgeAck}
+        onConfirm={doPurgeAll}
+        onCancel={() => {
+          setPurgeAllOpen(false);
+          setPurgeAck(false);
+        }}
+      />
+      <RestoreConflictDialog
+        item={pendingConflict}
+        busy={pendingConflict !== undefined && trashBusyIds.has(pendingConflict.trashId)}
+        errors={conflictErrors}
+        onConfirm={() => {
+          if (pendingConflict !== undefined) doRestore(pendingConflict, true);
+        }}
+        onCancel={() => {
+          setPendingConflict(undefined);
+          setConflictErrors([]);
+        }}
+      />
+      {remote.dialogs}
+      {toast === undefined ? null : (
+        <Toast
+          key={toast.seq}
+          text={toast.text}
+          holdMs={4000}
+          {...(toast.action === undefined
+            ? {}
+            : { actions: [{ prefix: "", label: toast.action.label, onClick: toast.action.onClick }] })}
+          onDone={() =>
+            setToast((current) => (current !== undefined && current.seq === toast.seq ? undefined : current))
+          }
+        />
+      )}
+    </section>
+  );
 }
 
 /** 技能标签页（对外只导出这一个）。 */
 export function SkillsTab(props: TabProps): React.ReactElement {
-  return React.createElement(TabErrorBoundary, null, React.createElement(SkillsTabInner, props));
+  return (
+    <TabErrorBoundary>
+      <SkillsTabInner {...props} />
+    </TabErrorBoundary>
+  );
 }

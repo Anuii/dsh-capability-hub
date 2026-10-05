@@ -116,7 +116,11 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
           remoteStore.setCheck(
             item.ok
               ? { skillId: item.skillId, status: "up-to-date" }
-              : { skillId: item.skillId, status: "error", ...(item.message === undefined ? {} : { message: item.message }) },
+              : {
+                  skillId: item.skillId,
+                  status: "error",
+                  ...(item.message === undefined ? {} : { message: item.message }),
+                },
           );
         }
         setApplying(false);
@@ -214,61 +218,91 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
 
   const authItem: MenuItem = {
     id: "github",
-    label: state.rateLimitRemaining === undefined
-      ? t("skills.remote.menu.authUnknown", { mode: authModeLabel(auth) })
-      : t("skills.remote.menu.auth", { mode: authModeLabel(auth), remaining: state.rateLimitRemaining }),
+    label:
+      state.rateLimitRemaining === undefined
+        ? t("skills.remote.menu.authUnknown", { mode: authModeLabel(auth) })
+        : t("skills.remote.menu.auth", { mode: authModeLabel(auth), remaining: state.rateLimitRemaining }),
     info: true,
     separatorBefore: true,
     testId: "skills-remote-auth",
   };
 
   const groups = groupCandidates(candidates ?? []);
-  const dialogs = discoverOpen
-    ? React.createElement(Modal, {
-      open: true,
-      onClose: () => setDiscoverOpen(false),
-      title: t("skills.remote.batch.title"),
-      closeLabel: t("skills.close"),
-      description: t("skills.remote.batch.hint"),
-      contentClassName: styles.modalBody,
-      footer: [
-        React.createElement(Button, { key: "cancel", variant: "outline", "data-testid": "skills-remote-batch-cancel", onClick: () => setDiscoverOpen(false) }, t("skills.cancel")),
-        React.createElement(Button, {
-          key: "ok",
-          variant: "primary",
-          disabled: registering || selected.size === 0,
-          "data-testid": "skills-remote-batch-confirm",
-          onClick: registerSelected,
-        }, t("skills.remote.batch.confirm", { count: selected.size })),
-      ],
-    },
-    React.createElement("div", { className: styles.form, "data-testid": "skills-remote-batch-dialog" },
-      discovering
-        ? React.createElement("p", { className: styles.loading }, t("skills.remote.source.discovering"))
-        : groups.length === 0
-          ? React.createElement("p", { className: styles.note, "data-testid": "skills-remote-batch-none" }, t("skills.remote.batch.none"))
-          : groups.map((group) => React.createElement("div", { key: group.skillId, className: styles.form, "data-testid": "skills-remote-batch-group-" + group.skillId },
-            React.createElement("span", { className: styles.fieldLabel }, group.skillId),
-            group.candidates.map((candidate) => React.createElement("div", { key: candidateKey(candidate), className: styles.inlineRow },
-              React.createElement(Checkbox, {
-                checked: selected.has(candidateKey(candidate)),
-                label: candidate.skillId,
-                className: styles.candidateLabel,
-                onChange: (next: boolean) =>
-                  setSelected((previous) => {
-                    const set = new Set(previous);
-                    if (next) set.add(candidateKey(candidate));
-                    else set.delete(candidateKey(candidate));
-                    return set;
-                  }),
-              }),
-              React.createElement(Badge, { tone: confidenceBadgeTone(candidate.confidence) }, confidenceLabel(candidate.confidence)),
-              React.createElement("span", { className: styles.candidateMain },
-                React.createElement("span", { className: styles.note }, `${candidate.repo}${candidate.ref === undefined ? "" : "@" + candidate.ref} · ${candidate.skillPath}`),
-                React.createElement("span", { className: styles.code }, candidate.reason)))))),
-      error === undefined ? null : React.createElement("p", { className: styles.errorBox }, error),
-      errors.map((entry) => React.createElement("p", { key: entry.path + entry.message, className: styles.fieldError }, `${entry.path}：${entry.message}`))))
-    : null;
+  const dialogs = discoverOpen ? (
+    <Modal
+      open
+      onClose={() => setDiscoverOpen(false)}
+      title={t("skills.remote.batch.title")}
+      closeLabel={t("skills.close")}
+      description={t("skills.remote.batch.hint")}
+      contentClassName={styles.modalBody}
+      footer={[
+        <Button
+          key="cancel"
+          variant="outline"
+          data-testid="skills-remote-batch-cancel"
+          onClick={() => setDiscoverOpen(false)}
+        >
+          {t("skills.cancel")}
+        </Button>,
+        <Button
+          key="ok"
+          variant="primary"
+          disabled={registering || selected.size === 0}
+          data-testid="skills-remote-batch-confirm"
+          onClick={registerSelected}
+        >
+          {t("skills.remote.batch.confirm", { count: selected.size })}
+        </Button>,
+      ]}
+    >
+      <div className={styles.form} data-testid="skills-remote-batch-dialog">
+        {discovering ? (
+          <p className={styles.loading}>{t("skills.remote.source.discovering")}</p>
+        ) : groups.length === 0 ? (
+          <p className={styles.note} data-testid="skills-remote-batch-none">
+            {t("skills.remote.batch.none")}
+          </p>
+        ) : (
+          groups.map((group) => (
+            <div key={group.skillId} className={styles.form} data-testid={"skills-remote-batch-group-" + group.skillId}>
+              <span className={styles.fieldLabel}>{group.skillId}</span>
+              {group.candidates.map((candidate) => (
+                <div key={candidateKey(candidate)} className={styles.inlineRow}>
+                  <Checkbox
+                    checked={selected.has(candidateKey(candidate))}
+                    label={candidate.skillId}
+                    className={styles.candidateLabel}
+                    onChange={(next: boolean) =>
+                      setSelected((previous) => {
+                        const set = new Set(previous);
+                        if (next) set.add(candidateKey(candidate));
+                        else set.delete(candidateKey(candidate));
+                        return set;
+                      })
+                    }
+                  />
+                  <Badge tone={confidenceBadgeTone(candidate.confidence)}>
+                    {confidenceLabel(candidate.confidence)}
+                  </Badge>
+                  <span className={styles.candidateMain}>
+                    <span
+                      className={styles.note}
+                    >{`${candidate.repo}${candidate.ref === undefined ? "" : "@" + candidate.ref} · ${candidate.skillPath}`}</span>
+                    <span className={styles.code}>{candidate.reason}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))
+        )}
+        {error === undefined ? null : <p className={styles.errorBox}>{error}</p>}
+        {errors.map((entry) => (
+          <p key={entry.path + entry.message} className={styles.fieldError}>{`${entry.path}：${entry.message}`}</p>
+        ))}
+      </div>
+    </Modal>
+  ) : null;
 
   return { items, authItem, dialogs, updatable };
 }

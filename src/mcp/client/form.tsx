@@ -101,7 +101,9 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
   const [advanced, setAdvanced] = React.useState<boolean>(false);
   const [busy, setBusy] = React.useState<boolean>(false);
   const [checking, setChecking] = React.useState<boolean>(false);
-  const [commandCheck, setCommandCheck] = React.useState<{ command: string; found: boolean; resolvedPath?: string } | undefined>(undefined);
+  const [commandCheck, setCommandCheck] = React.useState<
+    { command: string; found: boolean; resolvedPath?: string } | undefined
+  >(undefined);
   const [commandWarning, setCommandWarning] = React.useState<string | undefined>(undefined);
   const [serverErrors, setServerErrors] = React.useState<FieldError[]>([]);
   const [formError, setFormError] = React.useState<string | undefined>(undefined);
@@ -166,7 +168,11 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
     try {
       const cwd = textOf(draft.values.cwd);
       const result = await checkCommand(command, cwd === "" ? undefined : cwd);
-      setCommandCheck({ command, found: result.found, ...(result.resolvedPath === undefined ? {} : { resolvedPath: result.resolvedPath }) });
+      setCommandCheck({
+        command,
+        found: result.found,
+        ...(result.resolvedPath === undefined ? {} : { resolvedPath: result.resolvedPath }),
+      });
       return result;
     } catch (error) {
       setFormError(t("mcp.form.saveFailed", { message: errorMessage(error) }));
@@ -249,258 +255,416 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
     hint: string,
     control: React.ReactNode,
     opts: { required?: boolean; reset?: boolean } = {},
-  ): React.ReactElement =>
-    React.createElement(
-      FieldShell,
-      {
-        key: id,
-        field: id,
-        label,
-        hint,
-        set: draftHas(draft, id),
-        ...(opts.required === true ? { required: true } : {}),
-        errors: errorsOf(groups, id),
-        showErrors: showAll || touched.has(id),
-        ...(opts.reset === false ? {} : { onReset: () => resetField(id) }),
-      },
-      control,
-    );
+  ): React.ReactElement => (
+    <FieldShell
+      key={id}
+      field={id}
+      label={label}
+      hint={hint}
+      set={draftHas(draft, id)}
+      {...(opts.required === true ? { required: true } : {})}
+      errors={errorsOf(groups, id)}
+      showErrors={showAll || touched.has(id)}
+      {...(opts.reset === false ? {} : { onReset: () => resetField(id) })}
+    >
+      {control}
+    </FieldShell>
+  );
 
-  const metaField = (key: string, label: string, hint: string, control: React.ReactNode): React.ReactElement =>
-    React.createElement(
-      FieldShell,
-      {
-        key: "meta." + key,
-        field: "meta." + key,
-        label,
-        hint,
-        set: metaHas(draft, key),
-        errors: errorsOf(groups, "meta." + key),
-        showErrors: showAll || touched.has("meta." + key),
-        onReset: () => resetMetaField(key),
-      },
-      control,
-    );
+  const metaField = (key: string, label: string, hint: string, control: React.ReactNode): React.ReactElement => (
+    <FieldShell
+      key={"meta." + key}
+      field={"meta." + key}
+      label={label}
+      hint={hint}
+      set={metaHas(draft, key)}
+      errors={errorsOf(groups, "meta." + key)}
+      showErrors={showAll || touched.has("meta." + key)}
+      onReset={() => resetMetaField(key)}
+    >
+      {control}
+    </FieldShell>
+  );
 
-  const mapField = (id: string, secret: boolean): React.ReactElement =>
-    React.createElement(RecordField, {
-      field: id,
-      entries: stringMapOf(draftValue(draft, id)),
-      ...(secret ? { secret: true, revealed: revealed.has(id), revealBusy, ...(props.originalName === undefined ? {} : { onReveal: () => doReveal(id === "env" ? "env" : "headers") }) } : {}),
-      syncToken,
-      onChange: (entries: Record<string, string>) => setFieldValue(id, entries),
-    });
+  const mapField = (id: string, secret: boolean): React.ReactElement => (
+    <RecordField
+      field={id}
+      entries={stringMapOf(draftValue(draft, id))}
+      {...(secret
+        ? {
+            secret: true,
+            revealed: revealed.has(id),
+            revealBusy,
+            ...(props.originalName === undefined ? {} : { onReveal: () => doReveal(id === "env" ? "env" : "headers") }),
+          }
+        : {})}
+      syncToken={syncToken}
+      onChange={(entries: Record<string, string>) => setFieldValue(id, entries)}
+    />
+  );
 
-  const arrayField = (id: string, placeholder: string): React.ReactElement =>
-    React.createElement(ArrayField, {
-      field: id,
-      items: stringListOf(draftValue(draft, id)),
-      placeholder,
-      syncToken,
-      onChange: (items: string[]) => setFieldValue(id, items),
-    });
+  const arrayField = (id: string, placeholder: string): React.ReactElement => (
+    <ArrayField
+      field={id}
+      items={stringListOf(draftValue(draft, id))}
+      placeholder={placeholder}
+      syncToken={syncToken}
+      onChange={(items: string[]) => setFieldValue(id, items)}
+    />
+  );
 
-  const numberField = (id: string, placeholder: string): React.ReactElement =>
-    React.createElement(NumberField, {
-      field: id,
-      value: numericText(draftValue(draft, id)),
-      placeholder,
-      onChange: (text: string) => setFieldValue(id, text),
-    });
+  const numberField = (id: string, placeholder: string): React.ReactElement => (
+    <NumberField
+      field={id}
+      value={numericText(draftValue(draft, id))}
+      placeholder={placeholder}
+      onChange={(text: string) => setFieldValue(id, text)}
+    />
+  );
 
-  const commandControl = React.createElement("div", { className: styles.control },
-    React.createElement("div", { className: styles.controlGrow },
-      React.createElement(TextField, {
-        field: "command",
-        value: textOf(draftValue(draft, "command")),
-        placeholder: "node",
-        onChange: (value: string) => {
-          setFieldValue("command", value);
-          setCommandWarning(undefined);
-        },
-      })),
-    React.createElement(Button, {
-      size: "sm",
-      variant: "outline",
-      "data-testid": "mcp-command-check",
-      ...(checking ? { disabled: true } : {}),
-      onClick: () => {
-        void runCheck();
-      },
-    }, checking ? t("mcp.command.checking") : t("mcp.command.check")));
+  const commandControl = (
+    <div className={styles.control}>
+      <div className={styles.controlGrow}>
+        <TextField
+          field="command"
+          value={textOf(draftValue(draft, "command"))}
+          placeholder="node"
+          onChange={(value: string) => {
+            setFieldValue("command", value);
+            setCommandWarning(undefined);
+          }}
+        />
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid="mcp-command-check"
+        {...(checking ? { disabled: true } : {})}
+        onClick={() => {
+          void runCheck();
+        }}
+      >
+        {checking ? t("mcp.command.checking") : t("mcp.command.check")}
+      </Button>
+    </div>
+  );
 
-  const commandResult = React.createElement("div", { className: styles.commandBox },
-    commandCheck === undefined
-      ? React.createElement("p", { className: styles.hint }, t("mcp.command.check"))
-      : commandCheck.found
-        ? React.createElement("p", { className: styles.commandOk, "data-testid": "mcp-command-result" }, t("mcp.command.found", { path: commandCheck.resolvedPath ?? commandCheck.command }))
-        : React.createElement("p", { className: styles.commandWarn, "data-testid": "mcp-command-result" }, t("mcp.command.missing", { command: commandCheck.command })));
+  const commandResult = (
+    <div className={styles.commandBox}>
+      {commandCheck === undefined ? (
+        <p className={styles.hint}>{t("mcp.command.check")}</p>
+      ) : commandCheck.found ? (
+        <p className={styles.commandOk} data-testid="mcp-command-result">
+          {t("mcp.command.found", { path: commandCheck.resolvedPath ?? commandCheck.command })}
+        </p>
+      ) : (
+        <p className={styles.commandWarn} data-testid="mcp-command-result">
+          {t("mcp.command.missing", { command: commandCheck.command })}
+        </p>
+      )}
+    </div>
+  );
 
   const advancedSet = ADVANCED_FIELDS.some((id) =>
-    id === "meta" ? Object.keys(draftMeta(draft)).length > 0 : draftHas(draft, id));
+    id === "meta" ? Object.keys(draftMeta(draft)).length > 0 : draftHas(draft, id),
+  );
 
   const errorCount = Object.values(groups).reduce((total, list) => total + list.length, 0);
 
-  return React.createElement("div", { className: styles.form, "data-testid": "mcp-form" },
-    React.createElement(Section, { title: t("mcp.form.basic"), testId: "mcp-form-basic" },
-      React.createElement("div", { className: styles.formFields },
-        field("serverName", t("mcp.field.serverName"), t("mcp.hint.serverName"),
-          React.createElement(TextField, {
-            field: "serverName",
-            value: textOf(draftValue(draft, "serverName")),
-            placeholder: "my-server",
-            onChange: (value: string) => setFieldValue("serverName", value),
-          }), { required: true, reset: false }),
-        field("transport", t("mcp.field.transport"), t("mcp.hint.transport"),
-          React.createElement(SelectField, {
-            field: "transport",
-            value: transport,
-            options: [
-              { value: "stdio", label: "stdio" },
-              { value: "streamable-http", label: "streamable-http" },
-            ],
-            onChange: changeTransport,
-          }), { required: true, reset: false }),
-        transport === "stdio"
-          ? field("command", t("mcp.field.command"), t("mcp.hint.command"), commandControl, { required: true })
-          : null,
-        transport === "stdio" ? commandResult : null,
-        transport === "stdio"
-          ? field("args", t("mcp.field.args"), t("mcp.hint.args"), arrayField("args", "-y"))
-          : null,
-        transport === "stdio" ? field("cwd", t("mcp.field.cwd"), t("mcp.hint.cwd"),
-          React.createElement(TextField, {
-            field: "cwd",
-            value: textOf(draftValue(draft, "cwd")),
-            onChange: (value: string) => setFieldValue("cwd", value),
-          })) : null,
-        transport === "stdio" ? field("env", t("mcp.field.env"), t("mcp.hint.env"), mapField("env", true)) : null,
-        transport === "streamable-http"
-          ? field("url", t("mcp.field.url"), t("mcp.hint.url"),
-              React.createElement(TextField, {
-                field: "url",
-                value: textOf(draftValue(draft, "url")),
-                placeholder: "https://example.com/mcp",
-                onChange: (value: string) => setFieldValue("url", value),
-              }), { required: true })
-          : null,
-        transport === "streamable-http"
-          ? field("headers", t("mcp.field.headers"), t("mcp.hint.headers"), mapField("headers", true))
-          : null,
-        revealError === undefined ? null : React.createElement("p", { className: styles.fieldError, "data-testid": "mcp-reveal-error" }, revealError))),
-
-    React.createElement(Section, {
-      title: t("mcp.form.advanced"),
-      collapsible: true,
-      defaultCollapsed: true,
-      testId: "mcp-form-advanced",
-      end: advancedSet && !advanced
-        ? React.createElement("span", { className: styles.small, "data-testid": "mcp-advanced-set" }, t("mcp.form.set"))
-        : undefined,
-    },
-    React.createElement("div", { className: styles.formFields, "data-testid": "mcp-advanced" },
-      transport === "stdio" ? field("envFrom", t("mcp.field.envFrom"), t("mcp.hint.envFrom"), mapField("envFrom", false)) : null,
-      transport === "stdio" ? field("allowEmpty", t("mcp.field.allowEmpty"), t("mcp.hint.allowEmpty"), arrayField("allowEmpty", "MY_VAR")) : null,
-      transport === "stdio" ? field("envFromTimeoutMs", t("mcp.field.envFromTimeoutMs"), t("mcp.hint.envFromTimeoutMs", { value: 10000 }), numberField("envFromTimeoutMs", "10000")) : null,
-      field("toolCallTimeoutMs", t("mcp.field.toolCallTimeoutMs"), t("mcp.hint.toolCallTimeoutMs", { value: 60000 }), numberField("toolCallTimeoutMs", "60000")),
-      field("lifecycle", t("mcp.field.lifecycle"), t("mcp.hint.lifecycle"),
-        React.createElement(SelectField, {
-          field: "lifecycle",
-          value: textOf(draftValue(draft, "lifecycle")) === "" ? "lazy" : textOf(draftValue(draft, "lifecycle")),
-          options: LIFECYCLES.map((item) => ({ value: item, label: lifecycleLabel(item) })),
-          onChange: (value: string) => setFieldValue("lifecycle", value),
-        })),
-      field("idleTimeout", t("mcp.field.idleTimeout"), t("mcp.hint.idleTimeout"), numberField("idleTimeout", "10")),
-      field("includeTools", t("mcp.field.includeTools"), t("mcp.hint.includeTools"), arrayField("includeTools", "tool-name")),
-      field("excludeTools", t("mcp.field.excludeTools"), t("mcp.hint.excludeTools"), arrayField("excludeTools", "tool-name")),
-      field("searchKeywords", t("mcp.field.searchKeywords"), t("mcp.hint.searchKeywords"),
-        React.createElement(RecordField, {
-          field: "searchKeywords",
-          entries: Object.fromEntries(
-            Object.entries(isPlainObject(draftValue(draft, "searchKeywords")) ? (draftValue(draft, "searchKeywords") as Record<string, unknown>) : {})
-              .map(([key, value]) => [key, stringListOf(value).join(", ")]),
-          ),
-          valuePlaceholder: "关键词, 关键词",
-          syncToken,
-          onChange: (entries: Record<string, string>) => {
-            const map: Record<string, string[]> = {};
-            for (const [key, value] of Object.entries(entries)) {
-              const list = value.split(",").map((item) => item.trim()).filter((item) => item !== "");
-              if (list.length > 0) map[key] = list;
-            }
-            setFieldValue("searchKeywords", map);
-          },
-        })),
-      field("disabled", t("mcp.field.disabled"), t("mcp.hint.disabled"),
-        React.createElement(SwitchField, {
-          field: "disabled",
-          checked: draftValue(draft, "disabled") === true,
-          label: t("mcp.field.disabled"),
-          onChange: (next: boolean) => setFieldValue("disabled", next),
-        })),
-      field("debug", t("mcp.field.debug"), t("mcp.hint.debug"),
-        React.createElement(SwitchField, {
-          field: "debug",
-          checked: draftValue(draft, "debug") === true,
-          label: t("mcp.field.debug"),
-          onChange: (next: boolean) => setFieldValue("debug", next),
-        })),
-      metaField("description", t("mcp.field.meta.description"), t("mcp.hint.meta.description"),
-        React.createElement(TextField, {
-          field: "meta.description",
-          value: textOf(draftMeta(draft).description),
-          onChange: (value: string) => { setDraft((prev) => withMetaField(prev, "description", value)); touch("meta.description"); },
-        })),
-      metaField("tags", t("mcp.field.meta.tags"), t("mcp.hint.meta.tags"),
-        React.createElement(ArrayField, {
-          field: "meta.tags",
-          items: stringListOf(draftMeta(draft).tags),
-          placeholder: "标签",
-          syncToken,
-          onChange: (items: string[]) => { setDraft((prev) => withMetaField(prev, "tags", items)); touch("meta.tags"); },
-        })),
-      metaField("homepage", t("mcp.field.meta.homepage"), t("mcp.hint.meta.homepage"),
-        React.createElement(TextField, {
-          field: "meta.homepage",
-          value: textOf(draftMeta(draft).homepage),
-          placeholder: "https://example.com",
-          onChange: (value: string) => { setDraft((prev) => withMetaField(prev, "homepage", value)); touch("meta.homepage"); },
-        })))),
-
-    formError === undefined ? null : React.createElement(Banner, { tone: "danger", testId: "mcp-form-error" }, formError),
-    serverErrors.length === 0
-      ? null
-      : React.createElement(Banner, { tone: "danger", testId: "mcp-form-server-errors" },
-          t("mcp.form.serverErrors", { count: serverErrors.length }) + " " + t("mcp.form.unknownField"),
-          React.createElement("ul", { className: styles.serverErrors },
-            serverErrors.map((error, index) =>
-              React.createElement("li", { key: index, className: styles.serverErrorItem }, error.path + "：" + error.message)))),
-    commandWarning === undefined
-      ? null
-      : React.createElement(Banner, { tone: "warn", testId: "mcp-command-warning" }, commandWarning),
-
-    React.createElement("div", { className: styles.actions },
-      React.createElement(Button, {
-        variant: "primary",
-        "data-testid": "mcp-form-save",
-        ...(busy ? { disabled: true } : {}),
-        onClick: () => save(false),
-      }, busy ? t("mcp.saving") : t("mcp.form.save")),
-      commandWarning === undefined
-        ? null
-        : React.createElement(Button, {
-            variant: "outline",
-            "data-testid": "mcp-form-save-anyway",
-            ...(busy ? { disabled: true } : {}),
-            onClick: () => save(true),
-          }, t("mcp.form.saveAnyway")),
-      React.createElement(Button, {
-        "data-testid": "mcp-form-to-json",
-        ...(busy ? { disabled: true } : {}),
-        onClick: () => props.onSwitchToJson(draft),
-      }, t("mcp.form.toJson")),
-      React.createElement(Button, { "data-testid": "mcp-form-cancel", onClick: props.onCancel }, t("mcp.cancel")),
-      showAll && errorCount > 0
-        ? React.createElement("span", { className: styles.small, "data-testid": "mcp-form-error-count" }, t("mcp.form.errorCount", { count: errorCount }))
-        : null));
+  return (
+    <div className={styles.form} data-testid="mcp-form">
+      <Section title={t("mcp.form.basic")} testId="mcp-form-basic">
+        <div className={styles.formFields}>
+          {field(
+            "serverName",
+            t("mcp.field.serverName"),
+            t("mcp.hint.serverName"),
+            <TextField
+              field="serverName"
+              value={textOf(draftValue(draft, "serverName"))}
+              placeholder="my-server"
+              onChange={(value: string) => setFieldValue("serverName", value)}
+            />,
+            { required: true, reset: false },
+          )}
+          {field(
+            "transport",
+            t("mcp.field.transport"),
+            t("mcp.hint.transport"),
+            <SelectField
+              field="transport"
+              value={transport}
+              options={[
+                { value: "stdio", label: "stdio" },
+                { value: "streamable-http", label: "streamable-http" },
+              ]}
+              onChange={changeTransport}
+            />,
+            { required: true, reset: false },
+          )}
+          {transport === "stdio"
+            ? field("command", t("mcp.field.command"), t("mcp.hint.command"), commandControl, { required: true })
+            : null}
+          {transport === "stdio" ? commandResult : null}
+          {transport === "stdio"
+            ? field("args", t("mcp.field.args"), t("mcp.hint.args"), arrayField("args", "-y"))
+            : null}
+          {transport === "stdio"
+            ? field(
+                "cwd",
+                t("mcp.field.cwd"),
+                t("mcp.hint.cwd"),
+                <TextField
+                  field="cwd"
+                  value={textOf(draftValue(draft, "cwd"))}
+                  onChange={(value: string) => setFieldValue("cwd", value)}
+                />,
+              )
+            : null}
+          {transport === "stdio" ? field("env", t("mcp.field.env"), t("mcp.hint.env"), mapField("env", true)) : null}
+          {transport === "streamable-http"
+            ? field(
+                "url",
+                t("mcp.field.url"),
+                t("mcp.hint.url"),
+                <TextField
+                  field="url"
+                  value={textOf(draftValue(draft, "url"))}
+                  placeholder="https://example.com/mcp"
+                  onChange={(value: string) => setFieldValue("url", value)}
+                />,
+                { required: true },
+              )
+            : null}
+          {transport === "streamable-http"
+            ? field("headers", t("mcp.field.headers"), t("mcp.hint.headers"), mapField("headers", true))
+            : null}
+          {revealError === undefined ? null : (
+            <p className={styles.fieldError} data-testid="mcp-reveal-error">
+              {revealError}
+            </p>
+          )}
+        </div>
+      </Section>
+      <Section
+        title={t("mcp.form.advanced")}
+        collapsible
+        defaultCollapsed
+        testId="mcp-form-advanced"
+        end={
+          advancedSet && !advanced ? (
+            <span className={styles.small} data-testid="mcp-advanced-set">
+              {t("mcp.form.set")}
+            </span>
+          ) : undefined
+        }
+      >
+        <div className={styles.formFields} data-testid="mcp-advanced">
+          {transport === "stdio"
+            ? field("envFrom", t("mcp.field.envFrom"), t("mcp.hint.envFrom"), mapField("envFrom", false))
+            : null}
+          {transport === "stdio"
+            ? field(
+                "allowEmpty",
+                t("mcp.field.allowEmpty"),
+                t("mcp.hint.allowEmpty"),
+                arrayField("allowEmpty", "MY_VAR"),
+              )
+            : null}
+          {transport === "stdio"
+            ? field(
+                "envFromTimeoutMs",
+                t("mcp.field.envFromTimeoutMs"),
+                t("mcp.hint.envFromTimeoutMs", { value: 10000 }),
+                numberField("envFromTimeoutMs", "10000"),
+              )
+            : null}
+          {field(
+            "toolCallTimeoutMs",
+            t("mcp.field.toolCallTimeoutMs"),
+            t("mcp.hint.toolCallTimeoutMs", { value: 60000 }),
+            numberField("toolCallTimeoutMs", "60000"),
+          )}
+          {field(
+            "lifecycle",
+            t("mcp.field.lifecycle"),
+            t("mcp.hint.lifecycle"),
+            <SelectField
+              field="lifecycle"
+              value={textOf(draftValue(draft, "lifecycle")) === "" ? "lazy" : textOf(draftValue(draft, "lifecycle"))}
+              options={LIFECYCLES.map((item) => ({ value: item, label: lifecycleLabel(item) }))}
+              onChange={(value: string) => setFieldValue("lifecycle", value)}
+            />,
+          )}
+          {field(
+            "idleTimeout",
+            t("mcp.field.idleTimeout"),
+            t("mcp.hint.idleTimeout"),
+            numberField("idleTimeout", "10"),
+          )}
+          {field(
+            "includeTools",
+            t("mcp.field.includeTools"),
+            t("mcp.hint.includeTools"),
+            arrayField("includeTools", "tool-name"),
+          )}
+          {field(
+            "excludeTools",
+            t("mcp.field.excludeTools"),
+            t("mcp.hint.excludeTools"),
+            arrayField("excludeTools", "tool-name"),
+          )}
+          {field(
+            "searchKeywords",
+            t("mcp.field.searchKeywords"),
+            t("mcp.hint.searchKeywords"),
+            <RecordField
+              field="searchKeywords"
+              entries={Object.fromEntries(
+                Object.entries(
+                  isPlainObject(draftValue(draft, "searchKeywords"))
+                    ? (draftValue(draft, "searchKeywords") as Record<string, unknown>)
+                    : {},
+                ).map(([key, value]) => [key, stringListOf(value).join(", ")]),
+              )}
+              valuePlaceholder="关键词, 关键词"
+              syncToken={syncToken}
+              onChange={(entries: Record<string, string>) => {
+                const map: Record<string, string[]> = {};
+                for (const [key, value] of Object.entries(entries)) {
+                  const list = value
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter((item) => item !== "");
+                  if (list.length > 0) map[key] = list;
+                }
+                setFieldValue("searchKeywords", map);
+              }}
+            />,
+          )}
+          {field(
+            "disabled",
+            t("mcp.field.disabled"),
+            t("mcp.hint.disabled"),
+            <SwitchField
+              field="disabled"
+              checked={draftValue(draft, "disabled") === true}
+              label={t("mcp.field.disabled")}
+              onChange={(next: boolean) => setFieldValue("disabled", next)}
+            />,
+          )}
+          {field(
+            "debug",
+            t("mcp.field.debug"),
+            t("mcp.hint.debug"),
+            <SwitchField
+              field="debug"
+              checked={draftValue(draft, "debug") === true}
+              label={t("mcp.field.debug")}
+              onChange={(next: boolean) => setFieldValue("debug", next)}
+            />,
+          )}
+          {metaField(
+            "description",
+            t("mcp.field.meta.description"),
+            t("mcp.hint.meta.description"),
+            <TextField
+              field="meta.description"
+              value={textOf(draftMeta(draft).description)}
+              onChange={(value: string) => {
+                setDraft((prev) => withMetaField(prev, "description", value));
+                touch("meta.description");
+              }}
+            />,
+          )}
+          {metaField(
+            "tags",
+            t("mcp.field.meta.tags"),
+            t("mcp.hint.meta.tags"),
+            <ArrayField
+              field="meta.tags"
+              items={stringListOf(draftMeta(draft).tags)}
+              placeholder="标签"
+              syncToken={syncToken}
+              onChange={(items: string[]) => {
+                setDraft((prev) => withMetaField(prev, "tags", items));
+                touch("meta.tags");
+              }}
+            />,
+          )}
+          {metaField(
+            "homepage",
+            t("mcp.field.meta.homepage"),
+            t("mcp.hint.meta.homepage"),
+            <TextField
+              field="meta.homepage"
+              value={textOf(draftMeta(draft).homepage)}
+              placeholder="https://example.com"
+              onChange={(value: string) => {
+                setDraft((prev) => withMetaField(prev, "homepage", value));
+                touch("meta.homepage");
+              }}
+            />,
+          )}
+        </div>
+      </Section>
+      {formError === undefined ? null : (
+        <Banner tone="danger" testId="mcp-form-error">
+          {formError}
+        </Banner>
+      )}
+      {serverErrors.length === 0 ? null : (
+        <Banner tone="danger" testId="mcp-form-server-errors">
+          {t("mcp.form.serverErrors", { count: serverErrors.length }) + " " + t("mcp.form.unknownField")}
+          <ul className={styles.serverErrors}>
+            {serverErrors.map((error, index) => (
+              <li key={index} className={styles.serverErrorItem}>
+                {error.path + "：" + error.message}
+              </li>
+            ))}
+          </ul>
+        </Banner>
+      )}
+      {commandWarning === undefined ? null : (
+        <Banner tone="warn" testId="mcp-command-warning">
+          {commandWarning}
+        </Banner>
+      )}
+      <div className={styles.actions}>
+        <Button
+          variant="primary"
+          data-testid="mcp-form-save"
+          {...(busy ? { disabled: true } : {})}
+          onClick={() => save(false)}
+        >
+          {busy ? t("mcp.saving") : t("mcp.form.save")}
+        </Button>
+        {commandWarning === undefined ? null : (
+          <Button
+            variant="outline"
+            data-testid="mcp-form-save-anyway"
+            {...(busy ? { disabled: true } : {})}
+            onClick={() => save(true)}
+          >
+            {t("mcp.form.saveAnyway")}
+          </Button>
+        )}
+        <Button
+          data-testid="mcp-form-to-json"
+          {...(busy ? { disabled: true } : {})}
+          onClick={() => props.onSwitchToJson(draft)}
+        >
+          {t("mcp.form.toJson")}
+        </Button>
+        <Button data-testid="mcp-form-cancel" onClick={props.onCancel}>
+          {t("mcp.cancel")}
+        </Button>
+        {showAll && errorCount > 0 ? (
+          <span className={styles.small} data-testid="mcp-form-error-count">
+            {t("mcp.form.errorCount", { count: errorCount })}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
 }

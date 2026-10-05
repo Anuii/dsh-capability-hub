@@ -78,9 +78,8 @@ export function Drawer(props: DrawerProps): React.ReactElement | null {
   // 焦点：打开时移进来，关闭时归还给打开它的那一行。
   React.useEffect(() => {
     if (!open) return;
-    const previous = typeof document !== "undefined" && document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+    const previous =
+      typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panelRef.current?.focus();
     return () => {
       if (previous !== null && previous.isConnected) previous.focus();
@@ -124,43 +123,50 @@ export function Drawer(props: DrawerProps): React.ReactElement | null {
   };
 
   return createPortal(
-    React.createElement("div", { className: kit.drawerLayer + " " + kit.scope, onKeyDown },
-      React.createElement("div", {
-        className: kit.drawerMask,
-        "data-testid": props.testId === undefined ? undefined : props.testId + "-mask",
-        onClick: onClose,
-      }),
-      React.createElement("div", {
-        ref: panelRef,
-        className: kit.drawer,
-        "data-full": full ? "" : undefined,
-        role: "dialog",
-        "aria-modal": "true",
-        "aria-label": typeof props.title === "string" ? props.title : undefined,
-        tabIndex: -1,
-        "data-testid": props.testId,
-        ...(props.width === undefined ? {} : { style: { width: props.width } }),
-      },
-      React.createElement("header", { className: kit.drawerHead },
-        React.createElement("div", { className: kit.drawerHeadText },
-          React.createElement("div", { className: kit.drawerTitle }, props.title),
-          props.subtitle === undefined
-            ? null
-            : React.createElement("div", { className: kit.drawerSub, title: props.subtitleTitle ?? props.subtitle }, props.subtitle)),
-        React.createElement("div", { className: kit.drawerHeadEnd },
-          props.headerEnd,
-          React.createElement("button", {
-            type: "button",
-            className: kit.iconButton,
-            "aria-label": "关闭",
-            title: "关闭",
-            "data-testid": props.testId === undefined ? undefined : props.testId + "-close",
-            onClick: onClose,
-          }, "\u00d7"))),
-      React.createElement("div", { className: kit.drawerBody }, props.children),
-      props.footer === undefined
-        ? null
-        : React.createElement("footer", { className: kit.drawerFoot }, props.footer))),
+    <div className={kit.drawerLayer + " " + kit.scope} onKeyDown={onKeyDown}>
+      <div
+        className={kit.drawerMask}
+        data-testid={props.testId === undefined ? undefined : props.testId + "-mask"}
+        onClick={onClose}
+      />
+      <div
+        ref={panelRef}
+        className={kit.drawer}
+        data-full={full ? "" : undefined}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof props.title === "string" ? props.title : undefined}
+        tabIndex={-1}
+        data-testid={props.testId}
+        {...(props.width === undefined ? {} : { style: { width: props.width } })}
+      >
+        <header className={kit.drawerHead}>
+          <div className={kit.drawerHeadText}>
+            <div className={kit.drawerTitle}>{props.title}</div>
+            {props.subtitle === undefined ? null : (
+              <div className={kit.drawerSub} title={props.subtitleTitle ?? props.subtitle}>
+                {props.subtitle}
+              </div>
+            )}
+          </div>
+          <div className={kit.drawerHeadEnd}>
+            {props.headerEnd}
+            <button
+              type="button"
+              className={kit.iconButton}
+              aria-label="关闭"
+              title="关闭"
+              data-testid={props.testId === undefined ? undefined : props.testId + "-close"}
+              onClick={onClose}
+            >
+              {"\u00d7"}
+            </button>
+          </div>
+        </header>
+        <div className={kit.drawerBody}>{props.children}</div>
+        {props.footer === undefined ? null : <footer className={kit.drawerFoot}>{props.footer}</footer>}
+      </div>
+    </div>,
     host,
   );
 }

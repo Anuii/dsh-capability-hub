@@ -35,18 +35,22 @@ export interface MenuItem {
  * testid 落在真实 DOM 上，点它等于点菜单项（事件冒泡回 MenuItemButton）。
  */
 export function menuChildren(items: readonly MenuItem[], close: () => void): React.ReactElement[] {
-  return items.map((item, index) => React.createElement(MenuItemButton, {
-    key: item.id ?? String(index),
-    disabled: item.disabled === true || item.info === true,
-    danger: item.danger === true,
-    separatorBefore: item.separatorBefore === true,
-    onSelect: () => {
-      close();
-      item.onClick?.();
-    },
-  }, React.createElement("span", {
-    "data-testid": item.testId ?? item.id,
-  }, item.hint === undefined ? item.label : item.label + " \u00b7 " + item.hint)));
+  return items.map((item, index) => (
+    <MenuItemButton
+      key={item.id ?? String(index)}
+      disabled={item.disabled === true || item.info === true}
+      danger={item.danger === true}
+      separatorBefore={item.separatorBefore === true}
+      onSelect={() => {
+        close();
+        item.onClick?.();
+      }}
+    >
+      <span data-testid={item.testId ?? item.id}>
+        {item.hint === undefined ? item.label : item.label + " \u00b7 " + item.hint}
+      </span>
+    </MenuItemButton>
+  ));
 }
 
 /** 工具栏右侧的「⋯」按钮 + 菜单。 */
@@ -58,22 +62,30 @@ export function MoreMenu(props: {
 }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const close = (): void => setOpen(false);
-  return React.createElement("span", { className: kit.more, "data-testid": props.testId },
-    React.createElement(Menu, {
-      open,
-      onClose: close,
-      side: "bottom",
-      align: "end",
-      anchor: React.createElement("button", {
-        type: "button",
-        className: kit.moreButton,
-        "aria-label": props.label,
-        title: props.label,
-        "data-testid": props.testId === undefined ? undefined : props.testId + "-button",
-        onClick: () => setOpen((prev) => !prev),
-      }, "\u22ef"),
-    },
-    menuChildren(props.items, close)));
+  return (
+    <span className={kit.more} data-testid={props.testId}>
+      <Menu
+        open={open}
+        onClose={close}
+        side="bottom"
+        align="end"
+        anchor={
+          <button
+            type="button"
+            className={kit.moreButton}
+            aria-label={props.label}
+            title={props.label}
+            data-testid={props.testId === undefined ? undefined : props.testId + "-button"}
+            onClick={() => setOpen((prev) => !prev)}
+          >
+            {"\u22ef"}
+          </button>
+        }
+      >
+        {menuChildren(props.items, close)}
+      </Menu>
+    </span>
+  );
 }
 
 /** 主按钮的分支：label + 下拉菜单。 */
@@ -85,19 +97,27 @@ export function PrimaryMenuButton(props: {
 }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const close = (): void => setOpen(false);
-  return React.createElement("span", { className: kit.more, "data-testid": props.testId },
-    React.createElement(Menu, {
-      open,
-      onClose: close,
-      side: "bottom",
-      align: "end",
-      anchor: React.createElement(Button, {
-        variant: "primary",
-        "aria-haspopup": "menu",
-        "aria-expanded": open,
-        "data-testid": props.testId === undefined ? undefined : props.testId + "-button",
-        onClick: () => setOpen((prev) => !prev),
-      }, props.label + " \u25be"),
-    },
-    menuChildren(props.items, close)));
+  return (
+    <span className={kit.more} data-testid={props.testId}>
+      <Menu
+        open={open}
+        onClose={close}
+        side="bottom"
+        align="end"
+        anchor={
+          <Button
+            variant="primary"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            data-testid={props.testId === undefined ? undefined : props.testId + "-button"}
+            onClick={() => setOpen((prev) => !prev)}
+          >
+            {props.label + " \u25be"}
+          </Button>
+        }
+      >
+        {menuChildren(props.items, close)}
+      </Menu>
+    </span>
+  );
 }

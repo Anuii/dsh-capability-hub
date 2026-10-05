@@ -75,56 +75,75 @@ export function JsonEditor(props: JsonEditorProps): React.ReactElement {
     setText(JSON.stringify(result.values, null, 2));
   };
 
-  return React.createElement("div", { className: styles.json, "data-testid": "mcp-json" },
-    React.createElement(React.Fragment, null,
-      React.createElement("p", { className: styles.note }, t("mcp.json.hint")),
-      props.originalName === undefined
-        ? React.createElement("p", { className: styles.note }, t("mcp.json.hiddenWarning"))
-        : null,
-      React.createElement("textarea", {
-        className: styles.jsonTextarea,
-        value: text,
-        spellCheck: false,
-        "data-testid": "mcp-json-textarea",
-        onChange: (event: { target: { value: string } }) => setText(event.target.value),
-      }),
-      parseError === undefined
-        ? null
-        : React.createElement("p", { className: styles.fieldError, "data-testid": "mcp-json-parse-error" }, t("mcp.json.parseError", { message: parseError })),
-      errors.length === 0
-        ? null
-        : React.createElement(Banner, { tone: "danger", testId: "mcp-json-errors" },
-            React.createElement("span", null, t("mcp.json.errors", { count: errors.length })),
-            React.createElement("ul", { className: styles.jsonErrors },
-              errors.map((error, index) =>
-                React.createElement("li", { key: index, className: styles.jsonErrorRow, "data-testid": "mcp-json-error-" + String(index) },
-                  React.createElement("span", { className: styles.jsonErrorPath }, error.path),
-                  "：" + error.message)))),
-      okText === undefined ? null : React.createElement("p", { className: styles.commandOk, "data-testid": "mcp-json-ok" }, okText),
-      formError === undefined ? null : React.createElement(Banner, { tone: "danger", testId: "mcp-json-form-error" }, formError),
-      React.createElement("div", { className: styles.actions },
-        React.createElement(Button, {
-          variant: "primary",
-          "data-testid": "mcp-json-save",
-          ...(busy ? { disabled: true } : {}),
-          onClick: save,
-        }, busy ? t("mcp.saving") : t("mcp.json.save")),
-        React.createElement(Button, { "data-testid": "mcp-json-format", onClick: format }, t("mcp.json.format")),
-        React.createElement(Button, {
-          "data-testid": "mcp-json-to-form",
-          onClick: () => {
-            const result = parseJsonServer(text);
-            if (result.values === undefined) {
-              setParseError(result.error ?? "");
-              return;
-            }
-            setParseError(undefined);
-            props.onSwitchToForm(result.values);
-          },
-        }, t("mcp.json.toForm")),
-        React.createElement(Button, { "data-testid": "mcp-json-cancel", onClick: props.onCancel }, t("mcp.cancel")),
-        parsed.values === undefined
-          ? React.createElement("span", { className: styles.small }, t("mcp.json.parseError", { message: parsed.error ?? "" }))
-          : null)),
+  return (
+    <div className={styles.json} data-testid="mcp-json">
+      <React.Fragment>
+        <p className={styles.note}>{t("mcp.json.hint")}</p>
+        {props.originalName === undefined ? <p className={styles.note}>{t("mcp.json.hiddenWarning")}</p> : null}
+        <textarea
+          className={styles.jsonTextarea}
+          value={text}
+          spellCheck={false}
+          data-testid="mcp-json-textarea"
+          onChange={(event: { target: { value: string } }) => setText(event.target.value)}
+        />
+        {parseError === undefined ? null : (
+          <p className={styles.fieldError} data-testid="mcp-json-parse-error">
+            {t("mcp.json.parseError", { message: parseError })}
+          </p>
+        )}
+        {errors.length === 0 ? null : (
+          <Banner tone="danger" testId="mcp-json-errors">
+            <span>{t("mcp.json.errors", { count: errors.length })}</span>
+            <ul className={styles.jsonErrors}>
+              {errors.map((error, index) => (
+                <li key={index} className={styles.jsonErrorRow} data-testid={"mcp-json-error-" + String(index)}>
+                  <span className={styles.jsonErrorPath}>{error.path}</span>
+                  {"：" + error.message}
+                </li>
+              ))}
+            </ul>
+          </Banner>
+        )}
+        {okText === undefined ? null : (
+          <p className={styles.commandOk} data-testid="mcp-json-ok">
+            {okText}
+          </p>
+        )}
+        {formError === undefined ? null : (
+          <Banner tone="danger" testId="mcp-json-form-error">
+            {formError}
+          </Banner>
+        )}
+        <div className={styles.actions}>
+          <Button variant="primary" data-testid="mcp-json-save" {...(busy ? { disabled: true } : {})} onClick={save}>
+            {busy ? t("mcp.saving") : t("mcp.json.save")}
+          </Button>
+          <Button data-testid="mcp-json-format" onClick={format}>
+            {t("mcp.json.format")}
+          </Button>
+          <Button
+            data-testid="mcp-json-to-form"
+            onClick={() => {
+              const result = parseJsonServer(text);
+              if (result.values === undefined) {
+                setParseError(result.error ?? "");
+                return;
+              }
+              setParseError(undefined);
+              props.onSwitchToForm(result.values);
+            }}
+          >
+            {t("mcp.json.toForm")}
+          </Button>
+          <Button data-testid="mcp-json-cancel" onClick={props.onCancel}>
+            {t("mcp.cancel")}
+          </Button>
+          {parsed.values === undefined ? (
+            <span className={styles.small}>{t("mcp.json.parseError", { message: parsed.error ?? "" })}</span>
+          ) : null}
+        </div>
+      </React.Fragment>
+    </div>
   );
 }

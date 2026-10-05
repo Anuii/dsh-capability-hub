@@ -10,25 +10,25 @@ import * as React from "react";
 
 /** 拖动手柄（六个点）。 */
 export function GripIcon({ className }: { className?: string }): React.ReactElement {
-  return React.createElement("svg", {
-    className,
-    viewBox: "0 0 16 16",
-    width: 12,
-    height: 12,
-    fill: "currentColor",
-    "aria-hidden": "true",
-  },
-  React.createElement("circle", { cx: "6", cy: "4", r: "1.05" }),
-  React.createElement("circle", { cx: "10", cy: "4", r: "1.05" }),
-  React.createElement("circle", { cx: "6", cy: "8", r: "1.05" }),
-  React.createElement("circle", { cx: "10", cy: "8", r: "1.05" }),
-  React.createElement("circle", { cx: "6", cy: "12", r: "1.05" }),
-  React.createElement("circle", { cx: "10", cy: "12", r: "1.05" }));
+  return (
+    <svg className={className} viewBox="0 0 16 16" width={12} height={12} fill="currentColor" aria-hidden="true">
+      <circle cx="6" cy="4" r="1.05" />
+      <circle cx="10" cy="4" r="1.05" />
+      <circle cx="6" cy="8" r="1.05" />
+      <circle cx="10" cy="8" r="1.05" />
+      <circle cx="6" cy="12" r="1.05" />
+      <circle cx="10" cy="12" r="1.05" />
+    </svg>
+  );
 }
 
 /** 行的「打开详情」指示（淡色右尖括号）。 */
 export function ChevronGlyph({ className }: { className?: string }): React.ReactElement {
-  return React.createElement("span", { className, "aria-hidden": "true" }, "\u203a");
+  return (
+    <span className={className} aria-hidden="true">
+      {"\u203a"}
+    </span>
+  );
 }
 
 /**
@@ -39,21 +39,24 @@ export function ChevronGlyph({ className }: { className?: string }): React.React
  * 两个地方（工具栏的「刷新」按钮、以后任何要刷新的地方）共用同一个字形。
  */
 export function RefreshIcon({ className }: { className?: string }): React.ReactElement {
-  return React.createElement("svg", {
-    className,
-    viewBox: "0 0 16 16",
-    width: 14,
-    height: 14,
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.4",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    "aria-hidden": "true",
-    focusable: "false",
-  },
-  React.createElement("path", { d: "M13.2 8a5.2 5.2 0 1 1-1.6-3.75" }),
-  React.createElement("path", { d: "M13.4 1.9v3.2H10.2" }));
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 16 16"
+      width={14}
+      height={14}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75" />
+      <path d="M13.4 1.9v3.2H10.2" />
+    </svg>
+  );
 }
 
 /**
@@ -64,21 +67,21 @@ export function RefreshIcon({ className }: { className?: string }): React.ReactE
  * 展开时旋转 90°，旋转与动画由样式表上的 [data-open] 负责（含 reduced-motion）。
  */
 export function SectionChevron({ open, className }: { open: boolean; className?: string }): React.ReactElement {
-  return React.createElement("span", {
-    className,
-    "data-open": open ? "" : undefined,
-    "aria-hidden": "true",
-  },
-  React.createElement("svg", {
-    viewBox: "0 0 12 12",
-    width: 12,
-    height: 12,
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.4",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    focusable: "false",
-  },
-  React.createElement("path", { d: "M4.5 2.5 L8 6 L4.5 9.5" })));
+  return (
+    <span className={className} data-open={open ? "" : undefined} aria-hidden="true">
+      <svg
+        viewBox="0 0 12 12"
+        width={12}
+        height={12}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        focusable="false"
+      >
+        <path d="M4.5 2.5 L8 6 L4.5 9.5" />
+      </svg>
+    </span>
+  );
 }
