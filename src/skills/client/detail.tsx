@@ -8,7 +8,7 @@
  */
 
 import * as React from "react";
-import { Button, CodeBlock, Switch } from "@deepseek-ai/dsh-client-ui-primitives";
+import { Button, CodeBlock } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, Drawer, KeyValue, Section, SkeletonRows, kit } from "../../kit/index.ts";
 import { viewSkill } from "./data.ts";
 import { SkillSourceSection } from "./remote/source.tsx";
@@ -21,16 +21,13 @@ import {
   fileName,
   formatBytes,
   formatDateTime,
-  invocationAccess,
   isFlatSkill,
   levelLabel,
   levelTone,
-  modelAccessText,
   sortFiles,
-  toggleBlockReason,
-  toggleLabel,
-  userAccessText,
 } from "./format.ts";
+import { accessLines, skillToggle } from "./row.ts";
+import { SkillSwitch } from "./switch.tsx";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { RootInfo, SkillSummary, SkillView } from "../contract/local.ts";
@@ -76,7 +73,8 @@ export function SkillDetailDrawer(props: SkillDetailProps): React.ReactElement {
   }, [skill.id, props.workspace]);
 
   const name = displayName(skill).text;
-  const blocked = toggleBlockReason(skill);
+  const toggle = skillToggle(skill, props.busy);
+  const access = accessLines(skill);
   const files = view === undefined ? [] : sortFiles(view.files);
   const root = props.root;
 
@@ -116,12 +114,12 @@ export function SkillDetailDrawer(props: SkillDetailProps): React.ReactElement {
     // 调用权限（D-B17）：模型调用由右上开关控制；用户调用只读展示（键缺省即允许）。
     {
       label: t("skills.access.model"),
-      value: modelAccessText(invocationAccess(skill)),
+      value: access.model,
       testId: "skills-detail-access-model",
     },
     {
       label: t("skills.access.user"),
-      value: userAccessText(invocationAccess(skill)),
+      value: access.user,
       testId: "skills-detail-access-user",
     },
     {
@@ -193,19 +191,8 @@ export function SkillDetailDrawer(props: SkillDetailProps): React.ReactElement {
       subtitleTitle={skill.path}
       testId="skills-detail"
       onClose={props.onClose}
-      /* 只读技能不放开关（与列表一致）：调用权限在「概览」里写明。 */ {...(!skill.writable
-        ? {}
-        : {
-            headerEnd: (
-              <Switch
-                checked={!skill.modelInvocationDisabled}
-                disabled={props.busy || blocked !== undefined}
-                label={toggleLabel(skill)}
-                {...(blocked === undefined ? {} : { title: blocked })}
-                onChange={(next: boolean) => props.onToggle(next)}
-              />
-            ),
-          })}
+      // 只读技能不放开关（与列表一致）：调用权限在「概览」里写明。
+      {...(toggle === undefined ? {} : { headerEnd: <SkillSwitch toggle={toggle} onChange={props.onToggle} /> })}
       footer={
         <React.Fragment>
           <Button

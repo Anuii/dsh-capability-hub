@@ -1,15 +1,8 @@
 /**
- * 技能标签页的**纯逻辑**（UI-A 重做后：按 docs/UI-DESIGN.md §4 的口径）。
- *
- * 这里刻意不碰 DOM、不碰 React、不发请求：全部可以用 node:test 直接测
- * （见 test/skills/client/format.test.ts）。
- * 文案一律走 strings.ts 的 t()，所以测试断言的是界面上真正会出现的字。
- *
- * 与重做前的差别（都来自 UI-DESIGN §4）：
- *   - 筛选从 6 段收敛成 4 段：全部 / 已启用 / 已停用 / 需关注；
- *   - 「需关注」= 不可加载 + 被遮蔽 + 可更新（可更新来自远程 store，用 MatchContext 传进来）；
- *   - 分组不再折叠空的根，而是**隐藏**它们（列表底部给一行「另有 N 个…」可切换）；
- *   - 一行的标记只剩三种：不可加载 / 可更新 / 被遮蔽（外加「无名称」兜底），最多 2 个。
+ * 技能页的纯逻辑（不碰 DOM、不碰 React、不发请求，node:test 直接测，见 test/skills/client/format.test.ts）：
+ * 技能目录（范围、路径缩写、排序）、显示名、搜索与四段筛选（全部 / 已启用 / 已停用 / 需关注）、
+ * 诊断级别、格式化、局部更新、错误映射。
+ * 「一行技能长什么样」在 row.ts，分组在 tree.ts。文案一律走 strings.ts 的 t()。
  */
 
 import type {
@@ -353,51 +346,7 @@ export function filterCounts(skills: readonly SkillSummary[], context?: MatchCon
   return counts;
 }
 
-/* ---------------- 行标记与启停 ---------------- */
-
-export interface RowBadge {
-  key: string;
-  label: string;
-  tone: BadgeTone;
-  title?: string;
-}
-
-/**
- * 一行的标记（UI-DESIGN §4）：不可加载（danger）、可更新（accent）、被遮蔽（neutral），
- * 外加「没有 name 时用目录名」的兜底标记。行内最多显示 2 个（多的由 kit 截掉），
- * 所以这里的顺序就是优先级。
- */
-export function rowBadges(skill: SkillSummary, context?: MatchContext): RowBadge[] {
-  const badges: RowBadge[] = [];
-  if (!skill.loadable) {
-    badges.push({
-      key: "notLoadable",
-      label: t("skills.tag.notLoadable"),
-      tone: "danger",
-      title: t("skills.tag.notLoadableTitle"),
-    });
-  }
-  if (context?.updatable?.has(skill.id) === true) {
-    badges.push({
-      key: "updatable",
-      label: t("skills.tag.updatable"),
-      tone: "accent",
-      title: t("skills.tag.updatableTitle"),
-    });
-  }
-  if (skill.shadowedBy !== undefined) {
-    badges.push({
-      key: "shadowed",
-      label: t("skills.tag.shadowed"),
-      tone: "neutral",
-      title: t("skills.tag.shadowedTitle", { id: skill.shadowedBy }),
-    });
-  }
-  if (displayName(skill).fromDir) {
-    badges.push({ key: "noName", label: t("skills.tag.noName"), tone: "neutral", title: t("skills.name.hint") });
-  }
-  return badges;
-}
+/* ---------------- 诊断级别 ---------------- */
 
 /** 诊断级别 → kit Badge 的 tone（详情「体检」用）。 */
 export function levelTone(level: DiagnosticLevel): BadgeTone {
@@ -411,89 +360,6 @@ export function levelLabel(level: DiagnosticLevel): string {
   if (level === "error") return t("skills.diag.level.error");
   if (level === "warning") return t("skills.diag.level.warning");
   return t("skills.diag.level.info");
-}
-
-/**
- * 不能启停时给出**人能看懂的原因**（D-B3 / 验收 U2）。
- * 返回 undefined = 可以启停。
- */
-export function toggleBlockReason(skill: SkillSummary): string | undefined {
-  if (!skill.writable) return t("skills.toggle.blockedReadonly");
-  if (!skill.format.safeToToggle) {
-    const detail = skill.diagnostics.find((item) => item.level === "error" || item.level === "warning");
-    const base = t("skills.toggle.blockedUnsafe");
-    return detail === undefined ? base : `${base}：${detail.message}`;
-  }
-  return undefined;
-}
-
-/** 启停开关的无障碍名 / 悬停文案。 */
-export function toggleLabel(skill: SkillSummary): string {
-  const name = displayName(skill).text;
-  return skill.modelInvocationDisabled ? t("skills.toggle.enable", { name }) : t("skills.toggle.disable", { name });
-}
-
-/* ---------------- 调用权限（D-B17） ---------------- */
-
-/**
- * 技能的调用权限，口径与 DSH 一致（dsh-skill-filesystem）：
- *   模型调用 = disable-model-invocation 不是 true（列表上的开关就是它，可改）；
- *   用户调用 = user-invocable 不是 false（只读展示，键缺省即允许）。
- */
-export interface InvocationAccess {
-  model: boolean;
-  user: boolean;
-  /** user-invocable 是否在 frontmatter 里显式写了 */
-  userExplicit: boolean;
-  /** 模型调用能不能在界面上改（技能所在目录可写） */
-  editable: boolean;
-}
-
-export function invocationAccess(
-  skill: Pick<SkillSummary, "modelInvocationDisabled" | "userInvocable"> & { writable?: boolean },
-): InvocationAccess {
-  return {
-    model: !skill.modelInvocationDisabled,
-    user: skill.userInvocable !== false,
-    userExplicit: skill.userInvocable !== null,
-    editable: skill.writable !== false,
-  };
-}
-
-/** 行尾那一小段文字：模型、用户 / 仅模型 / 仅用户 / 不可调用。 */
-export function invocationLabel(access: InvocationAccess): string {
-  if (access.model && access.user) return t("skills.access.both");
-  if (access.model) return t("skills.access.modelOnly");
-  if (access.user) return t("skills.access.userOnly");
-  return t("skills.access.none");
-}
-
-/** 模型调用的说明（详情与悬停提示共用）。 */
-export function modelAccessText(access: InvocationAccess): string {
-  if (!access.editable)
-    return access.model ? t("skills.access.modelAllowedReadonly") : t("skills.access.modelDeniedReadonly");
-  return access.model ? t("skills.access.modelAllowed") : t("skills.access.modelDenied");
-}
-
-/** 用户调用的说明：区分「默认允许」与「显式写了」。 */
-export function userAccessText(access: InvocationAccess): string {
-  if (!access.user) return t("skills.access.userDenied");
-  return access.userExplicit ? t("skills.access.userAllowed") : t("skills.access.userDefault");
-}
-
-/** 行尾文字的悬停提示：两种调用各一行。 */
-export function invocationTitle(access: InvocationAccess): string {
-  return (
-    t("skills.access.title") +
-    "\n" +
-    t("skills.access.model") +
-    "：" +
-    modelAccessText(access) +
-    "\n" +
-    t("skills.access.user") +
-    "：" +
-    userAccessText(access)
-  );
 }
 
 /* ---------------- 格式化 ---------------- */

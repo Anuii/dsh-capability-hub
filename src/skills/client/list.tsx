@@ -1,34 +1,20 @@
 /**
  * 技能列表（UI-DESIGN §3，D-B14 / D-B15）：**只通过 kit 拼界面**。
  *
- * 一处一事：一行只回答「这是什么、开没开」——
- *   标题 = name（没有 name 时用目录名 + 「无名称」标记）+ 淡色目录标签（.agents / .dsh；层级里只有一个目录时不显示）
- *   副标题 = description（没有就是空行，保持行高一致）
- *   标记 = 不可加载 / 可更新 / 被遮蔽（最多 2 个，由 kit 截断）
- *   行尾 = 调用权限文字（模型、用户 / 仅模型 / 仅用户 / 不可调用，D-B17）+ 开关（模型调用；只读或不可安全改写时禁用，工具提示写原因）
- * 其余信息（来源、更新、诊断、文件、SKILL.md）全在详情抽屉里。
+ * 一处一事：一行只回答「这是什么、开没开」，长什么样由 row.ts 的 skillRowView 决定
+ * （标题、目录标签、描述、标记、调用权限文字、开关）；其余信息全在详情抽屉里。
  *
  * 分组（tree.ts）：一级 = 层级（DSH 内置默认折叠 / 用户级 / 项目级），二级 = 来源仓库。
- * 折叠状态在本组件里（标签隐藏而不卸载，切标签不会丢）；搜索或任何筛选时有匹配的分组先展开，
- * 筛选中仍可折叠（只对这一次筛选有效），清空后回到原来的折叠。
+ * 折叠用 kit 的 useFold（规则见 kit/fold.ts），状态在本组件里（标签隐藏而不卸载，切标签不会丢）。
  */
 import * as React from "react";
-import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, EmptyState, ListGroup, ListRow, ListSurface, SkeletonRows, kit, useFold } from "../../kit/index.ts";
 import { useRemoteState } from "./remote/use-store.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import {
-  displayName,
-  invocationAccess,
-  invocationLabel,
-  invocationTitle,
-  rowBadges,
-  toggleBlockReason,
-  toggleLabel,
-  type FilterId,
-  type MatchContext,
-} from "./format.ts";
+import type { FilterId, MatchContext } from "./format.ts";
+import { skillRowView } from "./row.ts";
+import { SkillSwitch } from "./switch.tsx";
 import {
   LEVELS,
   buildSkillTree,
@@ -62,7 +48,7 @@ export interface SkillListProps {
   onAdd(): void;
 }
 
-/** 一行技能。 */
+/** 一行技能（长什么样由 row.ts 决定，这里只渲染）。 */
 function SkillRow(props: {
   skill: SkillSummary;
   tag: { text: string; title: string } | undefined;
@@ -72,18 +58,18 @@ function SkillRow(props: {
   onOpen(skill: SkillSummary): void;
 }): React.ReactElement {
   const { skill } = props;
-  const name = displayName(skill);
-  const blocked = toggleBlockReason(skill);
-  const badges = rowBadges(skill, props.context);
-  const access = invocationAccess(skill);
+  const view = skillRowView(skill, {
+    context: props.context,
+    busy: props.busy,
+    ...(props.tag === undefined ? {} : { dirTag: props.tag }),
+  });
   return (
     <ListRow
       testId={"skills-row-" + skill.id}
-      title={name.text}
-      {...(props.tag === undefined ? {} : { tag: { ...props.tag, testId: "skills-dir-tag-" + skill.id } })}
-      // 空描述也渲染副标题：行高保持 52px，列表看起来是一条直线（UI-DESIGN §1）
-      subtitle={skill.description ?? ""}
-      badges={badges.map((badge) => (
+      title={view.title}
+      {...(view.tag === undefined ? {} : { tag: { ...view.tag, testId: "skills-dir-tag-" + skill.id } })}
+      subtitle={view.subtitle}
+      badges={view.badges.map((badge) => (
         <Badge
           key={badge.key}
           tone={badge.tone}
@@ -93,27 +79,12 @@ function SkillRow(props: {
           {badge.label}
         </Badge>
       ))}
-      // 调用权限（D-B17）：开关管模型调用，这段文字把两种调用一起说清楚，悬停看来源。
-      // 默认的「模型、用户」调淡，例外（仅模型 / 仅用户 / 不可调用）才醒目。
-      note={{
-        text: invocationLabel(access),
-        title: invocationTitle(access),
-        muted: access.model && access.user,
-        testId: "skills-access-" + skill.id,
-      }}
-      // 只读技能（DSH 内置、自定义只读目录）不放开关——禁用的开关容易被看成「已关闭」；
-      // 留一个同宽空位让行尾文字仍对齐。层级标题上已标「只读」。
+      note={{ ...view.access, testId: "skills-access-" + skill.id }}
       trailing={
-        !skill.writable ? (
+        view.toggle === undefined ? (
           <span className={kit.trailingSpacer} aria-hidden="true" />
         ) : (
-          <Switch
-            checked={!skill.modelInvocationDisabled}
-            disabled={props.busy || blocked !== undefined}
-            label={toggleLabel(skill)}
-            {...(blocked === undefined ? {} : { title: blocked })}
-            onChange={(next: boolean) => props.onToggle(skill, next)}
-          />
+          <SkillSwitch toggle={view.toggle} onChange={(next) => props.onToggle(skill, next)} />
         )
       }
       onOpen={() => props.onOpen(skill)}

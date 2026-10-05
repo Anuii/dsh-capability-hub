@@ -28,9 +28,6 @@ import {
   formatDateTime,
   groupByRoot,
   hasProblems,
-  invocationAccess,
-  invocationLabel,
-  invocationTitle,
   isConflict,
   isProjectRoot,
   levelLabel,
@@ -50,8 +47,6 @@ import {
   sortFiles,
   sortSkills,
   sortTrash,
-  toggleBlockReason,
-  toggleLabel,
   trashReasonLabel,
   type FilterId,
   type MatchContext,
@@ -314,27 +309,6 @@ test("诊断计数、级别文案与色调", () => {
   assert.equal(levelLabel("info"), "提示");
 });
 
-test("启停禁用原因与无障碍名（D-B3）", () => {
-  assert.equal(toggleBlockReason(makeSkill({ id: "a:ok" })), undefined);
-
-  const readonly = makeSkill({ id: "custom-0:ro", rootId: "custom-0", writable: false });
-  assert.equal(toggleBlockReason(readonly), "只读根，不能启停");
-
-  const unsafe = makeSkill({
-    id: "user-agents:bom",
-    format: { eol: "lf", bom: true, safeToToggle: false },
-    diagnostics: [diag("error", "BOM_PRESENT", "文件以 UTF-8 BOM 开头。")],
-  });
-  assert.equal(toggleBlockReason(unsafe), "文件格式不支持安全改写（只能手工改）：文件以 UTF-8 BOM 开头。");
-
-  const unsafeNoDiag = makeSkill({ id: "user-agents:x", format: { eol: "mixed", bom: false, safeToToggle: false } });
-  assert.equal(toggleBlockReason(unsafeNoDiag), "文件格式不支持安全改写（只能手工改）");
-
-  assert.equal(toggleLabel(makeSkill({ id: "a:on", name: "on" })), "停用「on」");
-  assert.equal(toggleLabel(makeSkill({ id: "a:off", name: "off", modelInvocationDisabled: true })), "启用「off」");
-  assert.equal(toggleLabel(makeSkill({ id: "a:noname", dirName: "dir-only" })), "停用「dir-only」");
-});
-
 test("格式化：字节 / 时间 / 行尾 / 回收站原因", () => {
   assert.equal(formatBytes(0), "0 B");
   assert.equal(formatBytes(512), "512 B");
@@ -440,29 +414,4 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
   const conflict = new FakeApiError("CONFLICT", "原路径已存在同名的目录/文件");
   assert.equal(isConflict(conflict), true);
   assert.equal(isConflict(new Error("读取失败：原路径已存在同名的目录/文件")), true, "没有 code 时按文案兜底");
-});
-
-test("调用权限（D-B17）：与 DSH 口径一致，四种组合各有一段文字，悬停说明来源", () => {
-  const both = invocationAccess(makeSkill({ id: "a:x" }));
-  assert.deepEqual(both, { model: true, user: true, userExplicit: false, editable: true });
-  assert.equal(invocationLabel(both), "模型、用户");
-  assert.match(invocationTitle(both), /模型调用：允许/);
-  assert.match(invocationTitle(both), /用户调用：允许（未设置 user-invocable，默认允许）/);
-
-  const modelOnly = invocationAccess(makeSkill({ id: "a:x", userInvocable: false }));
-  assert.equal(invocationLabel(modelOnly), "仅模型");
-  assert.match(invocationTitle(modelOnly), /用户调用：禁止（user-invocable: false）/);
-
-  const userOnly = invocationAccess(makeSkill({ id: "a:x", modelInvocationDisabled: true, userInvocable: true }));
-  assert.deepEqual(userOnly, { model: false, user: true, userExplicit: true, editable: true });
-  assert.equal(invocationLabel(userOnly), "仅用户");
-  assert.match(invocationTitle(userOnly), /模型调用：禁止（disable-model-invocation: true/);
-  assert.match(invocationTitle(userOnly), /用户调用：允许（user-invocable: true）/);
-
-  const none = invocationAccess(makeSkill({ id: "a:x", modelInvocationDisabled: true, userInvocable: false }));
-  assert.equal(invocationLabel(none), "不可调用");
-
-  const readonly = invocationAccess(makeSkill({ id: "custom-1:x", writable: false }));
-  assert.equal(readonly.editable, false);
-  assert.match(invocationTitle(readonly), /模型调用：允许（只读目录/, "只读技能不说「右侧开关可关闭」");
 });

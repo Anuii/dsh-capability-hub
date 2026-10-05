@@ -5,7 +5,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { clampBadges, MAX_ROW_BADGES } from "../../../src/kit/pure.ts";
-import { isFlatSkill, rowBadges, sortSkills } from "../../../src/skills/client/format.ts";
+import { isFlatSkill, sortSkills, type MatchContext } from "../../../src/skills/client/format.ts";
+import { skillRowView } from "../../../src/skills/client/row.ts";
+import type { SkillSummary } from "../../../src/skills/contract/local.ts";
+
+const rowBadges = (skill: SkillSummary, context?: MatchContext) =>
+  skillRowView(skill, context === undefined ? {} : { context }).badges;
 import { diag, makeSkill } from "./fixtures.ts";
 
 test("平铺技能：dirName 以 .md 结尾（大小写不敏感）", () => {
