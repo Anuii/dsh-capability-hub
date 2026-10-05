@@ -6,7 +6,7 @@
  * { ok:false, error:{ code, message, details? } }。
  */
 
-import { badRequest } from "./errors.ts";
+import { badRequest } from "../../shared/errors.ts";
 import { createSkillsLocalImpl, type SkillsLocalImpl } from "./api.ts";
 import type { HubContext, HubModule, RouteHandler } from "../../platform/contract/host.ts";
 import type { LockStash, SkillsLocalApi } from "../contract/local.ts";

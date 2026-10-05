@@ -4,14 +4,14 @@
  *
  *   - 读（GET skills/discovery）只读缓存、不联网；「是否已安装」每次按本机技能列表现算，不进缓存；
  *   - 刷新（POST skills/discovery/refresh）才联网，逐仓库独立成败，失败原因（已打码）记在该仓库条目上；
- *   - 增删改仓库只动该仓库的条目（由路由层调用 refresh / forget）。
+ *   - 增删改仓库只动该仓库的条目（规则在 repo-catalog.ts，它是仓库列表与发现的唯一入口）。
  *
  * 缓存写入是「读 - 合并 - 写」，同一进程内用一条 Promise 链串行化，避免并发刷新互相覆盖。
  */
 
 import path from "node:path";
 import { readJsonFile, writeJsonFile } from "./fsx.ts";
-import { notFound } from "./errors.ts";
+import { notFound } from "../../shared/errors.ts";
 import { installedIdOf, loadInstalledIndex, scanRepoSkills } from "./browse.ts";
 import type { GitHubClient } from "./github.ts";
 import type { Redactor } from "./redact.ts";

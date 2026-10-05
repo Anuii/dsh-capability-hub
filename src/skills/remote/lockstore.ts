@@ -18,7 +18,7 @@
 import path from "node:path";
 import { pathExists, readJsonFile, writeJsonFile } from "./fsx.ts";
 import { hashLocalDirectory, recordedHash } from "./hash.ts";
-import { internal } from "./errors.ts";
+import { internal } from "../../shared/errors.ts";
 import { repoRelativeSkillPath, skillMdPathOf } from "./sourceurl.ts";
 import { sanitizeName } from "./rootskill.ts";
 import {

@@ -11,7 +11,7 @@ import { rootSkillFiles, sanitizeName } from "./rootskill.ts";
 import { safeRelativePath, safeSegmentName } from "./safepath.ts";
 import { parseMiniFrontmatter } from "./frontmatter.ts";
 import { skillDirOf, skillMdPathOf } from "./sourceurl.ts";
-import { upstream } from "./errors.ts";
+import { upstream } from "../../shared/errors.ts";
 import type { GitHubClient } from "./github.ts";
 import type { SkillsLocalPort } from "./types.ts";
 import type { BrowseResult, BrowseSkill, DiscoverySkill } from "../contract/remote.ts";

@@ -3,7 +3,7 @@
  * 全部只接受 https/http 的 github.com，拒绝其它 host（避免把任意 URL 当仓库源）。
  */
 
-import { validation } from "./errors.ts";
+import { validation } from "../../shared/errors.ts";
 import { describeUnsafePath } from "./safepath.ts";
 
 export interface ParsedRepoRef {

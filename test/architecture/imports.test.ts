@@ -8,7 +8,7 @@
  *   客户端外壳    src/platform/client（页头、标签、HTTP 客户端 api.ts、标签契约 tab-props.ts）
  *   kit          src/kit（界面组件，不知道任何功能）
  *   契约          src/<功能>/contract（只放类型，宿主与客户端共用）
- *   共享          src/version.ts
+ *   共享          src/version.ts、src/shared/（错误码等不知道任何功能的叶子工具）
  *
  * 规则：
  *   1. 四个宿主功能模块互不 import，只能引用自己、契约（仅类型）与共享。
@@ -52,6 +52,7 @@ const ZONES: Array<[RegExp, Zone]> = [
   [/^kit\//, "kit"],
   [/^[a-z-]+\/contract\//, "contract"],
   [/^version\.ts$/, "shared"],
+  [/^shared\//, "shared"],
 ];
 
 function zoneOf(rel: string): Zone {

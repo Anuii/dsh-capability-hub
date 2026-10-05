@@ -13,6 +13,7 @@ import { Redactor, createRedactingLogger } from "./redact.ts";
 import { createSourceStore, type SourceStore } from "./lockstore.ts";
 import { createRepoStore, type RepoStore } from "./repos.ts";
 import { createDiscoveryStore } from "./repo-discovery.ts";
+import { createRepoCatalog } from "./repo-catalog.ts";
 import { createSkillsRemoteRoutes } from "./routes.ts";
 import type { RemoteOptions, SkillsLocalPort } from "./types.ts";
 import type { HubContext, HubModule } from "../../platform/contract/host.ts";
@@ -54,7 +55,14 @@ export function createSkillsRemoteModule(
     github,
     sources,
     repos,
-    discovery: createDiscoveryStore(scopedCtx),
+    catalog: createRepoCatalog({
+      github,
+      skills: deps.skills,
+      repos,
+      store: createDiscoveryStore(scopedCtx),
+      redactor,
+      ...(options.now === undefined ? {} : { now: options.now }),
+    }),
     redactor,
     now: options.now,
   });

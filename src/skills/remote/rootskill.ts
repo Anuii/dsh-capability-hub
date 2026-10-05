@@ -29,7 +29,7 @@ import { describeUnsafePath } from "./safepath.ts";
 import { hashFiles, hashTarDirectory, type FolderHash, type HashFile } from "./hash.ts";
 import { filesUnderDirectory, type TarEntry } from "./tar.ts";
 import { parseMiniFrontmatter } from "./frontmatter.ts";
-import { upstream } from "./errors.ts";
+import { upstream } from "../../shared/errors.ts";
 
 /**
  * 根级安装时**不写进技能目录**的目录名（任意层级；大小写不敏感）。

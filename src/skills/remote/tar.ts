@@ -10,7 +10,7 @@
  */
 
 import { describeUnsafePath, safeRelativePath } from "./safepath.ts";
-import { upstream } from "./errors.ts";
+import { upstream } from "../../shared/errors.ts";
 
 export const TAR_BLOCK_SIZE = 512;
 

@@ -8,7 +8,7 @@
 import fs from "node:fs/promises";
 import { statSync } from "node:fs";
 import path from "node:path";
-import { badRequest, conflict, internal, notFound, readOnly } from "./errors.ts";
+import { badRequest, conflict, internal, notFound, readOnly } from "../../shared/errors.ts";
 import { atomicWriteFile, isDirectory, readFileText, removePath, statOrUndefined, walkEntries } from "./fsx.ts";
 import { evaluateFrontmatter, rewriteDisableModelInvocation } from "./frontmatter.ts";
 import {

@@ -11,7 +11,7 @@ import type { AuthMode } from "../contract/remote.ts";
 
 import { execFile } from "node:child_process";
 import { gunzipSync } from "node:zlib";
-import { upstream, rateLimited } from "./errors.ts";
+import { upstream, rateLimited } from "../../shared/errors.ts";
 import { readTarEntries, type TarEntry } from "./tar.ts";
 import type { HubLogger } from "../../platform/contract/host.ts";
 

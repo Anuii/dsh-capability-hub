@@ -6,7 +6,7 @@
  * { ok:false, error:{ code, message, details? } }；VALIDATION 的 details 是 FieldError[]。
  */
 
-import { badRequest, conflict, notFound, validationFailed } from "./errors.ts";
+import { badRequest, conflict, notFound, validation } from "../../shared/errors.ts";
 import { checkCommand, type CheckCommandOptions } from "./check-command.ts";
 import {
   listImportSources,
@@ -129,7 +129,7 @@ export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOpti
       // 或 originalName 指向的服务器不存在）因此全部落在拒绝这一侧。
       const existingForMerge = originalName === undefined ? undefined : rawStoredOf(originalName);
       const placeholders = findHiddenPlaceholders(submitted, existingForMerge);
-      if (placeholders.length > 0) throw validationFailed(HIDDEN_PLACEHOLDER_MESSAGE, placeholders);
+      if (placeholders.length > 0) throw validation(HIDDEN_PLACEHOLDER_MESSAGE, placeholders);
       if (originalName !== undefined) {
         const existing = existingForMerge;
         if (existing === undefined) throw notFound("找不到要修改的服务器「" + originalName + "」。");
@@ -150,7 +150,7 @@ export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOpti
 
       const currentNames = store.get().servers.map((server) => server.serverName);
       const parsed = parseServerInput(submitted, { existingNames: currentNames, originalName });
-      if (parsed.errors.length > 0) throw validationFailed("MCP 服务器配置校验未通过。", parsed.errors);
+      if (parsed.errors.length > 0) throw validation("MCP 服务器配置校验未通过。", parsed.errors);
       const serverName = parsed.server.serverName as string;
 
       // D-C4：保存时检查启动命令（只查 PATH，不执行）
@@ -224,7 +224,7 @@ export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOpti
         for (const name of current) {
           if (!names.includes(name)) errors.push({ path: "names", message: "缺少服务器「" + name + "」。" });
         }
-        if (errors.length > 0) throw validationFailed("排序请求与现有服务器列表不一致。", errors);
+        if (errors.length > 0) throw validation("排序请求与现有服务器列表不一致。", errors);
         const byName = new Map(draft.servers.map((s) => [s.serverName, s]));
         draft.servers = names.map((name) => byName.get(name) as (typeof draft.servers)[number]);
       });
@@ -248,7 +248,7 @@ export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOpti
     "POST mcp/settings/update": async (req) => {
       const body = asRecord(req.body);
       const parsed = parseSettingsInput(body.settings);
-      if (parsed.errors.length > 0) throw validationFailed("全局设置校验未通过。", parsed.errors);
+      if (parsed.errors.length > 0) throw validation("全局设置校验未通过。", parsed.errors);
       const next = await store.save((draft) => {
         draft.settings = parsed.settings;
       });

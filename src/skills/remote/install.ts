@@ -23,7 +23,7 @@ import { rootSkillNameOf, skillMdTextOf, upstreamSkillFiles, upstreamSkillHash }
 import { assertPathInsideDirectory, describeUnsafePath, safeRelativePath, safeSegmentName } from "./safepath.ts";
 import { skillDirOf, skillMdPathOf } from "./sourceurl.ts";
 import { assertRepoShape } from "./repos.ts";
-import { badRequest, conflict, notFound, validation } from "./errors.ts";
+import { badRequest, conflict, notFound, validation } from "../../shared/errors.ts";
 import { localFolderHash, type SourceStore } from "./lockstore.ts";
 import { FLAT_SKILL_UNSUPPORTED_MESSAGE, isFlatSkill } from "./skillshape.ts";
 import type { GitHubClient } from "./github.ts";

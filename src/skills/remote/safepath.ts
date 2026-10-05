@@ -15,7 +15,7 @@
  */
 
 import path from "node:path";
-import { upstream } from "./errors.ts";
+import { upstream } from "../../shared/errors.ts";
 
 /** Windows 保留设备名（不区分大小写；带扩展名的形式 —— 如 NUL.txt —— 同样保留） */
 const WINDOWS_RESERVED_NAMES = new Set<string>([
