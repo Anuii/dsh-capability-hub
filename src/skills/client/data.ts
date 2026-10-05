@@ -7,7 +7,7 @@
  */
 
 import { api } from "../../platform/client/api.ts";
-import type { ListResult, SkillSummary, SkillView, TrashItem } from "./types.ts";
+import type { ListResult, SkillSummary, SkillView, TrashItem } from "../contract/local.ts";
 
 /**
  * 当前会话工作区参数；undefined 与空白串都不下发 —— 宿主在没有 workspace 时

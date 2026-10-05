@@ -12,7 +12,8 @@
  * 阶段 B：4 个真实模块（skills-local / skills-remote / mcp-config / mcp-runtime）
  *         由本文件的 createFeatureModuleEntries() 按依赖顺序接入（见该函数顶部说明）。
  */
-import type { HubContext, HubModule, RouteTable } from "./types.ts";
+import type { HubContext } from "../contract/host.ts";
+import type { HubModule, RouteTable } from "../contract/host.ts";
 import type { SdkLoadState } from "./sdk-loader.ts";
 import { createMcpConfigModule } from "../../mcp/config/module.ts";
 import { createSkillsLocalModule } from "../../skills/local/module.ts";

@@ -12,7 +12,8 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { walkFiles } from './fsx.ts';
 import { repoRelativeSkillPath, skillMdPathOf } from './sourceurl.ts';
 import { isFlatSkill } from './skillshape.ts';
-import type { DiscoverCandidate, RepoRecord, SkillsLocalApi, SourceEntry } from './types.ts';
+import type { SkillsLocalPort } from './types.ts';
+import type { DiscoverCandidate, RepoRecord, SourceEntry } from '../contract/remote.ts';
 import type { SourceStore } from './lockstore.ts';
 
 /** 扫描链接时只看这些小体积文本文件，避免读大二进制 */
@@ -45,7 +46,7 @@ export interface DiscoverOptions {
 }
 
 export interface DiscoverDeps {
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
   sources: SourceStore;
   repos: { list(): Promise<RepoRecord[]>; presets(): { repo: string; ref?: string; note: string }[] };
 }

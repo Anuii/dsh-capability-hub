@@ -11,7 +11,8 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { Diagnostic, HubContext, RootId, RootInfo, SkillSummary } from './types.ts';
+import type { Diagnostic, RootId, RootInfo, SkillSummary } from '../contract/local.ts';
+import type { HubContext } from '../../platform/contract/host.ts';
 import { evaluateFrontmatter } from './frontmatter.ts';
 import { isDirectory, pathExists, readFileText, statOrUndefined } from './fsx.ts';
 

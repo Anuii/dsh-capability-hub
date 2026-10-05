@@ -31,7 +31,7 @@ import {
 } from "../../../src/skills/client/remote/model.ts";
 import { t } from "../../../src/skills/client/strings.ts";
 import { makeSkill, root } from "./fixtures.ts";
-import type { DiscoverCandidate, SourceEntry } from "../../../src/skills/client/remote/types.ts";
+import type { DiscoverCandidate, SourceEntry } from "../../../src/skills/contract/remote.ts";
 
 const entry: SourceEntry = {
   skillId: "user-agents:grilling",

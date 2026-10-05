@@ -10,7 +10,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createFetchRoutes, parseRouteKey, registerRoutes, relativePath, routePath } from "../../../src/platform/host/router.ts";
 import type { RouterLogger } from "../../../src/platform/host/router.ts";
-import type { RouteTable } from "../../../src/platform/host/types.ts";
+import type { RouteTable } from "../../../src/platform/contract/host.ts";
 
 const logger: RouterLogger = { debug() {}, warn() {}, error() {} };
 

@@ -39,7 +39,7 @@ import { DeleteSkillDialog, PurgeAllDialog, PurgeOneDialog, RestoreConflictDialo
 import { SkillDetailDrawer } from "./detail.tsx";
 import { DirFilter, SkillList } from "./list.tsx";
 import { TrashDrawer } from "./trash.tsx";
-import type { ListResult, SkillSummary, TrashItem } from "./types.ts";
+import type { ListResult, SkillSummary, TrashItem } from "../contract/local.ts";
 
 /* 样式只注入一次（模块加载时；SSR/无 document 时自动跳过）。 */
 injectSkillsStyles();

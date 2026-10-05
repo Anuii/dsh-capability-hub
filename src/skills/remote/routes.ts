@@ -18,17 +18,13 @@ import type { GitHubClient } from './github.ts';
 import type { Redactor } from './redact.ts';
 import type { RepoStore } from './repos.ts';
 import type { SourceStore } from './lockstore.ts';
-import type {
-  HubContext,
-  InstallTarget,
-  RemoteOptions,
-  RouteHandler,
-  SkillsLocalApi,
-} from './types.ts';
+import type { RemoteOptions, SkillsLocalPort } from './types.ts';
+import type { HubContext, RouteHandler } from '../../platform/contract/host.ts';
+import type { InstallTarget } from '../contract/remote.ts';
 
 export interface RoutesDeps {
   ctx: HubContext;
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
   github: GitHubClient;
   sources: SourceStore;
   repos: RepoStore;

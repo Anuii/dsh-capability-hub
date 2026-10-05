@@ -17,7 +17,8 @@
 import { createMcpRuntime } from './runtime.ts';
 import type { McpRuntimeInternal } from './runtime.ts';
 import { BAD_REQUEST, NOT_FOUND } from './atoms/errors.ts';
-import type { HubContext, HubModule, McpConfigSource, McpSdk, RouteRequest } from './contract.ts';
+import type { McpConfigSource, McpSdk } from './contract.ts';
+import type { HubContext, HubModule, RouteRequest } from '../../platform/contract/host.ts';
 
 export interface McpRuntimeModuleDeps {
   config: McpConfigSource;

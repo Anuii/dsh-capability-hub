@@ -33,7 +33,7 @@ import {
 } from "./format.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { RootInfo, SkillSummary, SkillView } from "./types.ts";
+import type { RootInfo, SkillSummary, SkillView } from "../contract/local.ts";
 
 export interface SkillDetailProps {
   /** 列表里那一行（抽屉头部的名称与开关立刻可用） */

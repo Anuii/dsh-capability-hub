@@ -24,19 +24,15 @@ import { pathExists, removePath, writeDirectoryFiles } from './fsx.ts';
 import { locateSkill, type LocatedSkill } from './install.ts';
 import { skillMdPathOf } from './sourceurl.ts';
 import { FLAT_SKILL_UNSUPPORTED_MESSAGE, isFlatSkill } from './skillshape.ts';
-import type { AuthMode, GitHubClient, TarballResult } from './github.ts';
-import type {
-  SkillsLocalApi,
-  UpdateApplyItem,
-  UpdateApplyResult,
-  UpdateCheckItem,
-  UpdateCheckResult,
-} from './types.ts';
+import type { GitHubClient, TarballResult } from './github.ts';
+import type { AuthMode } from '../contract/remote.ts';
+import type { SkillsLocalPort } from './types.ts';
+import type { UpdateApplyItem, UpdateApplyResult, UpdateCheckItem, UpdateCheckResult } from '../contract/remote.ts';
 import type { SourceStore } from './lockstore.ts';
 
 export interface UpdateDeps {
   github: GitHubClient;
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
   sources: SourceStore;
   now?: () => Date;
 }

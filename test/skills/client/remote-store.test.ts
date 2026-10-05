@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRemoteStore } from "../../../src/skills/client/remote/store.ts";
-import type { SourceEntry } from "../../../src/skills/client/remote/types.ts";
+import type { SourceEntry } from "../../../src/skills/contract/remote.ts";
 
 function entry(skillId: string): SourceEntry {
   return { skillId, repo: "a/b", ref: "main", skillPath: "x/SKILL.md", store: "hub" };

@@ -14,10 +14,12 @@ import { createSourceStore, type SourceStore } from './lockstore.ts';
 import { createRepoStore, type RepoStore } from './repos.ts';
 import { createDiscoveryStore } from './repo-discovery.ts';
 import { createSkillsRemoteRoutes } from './routes.ts';
-import type { HubContext, HubModule, LockStash, RemoteOptions, SkillsLocalApi } from './types.ts';
+import type { RemoteOptions, SkillsLocalPort } from './types.ts';
+import type { HubContext, HubModule } from '../../platform/contract/host.ts';
+import type { LockStash } from '../contract/local.ts';
 
 export interface SkillsRemoteDeps {
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
 }
 
 export interface SkillsRemoteModule extends HubModule {
@@ -65,4 +67,6 @@ export function createSkillsRemoteModule(
   };
 }
 
-export type { SkillsLocalApi, LockStash, HubContext, HubModule } from './types.ts';
+export type { SkillsLocalPort } from './types.ts';
+export type { LockStash } from '../contract/local.ts';
+export type { HubContext, HubModule } from '../../platform/contract/host.ts';

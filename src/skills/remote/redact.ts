@@ -5,7 +5,7 @@
  * 一旦令牌字符串出现在日志参数里就被替换成 ***。响应与文件从不写令牌（代码层面没有路径）。
  */
 
-import type { HubLogger } from './types.ts';
+import type { HubLogger } from '../../platform/contract/host.ts';
 
 export const REDACTED = '***';
 

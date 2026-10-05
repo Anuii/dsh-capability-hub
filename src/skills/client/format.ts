@@ -12,16 +12,9 @@
  *   - 一行的标记只剩三种：不可加载 / 可更新 / 被遮蔽（外加「无名称」兜底），最多 2 个。
  */
 
-import type {
-  DiagnosticLevel,
-  ListResult,
-  RootInfo,
-  SkillSummary,
-  SkillViewFile,
-  TrashItem,
-  TrashReason,
-} from "./types.ts";
+import type { DiagnosticLevel, ListResult, RootInfo, SkillSummary, SkillViewFile, TrashItem, TrashReason } from "../contract/local.ts";
 import { t } from "./strings.ts";
+import type { BadgeTone } from "../../kit/index.ts";
 
 /* ---------------- 技能根 ---------------- */
 
@@ -355,8 +348,6 @@ export function filterCounts(skills: readonly SkillSummary[], context?: MatchCon
 
 /* ---------------- 行标记与启停 ---------------- */
 
-/** kit Badge 的 tone（UI-DESIGN §1：neutral / accent / warn / danger）。 */
-export type BadgeTone = "neutral" | "accent" | "warn" | "danger";
 
 export interface RowBadge {
   key: string;

@@ -24,7 +24,7 @@ import {
   sliceVisible,
 } from "../../../src/skills/client/remote/discovery-model.ts";
 import { normalizeDiscovery } from "../../../src/skills/client/remote/data.ts";
-import type { DiscoveredSkill } from "../../../src/skills/client/remote/types.ts";
+import type { DiscoveredSkill } from "../../../src/skills/contract/remote.ts";
 
 const SKILLS: DiscoveredSkill[] = [
   { repo: "mattpocock/skills", ref: "main", skillPath: "skills/tdd/SKILL.md", dirName: "tdd", name: "tdd", description: "测试驱动开发", installedId: "user-agents:tdd" },

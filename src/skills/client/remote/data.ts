@@ -8,20 +8,7 @@
 
 import { api } from "../../../platform/client/api.ts";
 import { workspaceQuery } from "../data.ts";
-import type {
-  BrowseResult,
-  DiscoverCandidate,
-  DiscoveryView,
-  DiscoveryRepoView,
-  GithubAuth,
-  InstallItemResult,
-  InstallTarget,
-  RepoRecord,
-  SearchResultItem,
-  SourceEntry,
-  UpdateApplyResult,
-  UpdateCheckResult,
-} from "./types.ts";
+import type { BrowseResult, DiscoverCandidate, DiscoveryView, DiscoveryRepoView, GithubAuth, InstallItemResult, InstallTarget, RepoRecord, SearchResultItem, SourceEntry, UpdateApplyResult, UpdateCheckResult } from "../../contract/remote.ts";
 
 function withWorkspace(body: Record<string, unknown>, workspace: string | undefined): Record<string, unknown> {
   return { ...body, ...(workspaceQuery(workspace) ?? {}) };

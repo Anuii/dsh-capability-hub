@@ -42,7 +42,7 @@ import {
   type FoldState,
   type LevelView,
 } from "./tree.ts";
-import type { ListResult, SkillSummary } from "./types.ts";
+import type { ListResult, SkillSummary } from "../contract/local.ts";
 
 export interface SkillListProps {
   list: ListResult;

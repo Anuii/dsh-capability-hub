@@ -3,11 +3,7 @@
  * 路由器据此产出 { ok:false, error:{ code, message, details? } }。
  */
 
-export interface HubError extends Error {
-  status: number;
-  code: string;
-  details?: unknown;
-}
+import type { HubError } from '../../platform/contract/host.ts';
 
 export function hubError(status: number, code: string, message: string, details?: unknown): HubError {
   const error = new Error(message) as HubError;

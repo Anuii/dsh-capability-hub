@@ -10,7 +10,7 @@ import { Badge, Drawer, EmptyState, ListGroup, ListRow, ListSurface, kit } from 
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import { formatDateTime, sortTrash, trashReasonLabel } from "./format.ts";
-import type { TrashItem } from "./types.ts";
+import type { TrashItem } from "../contract/local.ts";
 
 export interface TrashDrawerProps {
   open: boolean;

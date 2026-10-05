@@ -8,7 +8,7 @@
 
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import type { HubContext } from './types.ts';
+import type { HubContext } from '../../platform/contract/host.ts';
 import type { RootSpec } from './scan.ts';
 
 export interface ExternalManagementInput {

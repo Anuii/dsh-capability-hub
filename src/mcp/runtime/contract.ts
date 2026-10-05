@@ -5,33 +5,6 @@
  * 功能模块互不 import，只通过注入的接口协作）。T3a 实现的 McpConfigSource 只要结构对得上即可。
  */
 
-/** PLAN §3.1 HubLogger。 */
-export interface HubLogger {
-  debug(...a: unknown[]): void;
-  info(...a: unknown[]): void;
-  warn(...a: unknown[]): void;
-  error(...a: unknown[]): void;
-}
-
-/** PLAN §3.1 HubContext。 */
-export interface HubContext {
-  homeDir: string;
-  dshHome: string;
-  hubHome: string;
-  profileName: string;
-  logger: HubLogger;
-  customSkillDirs: string[];
-  bundledSkillDir?: string;
-}
-
-/** PLAN §3.1 RouteRequest / RouteHandler / HubModule。 */
-export type RouteRequest = { query: Record<string, string>; body: unknown; signal: AbortSignal };
-export type RouteHandler = (req: RouteRequest) => Promise<unknown>;
-export interface HubModule {
-  routes: Record<string, RouteHandler>;
-  dispose?(): void | Promise<void>;
-}
-
 /** PLAN §3.5 transport / lifecycle。 */
 export type McpTransport = 'stdio' | 'streamable-http';
 export type McpLifecycle = 'lazy' | 'lazy-keep-alive' | 'eager' | 'keep-alive';

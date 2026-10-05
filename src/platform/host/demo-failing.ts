@@ -8,7 +8,7 @@
  *
  * 覆盖同步抛与异步 reject 两种失败方式。
  */
-import type { HubModule } from "./types.ts";
+import type { HubModule } from "../contract/host.ts";
 
 /** 立即同步抛错。 */
 export function createThrowingModule(): HubModule {

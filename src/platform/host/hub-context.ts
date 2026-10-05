@@ -17,7 +17,8 @@ import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { HubContext, HubLogger } from "./types.ts";
+import type { PlatformContext } from "./types.ts";
+import type { HubLogger } from "../contract/host.ts";
 
 /** 插件原始配置里属于平台层的部分。 */
 export interface PlatformConfig {
@@ -810,7 +811,7 @@ export function resolveHubContext(
   config: PlatformConfig,
   packageRoot: string,
   logger?: HubLogger,
-): HubContext {
+): PlatformContext {
   const log = logger ?? makeLogger(ctx);
   const overrides = config?.devOverrides;
   const overrideHome = overrides?.enabled === true && typeof overrides.homeDir === "string" && overrides.homeDir.trim() !== ""
@@ -844,7 +845,7 @@ export function resolveHubContext(
   for (const note of skills.contributions.filter((c) => c.disabled || c.note !== undefined)) {
     log.debug(`skill-filesystem 来源 ${note.kind}/${note.id}：${note.disabled ? "已停用" : (note.note ?? "已采用")}`);
   }
-  const context: HubContext = {
+  const context: PlatformContext = {
     homeDir,
     dshHome,
     hubHome,

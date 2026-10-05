@@ -6,7 +6,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import type { HubContext, HubLogger, LockStash } from '../../../src/skills/local/types.ts';
+import type { HubContext, HubLogger } from '../../../src/platform/contract/host.ts';
+import type { LockStash } from '../../../src/skills/contract/local.ts';
 
 export const QUIET_LOGGER: HubLogger = {
   debug() {},

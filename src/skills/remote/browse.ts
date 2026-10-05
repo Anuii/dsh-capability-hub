@@ -13,7 +13,9 @@ import { parseMiniFrontmatter } from './frontmatter.ts';
 import { skillDirOf, skillMdPathOf } from './sourceurl.ts';
 import { upstream } from './errors.ts';
 import type { GitHubClient } from './github.ts';
-import type { BrowseResult, BrowseSkill, DiscoverySkill, SkillSummary, SkillsLocalApi } from './types.ts';
+import type { SkillsLocalPort } from './types.ts';
+import type { BrowseResult, BrowseSkill, DiscoverySkill } from '../contract/remote.ts';
+import type { SkillSummary } from '../contract/local.ts';
 
 /** 与 npx skills 的 copyDirectory 排除清单对齐（快照与安装都不带这些） */
 const BROWSE_SKIP_DIRS = new Set(['.git', 'node_modules', '__pycache__', '__pypackages__']);
@@ -32,7 +34,7 @@ export interface BrowseOptions {
 
 export interface BrowseDeps {
   github: GitHubClient;
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
 }
 
 export interface ScanResult {
@@ -136,7 +138,7 @@ export function installedIdOf(skill: DiscoverySkill, index: InstalledIndex): str
 }
 
 /** 读本机技能列表建索引；扫描失败不影响浏览/发现（只少「已安装」标记）。 */
-export async function loadInstalledIndex(skills: SkillsLocalApi, workspace?: string): Promise<InstalledIndex> {
+export async function loadInstalledIndex(skills: SkillsLocalPort, workspace?: string): Promise<InstalledIndex> {
   try {
     const listed = await skills.list({ workspace });
     return buildInstalledIndex(listed.skills);

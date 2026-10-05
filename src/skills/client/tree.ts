@@ -13,10 +13,10 @@
  */
 
 import { findSourceFor } from "./remote/model.ts";
-import type { SourceEntry } from "./remote/types.ts";
+import type { SourceEntry } from "../contract/remote.ts";
 import { isDshInstallPath, matches, normalizePath, rootScope, sortSkills, type FilterId, type MatchContext } from "./format.ts";
 import { t } from "./strings.ts";
-import type { ListResult, RootInfo, SkillSummary } from "./types.ts";
+import type { ListResult, RootInfo, SkillSummary } from "../contract/local.ts";
 
 /* ---------------- 层级 ---------------- */
 

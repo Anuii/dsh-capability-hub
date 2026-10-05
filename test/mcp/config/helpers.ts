@@ -7,7 +7,7 @@ import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HubContext, HubLogger, RouteRequest } from '../../../src/mcp/config/types.ts';
+import type { HubContext, HubLogger, RouteRequest } from '../../../src/platform/contract/host.ts';
 
 export interface TempDir {
   path: string;

@@ -13,7 +13,7 @@ import { PARAMETER_NAMES } from '../../../src/mcp/runtime/tool-schema.ts';
 import { DESCRIPTION_PREFIX, describeEnabledServers } from '../../../src/mcp/runtime/constants.ts';
 import { FakeConfigSource, makeContext, makeServer, makeTempHome } from './helpers.ts';
 import { FakeMcpRegistry, createFakeSdk } from './fakes/fake-sdk.ts';
-import type { RouteRequest } from '../../../src/mcp/runtime/contract.ts';
+import type { RouteRequest } from '../../../src/platform/contract/host.ts';
 
 const SERVERS = [
   makeServer({ serverName: 'alpha', command: 'node', args: ['srv.js'] }),

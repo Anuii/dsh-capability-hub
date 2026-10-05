@@ -1,138 +1,15 @@
 /**
- * skills-remote（T2）对外契约类型（PLAN §3.1 / §3.4）。
- *
- * 按 PLAN §2「功能模块之间不得互相 import；需要的类型在自己目录内按本契约结构化定义」，
- * 这里逐字段结构化重现 HubContext / SkillsLocalApi / LockStash，不 import T0、T1 的代码。
+ * 远程技能模块内部的类型：磁盘文件形状（lock、sources.json、仓库列表、发现缓存）与注入点。
+ * HTTP 形状在 ../contract/remote.ts，宿主上下文在 platform/contract/host.ts（ADR-0002）。
  */
 
-/* ---------- 宿主上下文（PLAN §3.1） ---------- */
+import type { SkillsLocalApi as LocalApi } from '../contract/local.ts';
+import type { RepoRecord, DiscoverySkill, InstallTarget } from '../contract/remote.ts';
 
-export interface HubLogger {
-  debug(...a: unknown[]): void;
-  info(...a: unknown[]): void;
-  warn(...a: unknown[]): void;
-  error(...a: unknown[]): void;
-}
-
-export interface HubContext {
-  /** 默认 os.homedir()；dev profile 用插件配置 devOverrides.homeDir 指向夹具 */
-  homeDir: string;
-  /** DSH 数据根（默认 <homeDir>/.dsh） */
-  dshHome: string;
-  /** <dshHome>/storages/dsh-capability-hub */
-  hubHome: string;
-  profileName: string;
-  logger: HubLogger;
-  /** 只读根，可为空数组 */
-  customSkillDirs: string[];
-  /** 只读根，可缺失 */
-  bundledSkillDir?: string;
-}
-
-export interface RouteRequest {
-  query: Record<string, string>;
-  body: unknown;
-  signal: AbortSignal;
-}
-
-export type RouteHandler = (req: RouteRequest) => Promise<unknown>;
-
-export interface HubModule {
-  routes: Record<string, RouteHandler>;
-  dispose?(): void | Promise<void>;
-}
-
-/* ---------- skills-local（PLAN §3.3）的消费子集 ---------- */
-
-export type RootId = string;
-
-export interface Diagnostic {
-  level: 'error' | 'warning' | 'info';
-  code: string;
-  message: string;
-}
-
-export interface SkillSummary {
-  id: string;
-  rootId: RootId;
-  dirName: string;
-  path: string;
-  name?: string;
-  description?: string;
-  writable: boolean;
-  modelInvocationDisabled: boolean;
-  userInvocable: boolean | null;
-  loadable: boolean;
-  modelVisible: boolean;
-  shadowedBy?: string;
-  diagnostics: Diagnostic[];
-  format: { eol: 'lf' | 'crlf' | 'mixed'; bom: boolean; safeToToggle: boolean };
-  extraKeys: string[];
-  mtimeMs: number;
-}
-
-export interface RootInfo {
-  rootId: RootId;
-  path: string;
-  exists: boolean;
-  writable: boolean;
-  precedence: number;
-}
-
-export interface ListResult {
-  roots: RootInfo[];
-  skills: SkillSummary[];
-  warnings: string[];
-}
-
-export interface TrashItem {
-  trashId: string;
-  skillId: string;
-  rootId: RootId;
-  dirName: string;
-  originalPath: string;
-  name?: string;
-  reason: 'delete' | 'update' | 'replace';
-  deletedAt: string;
-  hasLockEntry: boolean;
-}
-
-/** 由 skills-remote 实现，接线时注入 skills-local。 */
-export interface LockStash {
-  take(skill: { rootId: string; dirName: string; path: string }): Promise<unknown | undefined>;
-  put(skill: { rootId: string; dirName: string; path: string }, entry: unknown): Promise<void>;
-}
-
-export interface SkillsLocalApi {
-  list(opts: { workspace?: string }): Promise<ListResult>;
-  get(id: string, opts: { workspace?: string }): Promise<SkillSummary | undefined>;
-  setEnabled(id: string, enabled: boolean, opts: { workspace?: string }): Promise<SkillSummary>;
-  moveToTrash(
-    id: string,
-    opts: { workspace?: string; reason: 'delete' | 'update' | 'replace'; lockEntry?: unknown }
-  ): Promise<TrashItem>;
-  rootPath(rootId: RootId, opts: { workspace?: string }): string | undefined;
-  /** 恢复回收站条目（T2 的「更新失败回滚」需要；实际由 T1 实现，测试用假实现） */
-  restore(trashId: string, opts: { replace?: boolean; workspace?: string }): Promise<SkillSummary>;
-}
+/** 远程技能模块用到的本地技能接口子集（外壳注入；测试用假实现）。 */
+export type SkillsLocalPort = Pick<LocalApi, 'list' | 'get' | 'setEnabled' | 'moveToTrash' | 'rootPath' | 'restore'>;
 
 /* ---------- skills-remote 自身（PLAN §3.4 / §3.7） ---------- */
-
-export type SourceStoreKind = 'skill-lock' | 'hub';
-
-/** 契约 §3.4 的对外条目 */
-export interface SourceEntry {
-  skillId: string;
-  /** owner/name */
-  repo: string;
-  ref?: string;
-  /** 仓库内 SKILL.md 路径，与 npx skills lock 同义 */
-  skillPath: string;
-  store: SourceStoreKind;
-  installedAt?: string;
-  updatedAt?: string;
-  skillFolderHash?: string;
-}
 
 /** hubHome/skills/sources.json 中一条记录的完整形态（含定位信息） */
 export interface HubStoreEntry {
@@ -178,40 +55,10 @@ export interface HubStoreFile {
   [key: string]: unknown;
 }
 
-export interface RepoRecord {
-  repo: string;
-  ref?: string;
-  /** 只在仓库的这个子目录下发现技能（相对路径，正斜杠，不带首尾斜杠） */
-  subPath?: string;
-  preset: boolean;
-}
-
 export interface RepoReposFile {
   version: number;
   repos: RepoRecord[];
   [key: string]: unknown;
-}
-
-export interface BrowseSkill {
-  skillPath: string;
-  dirName: string;
-  name?: string;
-  description?: string;
-  installedId?: string;
-}
-
-export interface BrowseResult {
-  repo: string;
-  ref: string;
-  skills: BrowseSkill[];
-}
-
-/** 发现缓存里的一个技能（不含「是否已安装」——那个每次读取时现算） */
-export interface DiscoverySkill {
-  skillPath: string;
-  dirName: string;
-  name?: string;
-  description?: string;
 }
 
 /** 发现缓存里一个仓库的上次扫描结果（<hubHome>/skills/discovery.json） */
@@ -234,88 +81,6 @@ export interface DiscoveryCacheFile {
   repos: Record<string, DiscoveryCacheEntry>;
   [key: string]: unknown;
 }
-
-/** GET skills/discovery 里的一个仓库条目 */
-export interface DiscoveryRepoView {
-  repo: string;
-  ref?: string;
-  subPath?: string;
-  preset: boolean;
-  /** 从未扫描过时没有 */
-  scannedAt?: string;
-  resolvedRef?: string;
-  skillCount?: number;
-  error?: string;
-  /** 缓存是按旧的分支/子目录扫的 */
-  stale?: boolean;
-}
-
-/** 汇总发现里的一个技能 */
-export interface DiscoveredSkill extends DiscoverySkill {
-  repo: string;
-  /** 安装时要带的分支（实际解析到的分支） */
-  ref?: string;
-  installedId?: string;
-}
-
-export interface DiscoveryView {
-  /** false = 从未扫描过任何仓库（客户端据此自动扫一次） */
-  cached: boolean;
-  lastScannedAt?: string;
-  repos: DiscoveryRepoView[];
-  skills: DiscoveredSkill[];
-}
-
-export interface DiscoverCandidate {
-  skillId: string;
-  repo: string;
-  ref?: string;
-  skillPath: string;
-  confidence: 'high' | 'medium' | 'low';
-  reason: string;
-}
-
-export type UpdateStatus = 'up-to-date' | 'update-available' | 'no-source' | 'error';
-
-export interface UpdateCheckItem {
-  skillId: string;
-  status: UpdateStatus;
-  message?: string;
-}
-
-export interface UpdateCheckResult {
-  results: UpdateCheckItem[];
-  auth: 'env' | 'gh' | 'anonymous';
-  rateLimitRemaining?: number;
-}
-
-export interface UpdateApplyItem {
-  skillId: string;
-  ok: boolean;
-  message?: string;
-  trashId?: string;
-}
-
-export interface UpdateApplyResult {
-  results: UpdateApplyItem[];
-}
-
-export interface InstallItemResult {
-  skillPath: string;
-  ok: boolean;
-  skillId?: string;
-  message?: string;
-}
-
-export interface SearchResultItem {
-  name: string;
-  description?: string;
-  repo: string;
-  skillPath?: string;
-  installs?: number;
-}
-
-export type InstallTarget = 'user-agents' | 'user-dsh' | 'project-agents' | 'project-dsh';
 
 /** 需要项目级根的目标 */
 export const PROJECT_TARGETS: InstallTarget[] = ['project-agents', 'project-dsh'];

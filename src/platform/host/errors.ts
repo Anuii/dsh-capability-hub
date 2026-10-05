@@ -4,7 +4,7 @@
  * handler 抛出的 Error 若带 status(number) 与 code(string)，路由器就用它；
  * 否则一律 500 / INTERNAL。所有 message 都是中文，可直接展示给用户。
  */
-import type { HubError } from "./types.ts";
+import type { ThrownError as HubError } from "./types.ts";
 
 /** 统一错误码 → HTTP 状态。 */
 export const ERROR_STATUS = {

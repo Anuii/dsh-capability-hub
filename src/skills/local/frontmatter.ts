@@ -16,7 +16,7 @@
  *        -> 不崩，标记 format.safeToToggle = false 并给诊断，绝不写回。
  */
 
-import type { Diagnostic } from './types.ts';
+import type { Diagnostic } from '../contract/local.ts';
 
 export type ScalarValue = string | number | boolean | null;
 

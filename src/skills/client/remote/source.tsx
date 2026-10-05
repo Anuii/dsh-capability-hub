@@ -32,8 +32,8 @@ import {
 import { errorMessage, fieldErrors, formatDateTime, type FieldError } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
-import type { SkillSummary } from "../types.ts";
-import type { DiscoverCandidate } from "./types.ts";
+import type { SkillSummary } from "../../contract/local.ts";
+import type { DiscoverCandidate } from "../../contract/remote.ts";
 
 type Step = "view" | "discover" | "manual" | "unregister";
 

@@ -34,8 +34,8 @@ import {
 import { errorMessage, fieldErrors, type FieldError } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
-import type { SkillSummary } from "../types.ts";
-import type { AuthMode, DiscoverCandidate } from "./types.ts";
+import type { SkillSummary } from "../../contract/local.ts";
+import type { AuthMode, DiscoverCandidate } from "../../contract/remote.ts";
 
 export interface RemoteMenuProps {
   /** 列表里的全部技能（不受搜索/筛选影响） */

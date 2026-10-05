@@ -1,7 +1,7 @@
 /**
  * 客户端技能页单测用的夹具工厂（纯数据，不碰 DOM / React）。
  */
-import type { Diagnostic, ListResult, RootInfo, SkillSummary, TrashItem } from "../../../src/skills/client/types.ts";
+import type { Diagnostic, ListResult, RootInfo, SkillSummary, TrashItem } from "../../../src/skills/contract/local.ts";
 
 export function makeSkill(overrides: Partial<SkillSummary> & { id: string }): SkillSummary {
   const base: SkillSummary = {

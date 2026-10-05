@@ -8,7 +8,7 @@
  * 本文件不 import React、不碰 DOM：可被 node:test 直接测（见 test/skills/client/remote-store.test.ts）。
  */
 
-import type { AuthMode, SourceEntry, UpdateCheckItem } from "./types.ts";
+import type { AuthMode, SourceEntry, UpdateCheckItem } from "../../contract/remote.ts";
 
 export interface RemoteSnapshot {
   /** 来源表是否已经成功加载过一次 */

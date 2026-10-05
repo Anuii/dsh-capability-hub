@@ -4,7 +4,7 @@
  */
 
 import { t } from "../strings.ts";
-import type { DiscoveredSkill, DiscoveryRepoView, DiscoveryView } from "./types.ts";
+import type { DiscoveredSkill, DiscoveryRepoView, DiscoveryView } from "../../contract/remote.ts";
 
 export type InstalledFilter = "all" | "not" | "yes";
 export const INSTALLED_FILTERS: readonly InstalledFilter[] = ["all", "not", "yes"];

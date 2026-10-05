@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createSkillsLocalModule } from '../../../src/skills/local/module.ts';
-import type { RouteHandler, RouteRequest } from '../../../src/skills/local/types.ts';
+import type { RouteHandler, RouteRequest } from '../../../src/platform/contract/host.ts';
 import { agentsRoot, makeCtx, makeTempArea, skillMd, writeSkill, type TempArea } from './fixtures.ts';
 
 interface HttpError {

@@ -30,7 +30,7 @@
  * 事件对象只在监听器回调里可用：created 的 payload 会被 DSH 清空，所以必须在
  * created 时就地固化身份，disposed 才能拿到该会话的 id 与父会话。
  */
-import type { HubLogger } from "./types.ts";
+import type { HubLogger } from "../contract/host.ts";
 import type { McpSessionInfo } from "./mcp-runtime-contract.ts";
 
 /** 一条被记录下来的会话生命周期事件（V5 的证据来源）。 */

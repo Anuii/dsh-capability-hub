@@ -1,38 +1,41 @@
 /**
- * 宿主 skills-remote 契约的**客户端镜像**（PLAN §3.7 的远程组）。
- *
- * 为什么不 import 宿主类型：宿主半与浏览器半是两份产物（PLAN §2：功能模块之间不得互相 import）。
- * 这里按 HTTP 请求/响应逐字段复制，源头是 src/skills/remote/{types,routes}.ts —— 改契约时两处一起改。
+ * 远程技能（skills-remote）的 HTTP 契约（ADR-0002）：只有类型，宿主路由与客户端共用。
  */
 
-/* ---------------- 来源记录 ---------------- */
-
+/** 来源记录存在哪：npx skills 的 lock（~/.agents/.skill-lock.json）或插件自己的 sources.json。 */
 export type SourceStoreKind = "skill-lock" | "hub";
 
-/** GET skills/sources → entries[]。 */
+/** 一条来源记录（GET skills/sources 的 entries[]）。 */
 export interface SourceEntry {
   skillId: string;
   /** owner/name */
   repo: string;
   ref?: string;
-  /** 仓库内 SKILL.md 路径 */
+  /** 仓库内 SKILL.md 路径，与 npx skills lock 同义 */
   skillPath: string;
   store: SourceStoreKind;
   installedAt?: string;
   updatedAt?: string;
   skillFolderHash?: string;
-  /** lock 里有记录、但本机找不到对应技能目录（UI 需要提示） */
+  /** 只在 GET skills/sources 里出现：lock 里有记录、但本机找不到对应技能目录 */
   orphan?: boolean;
 }
 
-/* ---------------- 仓库浏览 ---------------- */
+/** 仓库列表里的一个仓库（GET skills/repos）。 */
+export interface RepoRecord {
+  repo: string;
+  ref?: string;
+  /** 只在仓库的这个子目录下发现技能（相对路径，正斜杠，不带首尾斜杠） */
+  subPath?: string;
+  preset: boolean;
+}
 
+/** 临时浏览一个仓库时的一个技能（POST skills/repo/browse）。 */
 export interface BrowseSkill {
   skillPath: string;
   dirName: string;
   name?: string;
   description?: string;
-  /** 本机已安装时的 skillId */
   installedId?: string;
 }
 
@@ -42,17 +45,15 @@ export interface BrowseResult {
   skills: BrowseSkill[];
 }
 
-export interface RepoRecord {
-  repo: string;
-  ref?: string;
-  /** 只在这个子目录下发现技能（0.3.0） */
-  subPath?: string;
-  preset: boolean;
+/** 发现缓存里的一个技能（不含「是否已安装」——那个每次读取时现算）。 */
+export interface DiscoverySkill {
+  skillPath: string;
+  dirName: string;
+  name?: string;
+  description?: string;
 }
 
-/* ---------------- 汇总发现（D-B16，0.3.0） ---------------- */
-
-/** GET skills/discovery 的 repos[]：一个仓库的配置 + 上次扫描结果。 */
+/** GET skills/discovery 里的一个仓库条目。 */
 export interface DiscoveryRepoView {
   repo: string;
   ref?: string;
@@ -68,30 +69,26 @@ export interface DiscoveryRepoView {
   stale?: boolean;
 }
 
-/** 汇总里的一个技能。 */
-export interface DiscoveredSkill {
-  skillPath: string;
-  dirName: string;
-  name?: string;
-  description?: string;
+/** 汇总发现里的一个技能。 */
+export interface DiscoveredSkill extends DiscoverySkill {
   repo: string;
-  /** 安装时带的分支 */
+  /** 安装时要带的分支（实际解析到的分支） */
   ref?: string;
   installedId?: string;
 }
 
+/** GET skills/discovery 与 POST skills/discovery/refresh 的 data。 */
 export interface DiscoveryView {
-  /** false = 从未扫描过（打开视图时自动扫一次） */
+  /** false = 从未扫描过任何仓库（客户端据此自动扫一次） */
   cached: boolean;
   lastScannedAt?: string;
   repos: DiscoveryRepoView[];
   skills: DiscoveredSkill[];
 }
 
-/* ---------------- 来源推测 ---------------- */
-
 export type Confidence = "high" | "medium" | "low";
 
+/** 为无来源技能推测的候选来源（POST skills/sources/discover）。 */
 export interface DiscoverCandidate {
   skillId: string;
   repo: string;
@@ -101,8 +98,6 @@ export interface DiscoverCandidate {
   reason: string;
 }
 
-/* ---------------- 检查更新 / 应用更新 ---------------- */
-
 export type UpdateStatus = "up-to-date" | "update-available" | "no-source" | "error";
 
 export interface UpdateCheckItem {
@@ -111,8 +106,10 @@ export interface UpdateCheckItem {
   message?: string;
 }
 
+/** GitHub 凭据模式（只有模式，绝不含令牌）。 */
 export type AuthMode = "env" | "gh" | "anonymous";
 
+/** POST skills/updates/check 的 data。 */
 export interface UpdateCheckResult {
   results: UpdateCheckItem[];
   auth: AuthMode;
@@ -126,12 +123,12 @@ export interface UpdateApplyItem {
   trashId?: string;
 }
 
+/** POST skills/updates/apply 的 data。 */
 export interface UpdateApplyResult {
   results: UpdateApplyItem[];
 }
 
-/* ---------------- 安装 / 搜索 ---------------- */
-
+/** 安装位置。 */
 export type InstallTarget = "user-agents" | "user-dsh" | "project-agents" | "project-dsh";
 
 export interface InstallItemResult {
@@ -141,6 +138,7 @@ export interface InstallItemResult {
   message?: string;
 }
 
+/** GET skills/search 的一条结果（skills.sh）。 */
 export interface SearchResultItem {
   name: string;
   description?: string;
@@ -149,6 +147,7 @@ export interface SearchResultItem {
   installs?: number;
 }
 
+/** GET skills/github-auth 的 data。 */
 export interface GithubAuth {
   mode: AuthMode;
   rateLimitRemaining?: number;

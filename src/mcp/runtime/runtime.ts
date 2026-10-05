@@ -41,15 +41,8 @@ import { isToolIncluded, keywordsFor, qualify, matchesPattern, toolCandidates } 
 import { rankDocuments, searchByRegex } from './atoms/search-ranking.ts';
 import { errorText } from './atoms/errors.ts';
 import { PROXY_TOOL_PARAMETERS } from './tool-schema.ts';
-import type {
-  EffectiveMcpConfig,
-  EffectiveServer,
-  HubContext,
-  McpConfigSource,
-  McpRuntime,
-  McpSdk,
-  RuntimeStatus,
-} from './contract.ts';
+import type { EffectiveMcpConfig, EffectiveServer, McpConfigSource, McpRuntime, McpSdk, RuntimeStatus } from './contract.ts';
+import type { HubContext } from '../../platform/contract/host.ts';
 import type { CacheEntry, CachedTool } from './atoms/metadata-cache.ts';
 import type { Clock } from './atoms/clock.ts';
 import type { ProcessSupervisor } from './atoms/supervisor.ts';

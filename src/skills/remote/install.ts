@@ -27,19 +27,15 @@ import { badRequest, conflict, notFound, validation } from './errors.ts';
 import { localFolderHash, type SourceStore } from './lockstore.ts';
 import { FLAT_SKILL_UNSUPPORTED_MESSAGE, isFlatSkill } from './skillshape.ts';
 import type { GitHubClient } from './github.ts';
-import type {
-  HubContext,
-  InstallItemResult,
-  InstallTarget,
-  SkillsLocalApi,
-  SourceEntry,
-} from './types.ts';
+import type { SkillsLocalPort } from './types.ts';
+import type { HubContext } from '../../platform/contract/host.ts';
+import type { InstallItemResult, InstallTarget, SourceEntry } from '../contract/remote.ts';
 import { PROJECT_TARGETS } from './types.ts';
 
 export interface InstallDeps {
   ctx: HubContext;
   github: GitHubClient;
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
   sources: SourceStore;
   now?: () => Date;
 }
@@ -183,7 +179,7 @@ export interface RegisterOptions {
 
 export interface RegisterDeps {
   ctx: HubContext;
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
   sources: SourceStore;
   now?: () => Date;
 }
@@ -229,7 +225,7 @@ export async function registerSource(deps: RegisterDeps, options: RegisterOption
 }
 
 export interface UnregisterDeps {
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
   sources: SourceStore;
 }
 
@@ -261,7 +257,7 @@ export interface LocatedSkill {
 }
 
 export async function locateSkill(
-  deps: { skills: SkillsLocalApi; sources: SourceStore },
+  deps: { skills: SkillsLocalPort; sources: SourceStore },
   id: string,
   workspace?: string
 ): Promise<LocatedSkill | undefined> {

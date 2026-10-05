@@ -19,7 +19,8 @@
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { HubContext, RouteTable } from "./types.ts";
+import type { PlatformContext } from "./types.ts";
+import type { RouteTable } from "../contract/host.ts";
 import { makeLogger, probeSkillSources, resolveHubContext, safeGet, type PlatformConfig } from "./hub-context.ts";
 import { ROUTE_PREFIX, registerRoutes, type ConnectionFace } from "./router.ts";
 import {
@@ -72,7 +73,7 @@ export interface ShellSnapshot {
 
 /** 外壳句柄（测试与 V7 用）。 */
 export interface Shell {
-  ctx: HubContext;
+  ctx: PlatformContext;
   /** 已注册的路由表（路由器用的就是它）。 */
   routes: RouteTable;
   registry: ModuleRegistry;
@@ -107,7 +108,7 @@ function probeServices(hostCtx: unknown): Record<string, boolean> {
  * cordis 的 Context.get 走 isolate 映射（cordis/lib/index.js:763-772），属性访问（ctx.connection）
  * 又要求它已在本 fiber 的可见集合里，所以两条路都要试，且都要能失败。
  */
-function readConnection(hostCtx: unknown, logger: HubContext["logger"]): ConnectionFace | undefined {
+function readConnection(hostCtx: unknown, logger: PlatformContext["logger"]): ConnectionFace | undefined {
   const viaGet = safeGet(hostCtx, "connection") as ConnectionFace | undefined;
   if (viaGet !== undefined) return viaGet;
   try {
@@ -182,8 +183,9 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
   const entries: ModuleEntry[] = [
     {
       name: "demo",
-      load: (moduleCtx) => createDemoModule({
-        ctx: moduleCtx,
+      // demo 的 health 要报 profileDir / packageRoot，用外壳自己的完整上下文。
+      load: () => createDemoModule({
+        ctx,
         sdk: sdkState,
         modules: () => registry.statuses(),
         sessionEvents: () => bridge?.events() ?? [],

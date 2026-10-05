@@ -16,7 +16,7 @@ import {
   repoKey,
   toggleFold,
 } from "../../../src/skills/client/tree.ts";
-import type { SourceEntry } from "../../../src/skills/client/remote/types.ts";
+import type { SourceEntry } from "../../../src/skills/contract/remote.ts";
 import { makeList, makeSkill, root } from "./fixtures.ts";
 
 const ASAR = "C:\\Program Files\\DSH\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-preset\\skills";

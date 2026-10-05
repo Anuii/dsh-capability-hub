@@ -24,7 +24,7 @@ import {
 import { errorMessage } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
-import type { SkillSummary } from "../types.ts";
+import type { SkillSummary } from "../../contract/local.ts";
 
 export interface SkillUpdateSectionProps {
   skill: SkillSummary;

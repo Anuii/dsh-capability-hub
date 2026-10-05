@@ -1,5 +1,5 @@
 /**
- * 测试公共夹具：临时目录、假 HubContext、假 SkillsLocalApi、假 fetch。
+ * 测试公共夹具：临时目录、假 HubContext、假 SkillsLocalPort、假 fetch。
  * 所有落盘都发生在 os.tmpdir() 下自建的临时目录里，绝不碰真实用户目录（PLAN §4.1 / C5）。
  */
 
@@ -10,7 +10,9 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { hashLocalDirectory, hashTarDirectory, recordedHash } from '../../../src/skills/remote/hash.ts';
 import { readTarEntries } from '../../../src/skills/remote/tar.ts';
-import type { HubContext, HubLogger, SkillSummary, TrashItem, ListResult, RootId, RootInfo, SkillsLocalApi } from '../../../src/skills/remote/types.ts';
+import type { SkillsLocalPort } from '../../../src/skills/remote/types.ts';
+import type { HubContext, HubLogger } from '../../../src/platform/contract/host.ts';
+import type { SkillSummary, TrashItem, ListResult, RootId, RootInfo } from '../../../src/skills/contract/local.ts';
 import { repoArchive, type FixtureEntry } from './tarfixture.ts';
 
 /* ---------- 临时目录 ---------- */
@@ -57,7 +59,7 @@ export function makeLogger(sink: LogRecord[] = []): { logger: HubLogger; sink: L
   return { logger: { debug: push('debug'), info: push('info'), warn: push('warn'), error: push('error') }, sink };
 }
 
-/* ---------- 假 SkillsLocalApi ---------- */
+/* ---------- 假 SkillsLocalPort ---------- */
 
 export interface FakeSkillInit {
   rootId?: string;
@@ -82,7 +84,7 @@ export interface FakeApiOptions {
   failRestore?: boolean;
 }
 
-export interface FakeApi extends SkillsLocalApi {
+export interface FakeApi extends SkillsLocalPort {
   /** 调用顺序记录：用于断言「更新五步」的次序 */
   calls: string[];
   /** 当前假技能表（可被测试改动） */

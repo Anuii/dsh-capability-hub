@@ -7,11 +7,13 @@
  * fetch 可注入（RemoteOptions.fetchImpl），单测用假 fetch 全覆盖。
  */
 
+import type { AuthMode } from '../contract/remote.ts';
+
 import { execFile } from 'node:child_process';
 import { gunzipSync } from 'node:zlib';
 import { upstream, rateLimited } from './errors.ts';
 import { readTarEntries, type TarEntry } from './tar.ts';
-import type { HubLogger } from './types.ts';
+import type { HubLogger } from '../../platform/contract/host.ts';
 
 export const API_TIMEOUT_MS = 15_000;
 export const CODELOAD_TIMEOUT_MS = 60_000;
@@ -21,8 +23,6 @@ export const SKILLS_SH_SEARCH_URL = 'https://skills.sh/api/search';
 /** 查询剩余额度用的端点；GitHub 明确说明它**不消耗配额** */
 export const RATE_LIMIT_URL = 'https://api.github.com/rate_limit';
 export const USER_AGENT = 'dsh-capability-hub';
-
-export type AuthMode = 'env' | 'gh' | 'anonymous';
 
 export interface AuthState {
   mode: AuthMode;

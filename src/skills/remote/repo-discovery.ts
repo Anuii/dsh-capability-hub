@@ -16,16 +16,9 @@ import { installedIdOf, loadInstalledIndex, scanRepoSkills } from './browse.ts';
 import type { GitHubClient } from './github.ts';
 import type { Redactor } from './redact.ts';
 import type { RepoStore } from './repos.ts';
-import type {
-  DiscoveredSkill,
-  DiscoveryCacheEntry,
-  DiscoveryCacheFile,
-  DiscoveryRepoView,
-  DiscoveryView,
-  HubContext,
-  RepoRecord,
-  SkillsLocalApi,
-} from './types.ts';
+import type { DiscoveryCacheEntry, DiscoveryCacheFile, SkillsLocalPort } from './types.ts';
+import type { DiscoveredSkill, DiscoveryRepoView, DiscoveryView, RepoRecord } from '../contract/remote.ts';
+import type { HubContext } from '../../platform/contract/host.ts';
 
 const DISCOVERY_VERSION = 1;
 /** 同时扫描的仓库数上限（每个仓库要下载一次 tarball） */
@@ -123,7 +116,7 @@ export function composeDiscoveryView(
 
 export interface DiscoveryDeps {
   github: GitHubClient;
-  skills: SkillsLocalApi;
+  skills: SkillsLocalPort;
   repos: RepoStore;
   store: DiscoveryStore;
   redactor: Redactor;

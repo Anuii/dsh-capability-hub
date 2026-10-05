@@ -23,7 +23,7 @@
  *   代价：parameters 必须是「受支持的 JSON Schema 子集」，register 会校验 output.schema。
  */
 import type { McpRuntime } from "./mcp-runtime-contract.ts";
-import type { HubLogger } from "./types.ts";
+import type { HubLogger } from "../contract/host.ts";
 
 /** 从 exec.agent 取会话身份；取不到时回退并记录。 */
 export interface SessionIdentity {

@@ -3,13 +3,14 @@
  *
  * 这一条路由就是 A2 里 V1/V8/V9 的证据来源，也是后续所有标签页拿环境信息的入口。
  */
-import type { HubContext, HubModule, RouteHandler } from "./types.ts";
+import type { PlatformContext } from "./types.ts";
+import type { HubModule, RouteHandler } from "../contract/host.ts";
 import type { SdkLoadState } from "./sdk-loader.ts";
 import type { ModuleStatus } from "./modules.ts";
 
 /** demo 模块需要的环境（由外壳注入，避免模块之间 import）。 */
 export interface DemoDeps {
-  ctx: HubContext;
+  ctx: PlatformContext;
   sdk: SdkLoadState;
   /** 模块状态快照（含降级）。 */
   modules(): ModuleStatus[];

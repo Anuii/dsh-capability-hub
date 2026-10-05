@@ -5,35 +5,12 @@
  * 这里按契约逐字段结构化定义，不 import T0 或其他模块的类型。
  */
 
+import type { HubContext, HubModule } from '../../platform/contract/host.ts';
+
 export type Transport = 'stdio' | 'streamable-http';
 export type Lifecycle = 'lazy' | 'lazy-keep-alive' | 'eager' | 'keep-alive';
 
 // —— 平台契约（PLAN §3.1） ——
-
-export interface HubLogger {
-  debug(...a: unknown[]): void;
-  info(...a: unknown[]): void;
-  warn(...a: unknown[]): void;
-  error(...a: unknown[]): void;
-}
-
-export interface HubContext {
-  homeDir: string;
-  dshHome: string;
-  hubHome: string;
-  profileName: string;
-  logger: HubLogger;
-  customSkillDirs: string[];
-  bundledSkillDir?: string;
-}
-
-export type RouteRequest = { query: Record<string, string>; body: unknown; signal: AbortSignal };
-export type RouteHandler = (req: RouteRequest) => Promise<unknown>;
-
-export interface HubModule {
-  routes: Record<string, RouteHandler>;
-  dispose?(): void | Promise<void>;
-}
 
 /** 校验错误（PLAN §3.1：VALIDATION 的 details = FieldError[]）。path 为字段路径，message 为中文。 */
 export interface FieldError {

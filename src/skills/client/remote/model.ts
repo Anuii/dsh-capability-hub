@@ -8,18 +8,8 @@
 
 import { isFlatSkill } from "../format.ts";
 import { t } from "../strings.ts";
-import type { RootInfo, SkillSummary } from "../types.ts";
-import type {
-  AuthMode,
-  Confidence,
-  DiscoverCandidate,
-  InstallItemResult,
-  InstallTarget,
-  SourceEntry,
-  UpdateApplyItem,
-  UpdateCheckItem,
-  UpdateStatus,
-} from "./types.ts";
+import type { RootInfo, SkillSummary } from "../../contract/local.ts";
+import type { AuthMode, Confidence, DiscoverCandidate, InstallItemResult, InstallTarget, SourceEntry, UpdateApplyItem, UpdateCheckItem, UpdateStatus } from "../../contract/remote.ts";
 
 /* ---------------- 平铺 .md 技能 ---------------- */
 

@@ -45,8 +45,8 @@ import {
 import { errorMessage, fieldErrors, type FieldError } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
-import type { RootInfo } from "../types.ts";
-import type { BrowseResult, DiscoveryRepoView, DiscoveryView, InstallItemResult, InstallTarget, SearchResultItem } from "./types.ts";
+import type { RootInfo } from "../../contract/local.ts";
+import type { BrowseResult, DiscoveryRepoView, DiscoveryView, InstallItemResult, InstallTarget, SearchResultItem } from "../../contract/remote.ts";
 
 /** 仓库行的悬停提示：仓库@分支（+ 预置）。 */
 export function repoChipTitle(record: { repo: string; ref?: string; preset: boolean }): string {

@@ -9,7 +9,8 @@ import { createMcpRuntime } from '../../../src/mcp/runtime/runtime.ts';
 import { FakeClock } from './fakes/fake-clock.ts';
 import { FakeMcpRegistry, createFakeSdk, createFakeSupervisor } from './fakes/fake-sdk.ts';
 import type { McpRuntimeInternal } from '../../../src/mcp/runtime/runtime.ts';
-import type { EffectiveMcpConfig, EffectiveServer, HubContext, McpConfigSource } from '../../../src/mcp/runtime/contract.ts';
+import type { EffectiveMcpConfig, EffectiveServer, McpConfigSource } from '../../../src/mcp/runtime/contract.ts';
+import type { HubContext } from '../../../src/platform/contract/host.ts';
 
 export interface TempHome {
   dir: string;

@@ -19,14 +19,8 @@ import {
 import { HIDDEN_PLACEHOLDER_MESSAGE, findHiddenPlaceholders, maskRawServer, mergeHiddenSecrets } from './mask.ts';
 import { parseServerInput, parseSettingsInput, serverView } from './schema.ts';
 import { createMcpStore, type McpStore, type McpStoreOptions } from './store.ts';
-import type {
-  EffectiveServer,
-  HubContext,
-  HubModule,
-  McpConfigModule,
-  RouteHandler,
-  ServerView,
-} from './types.ts';
+import type { EffectiveServer, McpConfigModule, ServerView } from './types.ts';
+import type { HubContext, HubModule, RouteHandler } from '../../platform/contract/host.ts';
 
 export interface McpConfigModuleOptions {
   /** 存储层选项（轮询间隔、时间源），测试用。 */

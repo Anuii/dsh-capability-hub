@@ -20,7 +20,9 @@
  *   - fetch(request) 返回 Response（Web Fetch，而不是 node:http 的 req/res）。
  * 匹配是**精确 pathname**（fetchRoutes 是 Map，按 pathname 直接 get），所以一条接口 = 一条路由。
  */
-import type { RouteHandler, RouteRequest } from "./types.ts";
+
+import type { RouteTable } from '../contract/host.ts';
+import type { RouteHandler, RouteRequest } from "../contract/host.ts";
 import { asHubError } from "./errors.ts";
 
 /** 路由前缀：不带尾斜杠（每段都要是合法 segment）。 */
@@ -31,9 +33,6 @@ export const MAX_BODY_BYTES = 1024 * 1024;
 
 /** 允许的请求方法。 */
 const METHODS = new Set(["GET", "POST"]);
-
-/** 路由表：键 = "GET skills/list"。 */
-export type RouteTable = Record<string, RouteHandler>;
 
 /** 极简日志面（避免依赖具体 ctx.logger 类型）。 */
 export interface RouterLogger {

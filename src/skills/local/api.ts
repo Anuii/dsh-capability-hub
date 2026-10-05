@@ -27,16 +27,8 @@ import {
 } from './scan.ts';
 import { TrashStore, isValidTrashId, normalizeLockEntry, type TrashMeta } from './trash.ts';
 import { collectWarnings } from './warnings.ts';
-import type {
-  HubContext,
-  ListResult,
-  LockStash,
-  MoveToTrashOptions,
-  SkillSummary,
-  SkillView,
-  SkillViewFile,
-  TrashItem,
-} from './types.ts';
+import type { HubContext } from '../../platform/contract/host.ts';
+import type { ListResult, LockStash, MoveToTrashOptions, SkillSummary, SkillView, SkillViewFile, TrashItem } from '../contract/local.ts';
 
 export const VIEW_MAX_FILES = 500;
 const SKIP_DIRS = ['node_modules', '.git'];

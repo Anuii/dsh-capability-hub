@@ -8,7 +8,8 @@
 
 import { badRequest } from './errors.ts';
 import { createSkillsLocalImpl, type SkillsLocalImpl } from './api.ts';
-import type { HubContext, HubModule, LockStash, RouteHandler, SkillsLocalApi } from './types.ts';
+import type { HubContext, HubModule, RouteHandler } from '../../platform/contract/host.ts';
+import type { LockStash, SkillsLocalApi } from '../contract/local.ts';
 
 export interface SkillsLocalModule extends HubModule {
   api: SkillsLocalApi;

@@ -21,16 +21,10 @@ import { hashLocalDirectory, recordedHash } from './hash.ts';
 import { internal } from './errors.ts';
 import { repoRelativeSkillPath, skillMdPathOf } from './sourceurl.ts';
 import { sanitizeName } from './rootskill.ts';
-import {
-  LOCK_BACKED_ROOT,
-  type HubContext,
-  type HubStoreEntry,
-  type HubStoreFile,
-  type LockStash,
-  type SkillLockEntry,
-  type SkillLockFile,
-  type SourceEntry,
-} from './types.ts';
+import { LOCK_BACKED_ROOT, type HubStoreEntry, type HubStoreFile, type SkillLockEntry, type SkillLockFile } from './types.ts';
+import type { HubContext } from '../../platform/contract/host.ts';
+import type { LockStash } from '../contract/local.ts';
+import type { SourceEntry } from '../contract/remote.ts';
 
 const LOCK_VERSION = 3;
 const SOURCES_VERSION = 1;

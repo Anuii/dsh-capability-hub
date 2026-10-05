@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSkillsLocalImpl } from '../../../src/skills/local/api.ts';
 import { makeCtx, makeTempArea, QUIET_LOGGER } from './fixtures.ts';
-import type { SkillSummary } from '../../../src/skills/local/types.ts';
+import type { SkillSummary } from '../../../src/skills/contract/local.ts';
 
 /**
  * 真实数据核对：把一份**技能目录快照**复制到临时目录（源目录只读），以副本作为 user-agents 根跑 list，
