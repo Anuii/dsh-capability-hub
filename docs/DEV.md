@@ -54,21 +54,21 @@
 
 ### 2.1 在线测试（可选）
 
-`test/skills-remote/live.test.ts` 会真的访问 GitHub，默认跳过。要跑：
+`test/skills/remote/live.test.ts` 会真的访问 GitHub，默认跳过。要跑：
 
     $env:RUN_LIVE='1'
-    node --test "test/skills-remote/live.test.ts"
+    node --test "test/skills/remote/live.test.ts"
 
 没有 `RUN_LIVE=1` 时它整体 skip，不算失败。它只读公开仓库，不需要令牌；
 配了 `GITHUB_TOKEN` 会走令牌（仅放在请求头里，不落盘）。
 
 ### 2.2 需要真实技能数据的测试（可选）
 
-`test/skills-local/realdata.test.ts` 会拿一份**技能目录快照**做只读核对（技能总数、模型可见数、
+`test/skills/local/realdata.test.ts` 会拿一份**技能目录快照**做只读核对（技能总数、模型可见数、
 CRLF 技能的启停只改一行）。快照不属于本仓库，指向你自己的副本：
 
     $env:CAPABILITY_HUB_REAL_SKILLS_DIR='<绝对路径>\agents-skills-snapshot'
-    node --test "test/skills-local/realdata.test.ts"
+    node --test "test/skills/local/realdata.test.ts"
 
 - 默认位置是 `<仓库根>\.dev\snapshots\agents-skills-20261004`；
 - 目录不存在（例如换一台机器）→ 自动 skip，不做任何写入；
@@ -83,7 +83,7 @@ CRLF 技能的启停只改一行）。快照不属于本仓库，指向你自己
 SDK 只存在于 DSH 的 `app.asar` 内，本机 Node 解析不到，所以必须用 Electron-as-node：
 
     $env:ELECTRON_RUN_AS_NODE='1'
-    & "$env:LOCALAPPDATA\Programs\DeepSeek Harness\DeepSeek Harness.exe" 'test/mcp-runtime/integration/run-integration.mjs'
+    & "$env:LOCALAPPDATA\Programs\DeepSeek Harness\DeepSeek Harness.exe" 'test/mcp/runtime/integration/run-integration.mjs'
 
 期望末行 `INTEGRATION-RESULT pass=35 fail=0 leftover-processes=0`。
 
@@ -100,7 +100,7 @@ SDK 只存在于 DSH 的 `app.asar` 内，本机 Node 解析不到，所以必�
 
 把本插件的 frontmatter 解析结果与 DSH 自带的 YAML 解析器逐样本对比：
 
-    node test/skills-local/yaml-parity.mjs
+    node test/skills/local/yaml-parity.mjs
 
 期望「对拍汇总 …… 25/25 一致，无差异」与「结果：全部一致」。
 
@@ -312,7 +312,7 @@ HttpOnly + SameSite=Strict 的签名 cookie（绑定 Host 头的 authority）。
     pwsh -NoProfile -File scripts\smoke-stage-b.ps1
 
 依次跑 skills/list → skills/view → set-enabled 停用再启用（逐行 diff + SHA256 证明「除那一行外
-字节不变」）→ mcp/config → upsert 一个指向 `test\mcp-runtime\fixtures\fake-mcp-server.mjs` 的
+字节不变」）→ mcp/config → upsert 一个指向 `test\mcp\runtime\fixtures\fake-mcp-server.mjs` 的
 stdio 服务器 → 等自动探测把 `toolCount` 写进缓存 → mcp/runtime/refresh → health →
 skills/github-auth（**只打印 mode**）→ 删掉测试服务器恢复原状。
 失败以非零退出码结束，末行是 `SMOKE-STAGE-B-RESULT pass=N fail=0`。

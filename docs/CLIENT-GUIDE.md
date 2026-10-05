@@ -32,31 +32,31 @@
 ## 2. 目录与职责
 
     src\client\index.tsx              入口，只导出 inject 与 apply
-    src\client\shell\applier.ts       装配：样式、字典、会话源、各 slot 注册（永不失败）
-    src\client\shell\page.tsx         侧栏行 + 中央面板（main slot）注册
-    src\client\shell\panel.tsx        页面本体：三标签 + 默认折叠的「诊断信息」卡片（标签页作者的样板）
-    src\client\shell\config-button.tsx 插件管理页那一行的「配置」入口
-    src\client\shell\api.ts           API 客户端（信封、错误、鉴权说明）
-    src\client\shell\styles.ts        class 名与 <style> 注入
-    src\client\shell\strings.ts       中英字典 + t()
-    src\client\shell\useCurrentWorkspace.ts  当前工作区 / 当前会话
+    src\platform\client\applier.ts       装配：样式、字典、会话源、各 slot 注册（永不失败）
+    src\platform\client\page.tsx         侧栏行 + 中央面板（main slot）注册
+    src\platform\client\panel.tsx        页面本体：三标签 + 默认折叠的「诊断信息」卡片（标签页作者的样板）
+    src\platform\client\config-button.tsx 插件管理页那一行的「配置」入口
+    src\platform\client\api.ts           API 客户端（信封、错误、鉴权说明）
+    src\platform\client\styles.ts        class 名与 <style> 注入
+    src\platform\client\strings.ts       中英字典 + t()
+    src\platform\client\useCurrentWorkspace.ts  当前工作区 / 当前会话
 
 ---
 
 ## 3. 写一个标签页（五步）
 
 > **动手写界面之前先读第 10 节「kit 使用说明」**：列表、工具栏、抽屉、
-> 标记、横幅、空状态、骨架屏都由 `src\client\shell\kit\` 提供，标签页**只通过 kit 拼界面**，
+> 标记、横幅、空状态、骨架屏都由 `src\kit\` 提供，标签页**只通过 kit 拼界面**，
 > 不要再自己写一遍这些样式（否则各个标签又会各长一套样子）。
 
 **第 1 步：在**你自己标签页的目录**下写组件**（不要在 shell 里堆）：
 
-    src\client\skills\    ← 技能标签（入口 index.tsx 导出 SkillsTab，字典 strings.ts）
-    src\client\mcp\       ← MCP 服务器标签（入口 index.tsx 导出 McpTab）
-    src\client\runtime\   ← MCP 页底部的「运行中」区域（入口 index.tsx 导出 RunningSection，由 mcp/index.tsx 渲染；0.3.0 起不再是独立标签）
+    src\skills\client\    ← 技能标签（入口 index.tsx 导出 SkillsTab，字典 strings.ts）
+    src\mcp\client\       ← MCP 服务器标签（入口 index.tsx 导出 McpTab）
+    src\mcp\client\running\   ← MCP 页底部的「运行中」区域（入口 index.tsx 导出 RunningSection，由 mcp/index.tsx 渲染；0.3.0 起不再是独立标签）
 
 每个标签页**自带一份 strings.ts**（key 前缀用 skills.* / mcp.* / runtime.*，互不打扰），
-外壳的 src\client\shell\strings.ts 只放外壳自己的文案（页面标题、标签名、环境卡片）。
+外壳的 src\platform\client\strings.ts 只放外壳自己的文案（页面标题、标签名、环境卡片）。
 组件里取字典就走自己目录那一份（例如 `import { t } from "./strings.ts"`）。
 
 界面**只做中文**（D-A3）：标签页字典不需要 en 镜像，只写 zh 即可
@@ -85,7 +85,7 @@
 
 ### 2.5 标签页的 props 接口（TabProps）
 
-定义在 `src\client\shell\tab-props.ts`，**形状已经冻结**
+定义在 `src\platform\client\tab-props.ts`，**形状已经冻结**
 （只能加可选字段，不能改已有字段的语义）：
 
     /** 标签 id（0.3.0 起只有两个）。 */
@@ -226,7 +226,7 @@
 
 ### 10.1 这是什么、为什么必须用
 
-`src\client\shell\kit\` 是各标签页共用的 UI 组件层，实现的是这套界面的视觉规范：
+`src\kit\` 是各标签页共用的 UI 组件层，实现的是这套界面的视觉规范：
 安静、一处一事、只在需要时出现、一个强调色。
 
 它替你做了三件容易做砸的事：
@@ -436,7 +436,7 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 - **行高固定 52px**：有没有副标题都一样（内容垂直居中），否则一列排下来会参差。
 - **行副标题的颜色**：`--chk-fg-sub`（= `color-mix(in srgb, var(--dsw-alias-label-tertiary) 85%, var(--dsw-alias-label-primary))`）。
   直接用 tertiary 在亮色下只有 3.71:1，达不到 WCAG AA 小字 4.5:1；混 15% 主文字色后亮色 4.70:1、暗色 8.30:1。
-  标签页不要自己改副标题颜色，`test/client-kit/styles.test.ts` 会拦下来。
+  标签页不要自己改副标题颜色，`test/kit/styles.test.ts` 会拦下来。
 - **等宽字体用主题变量**：`--ds-font-family-code`（注意是 `--ds-` 前缀，
   不是 `--dsw-`）。kit 的 `--chk-mono` 已经指向它；不要自己写 `monospace`——
   那会在中文系统上落到中文等宽字体，字距松散、显旧。
@@ -477,5 +477,5 @@ kit 的每一种形态都能一眼看全（截图审查用）：
    但**必须写完整包名**，写「dsh-client-ui-slots」这类简写会在运行期解析失败（已在 docs\PRIMITIVES.md 核实）。
 5. 改完不 build 就看页面 → 看到的还是旧产物。
 6. 组件里 throw → 会让面板整块消失；错误要转成 UI 状态。
-7. 把标签组件写进 src\client\shell → 会和外壳耦合；每个标签有自己的目录（见第 3 节）。
+7. 把标签组件写进 src\platform\client → 会和外壳耦合；每个标签有自己的目录（见第 3 节）。
 8. 想知道有哪些现成的宿主组件可复用 → 读 docs\PRIMITIVES.md，不要自己猜 class 名。

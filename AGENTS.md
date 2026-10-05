@@ -29,5 +29,5 @@ mcp-runtime 集成测试与 YAML 对拍要在 Electron-as-node 下运行，命�
 ## 写代码
 - TypeScript 只用可擦除语法（无 enum、namespace、参数属性、装饰器）；相对 import 带 `.ts` 扩展名。
 - 四个宿主模块（skills-local、skills-remote、mcp-config、mcp-runtime）互不 import，只通过平台层注入的接口协作；任何模块故障只降级，不得拖垮 DSH。
-- 界面文案写在各标签的 `strings.ts`；颜色只用主题变量；界面用 `src/client/shell/kit` 的组件拼。
+- 界面文案写在各标签的 `strings.ts`；颜色只用主题变量；界面用 `src/kit` 的组件拼。
 - 完成的标准：tsc 0 错、全部单测通过；改界面要有亮色、暗色截图，并满足 UI-DESIGN 第 5 节。

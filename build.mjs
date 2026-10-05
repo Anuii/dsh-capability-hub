@@ -112,7 +112,7 @@ function report(name, written) {
 
 // ---- 构建选项 ---------------------------------------------------------------
 const hostOptions = {
-  entryPoints: [join(root, "src/host/index.ts")],
+  entryPoints: [join(root, "src/platform/host/index.ts")],
   outfile: join(libDir, "index.js"),
   bundle: true,
   platform: "node",
@@ -128,7 +128,7 @@ const hostOptions = {
 };
 
 const clientOptions = {
-  entryPoints: [join(root, "src/client/index.tsx")],
+  entryPoints: [join(root, "src/platform/client/index.tsx")],
   outfile: join(libDir, ".client.raw.js"),
   bundle: true,
   platform: "browser",

@@ -40,7 +40,7 @@ $OutLog      = Join-Path $LogDir 'dev-profile.out.log'
 $Jar         = Join-Path $LogDir 'smoke-stage-b-cookies.txt'
 $BodyFile    = Join-Path $LogDir 'smoke-stage-b-body.json'
 $Base        = "http://127.0.0.1:$Port"
-$Fixture     = Join-Path $PackageRoot 'test\mcp-runtime\fixtures\fake-mcp-server.mjs'
+$Fixture     = Join-Path $PackageRoot 'test\mcp\runtime\fixtures\fake-mcp-server.mjs'
 # 假 MCP 服务器用哪个 node 跑：优先 -NodeExe / $env:DSH_NODE，其次 PATH。
 if (-not $NodeExe) { $NodeExe = $env:DSH_NODE }
 if (-not $NodeExe) {

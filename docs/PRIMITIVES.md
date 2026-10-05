@@ -352,7 +352,7 @@ if (typeof document !== "undefined" && document.querySelector('style[data-plugin
   tag.textContent = css; document.head.appendChild(tag);
 }
 ~~~
-能力中心已有 `src\client\shell\styles.ts`，沿用即可。
+能力中心已有 `src\platform\client\styles.ts`，沿用即可。
 
 **⑥ 第三方插件的前车之鉴**：`[3P]`（`@linxin666/dsh-client-ui-skill-explorer`，**技能浏览器，与本任务最像**）的客户端产物**只 require 了 `react` 与 `react/jsx-runtime`**（`[3P]:7-8`），完全没用 primitives——它自己实现了全部 UI。所以**它不能作为 import 说明符的证据**，但它证明不用 primitives 也能跑通（代价是 UI 与宿主风格脱节）。
 
