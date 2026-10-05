@@ -5,7 +5,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DISCOVERY_PAGE,
+  LARGE_REPO,
   discoveredKey,
+  discoveryFilterKey,
+  groupDiscovered,
+  initialRepoFold,
+  inputIntent,
+  normalizeRepoInput,
+  repoExpanded,
+  toggleRepoFold,
   filterDiscovered,
   installPlan,
   installedCounts,
@@ -96,4 +104,45 @@ test("接口返回补成安全形状", () => {
   assert.equal(view.repos.length, 1);
   assert.equal(view.skills.length, 1);
   assert.equal(view.lastScannedAt, "t");
+});
+
+test("合一的输入框：像仓库地址就浏览 / 加入，否则搜索 skills.sh", () => {
+  assert.equal(inputIntent("   "), "empty");
+  assert.equal(inputIntent("mattpocock/skills"), "repo");
+  assert.equal(inputIntent("https://github.com/a/b/tree/main/skills"), "repo");
+  assert.equal(inputIntent("github.com/a/b"), "repo");
+  assert.equal(inputIntent("pdf"), "search");
+  assert.equal(inputIntent("pdf tools"), "search");
+  assert.equal(inputIntent("a/b/c"), "search", "三段不是仓库");
+  assert.equal(normalizeRepoInput(" github.com/a/b "), "https://github.com/a/b");
+  assert.equal(normalizeRepoInput("a/b"), "a/b");
+});
+
+test("汇总按仓库分组：顺序跟仓库列表，总数不受筛选影响，空组不出现", () => {
+  const groups = groupDiscovered(SKILLS, filterDiscovered(SKILLS, { query: "", installed: "not", repo: "" }), ["mattpocock/skills", "anthropics/skills"]);
+  assert.deepEqual(groups.map((g) => [g.repo, g.total, g.skills.length]), [["mattpocock/skills", 2, 1], ["anthropics/skills", 2, 2]]);
+  const onlyPdf = groupDiscovered(SKILLS, filterDiscovered(SKILLS, { query: "pdf", installed: "all", repo: "" }), ["mattpocock/skills", "anthropics/skills"]);
+  assert.deepEqual(onlyPdf.map((g) => g.repo), ["anthropics/skills"]);
+  const unknown = groupDiscovered([{ repo: "z/z", skillPath: "SKILL.md", dirName: "z" }], [{ repo: "z/z", skillPath: "SKILL.md", dirName: "z" }], []);
+  assert.equal(unknown[0]!.repo, "z/z", "不在仓库列表里的仓库排在后面");
+});
+
+test("仓库分组折叠：大仓库默认折叠；筛选中先全部展开、可手动折叠；清空后回到原来的状态", () => {
+  const big = { repo: "ComposioHQ/awesome-claude-skills", total: LARGE_REPO + 1 };
+  const small = { repo: "mattpocock/skills", total: 37 };
+  let fold = initialRepoFold();
+  const none = discoveryFilterKey({ query: "", installed: "all", repo: "" });
+  assert.equal(none, "");
+  assert.equal(repoExpanded(fold, none, big), false, "超过 50 个默认折叠");
+  assert.equal(repoExpanded(fold, none, small), true);
+  fold = toggleRepoFold(fold, none, big);
+  assert.equal(repoExpanded(fold, none, big), true, "用户展开后记住");
+  fold = toggleRepoFold(fold, none, small);
+  const searching = discoveryFilterKey({ query: "pdf", installed: "all", repo: "" });
+  assert.equal(repoExpanded(fold, searching, small), true, "筛选中先全部展开");
+  fold = toggleRepoFold(fold, searching, small);
+  assert.equal(repoExpanded(fold, searching, small), false, "筛选中可以折叠");
+  assert.equal(repoExpanded(fold, discoveryFilterKey({ query: "", installed: "not", repo: "" }), small), true, "换一种筛选又展开");
+  assert.equal(repoExpanded(fold, none, small), false, "清空后回到不筛选时的折叠");
+  assert.equal(repoExpanded(fold, none, big), true);
 });

@@ -151,13 +151,18 @@ export function SkillDetailDrawer(props: SkillDetailProps): React.ReactElement {
     subtitleTitle: skill.path,
     testId: "skills-detail",
     onClose: props.onClose,
-    headerEnd: React.createElement(Switch, {
-      checked: !skill.modelInvocationDisabled,
-      disabled: props.busy || blocked !== undefined,
-      label: toggleLabel(skill),
-      ...(blocked === undefined ? {} : { title: blocked }),
-      onChange: (next: boolean) => props.onToggle(next),
-    }),
+    // 只读技能不放开关（与列表一致）：调用权限在「概览」里写明。
+    ...(!skill.writable
+      ? {}
+      : {
+          headerEnd: React.createElement(Switch, {
+            checked: !skill.modelInvocationDisabled,
+            disabled: props.busy || blocked !== undefined,
+            label: toggleLabel(skill),
+            ...(blocked === undefined ? {} : { title: blocked }),
+            onChange: (next: boolean) => props.onToggle(next),
+          }),
+        }),
     footer: React.createElement(React.Fragment, null,
       React.createElement(Button, {
         variant: "ghost",

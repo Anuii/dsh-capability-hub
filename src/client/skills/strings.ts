@@ -94,6 +94,8 @@ export const zh = {
   "skills.access.user": "用户调用",
   "skills.access.modelAllowed": "允许（右侧开关可关闭）",
   "skills.access.modelDenied": "禁止（disable-model-invocation: true；右侧开关可打开）",
+  "skills.access.modelAllowedReadonly": "允许（只读目录，不能在这里修改）",
+  "skills.access.modelDeniedReadonly": "禁止（disable-model-invocation: true；只读目录，不能在这里修改）",
   "skills.access.userDefault": "允许（未设置 user-invocable，默认允许）",
   "skills.access.userAllowed": "允许（user-invocable: true）",
   "skills.access.userDenied": "禁止（user-invocable: false）",
@@ -176,6 +178,8 @@ export const zh = {
   /* ---- 仓库视图（「添加技能」，D-B16，0.3.0）---- */
   "skills.repoView.subtitle": "汇总仓库列表里的技能；也可以粘贴仓库地址或搜索 skills.sh",
   "skills.repoView.addToList": "加入仓库列表",
+  "skills.repoView.entryPlaceholder": "粘贴仓库地址（owner/name 或 GitHub 链接），或输入关键词搜索 skills.sh",
+  "skills.repoView.searchButton": "搜索 skills.sh",
   "skills.repoView.searchSummary": "skills.sh 搜到 {count} 个结果",
   "skills.repoView.expand": "展开",
   "skills.repoView.collapse": "收起",
@@ -217,8 +221,6 @@ export const zh = {
   "skills.repoView.daysAgo": "{count} 天前",
 
   /* ---- 远程 · skills.sh 搜索 ---- */
-  "skills.remote.search.placeholder": "搜索 skills.sh（至少 2 个字符）",
-  "skills.remote.search.button": "搜索",
   "skills.remote.search.searching": "搜索中…",
   "skills.remote.search.tooShort": "搜索关键词至少需要 2 个字符。",
   "skills.remote.search.empty": "没有搜到结果。",

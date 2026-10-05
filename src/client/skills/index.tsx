@@ -296,7 +296,8 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
     testId: "skills-toolbar",
     search: { value: query, onChange: setQuery, placeholder: t("skills.searchPlaceholder"), testId: "skills-search" },
     filters: {
-      items: FILTERS.map((id) => ({ id, label: filterLabel(id), count: counts[id] })),
+      // 「需关注 0」调淡：没有问题时不抢眼，有问题时恢复正常。
+      items: FILTERS.map((id) => ({ id, label: filterLabel(id), count: counts[id], quiet: id === "attention" && counts[id] === 0 })),
       value: filter,
       onChange: (next: string) => setFilter(next as FilterId),
       label: t("skills.filterLabel"),

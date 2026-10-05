@@ -108,3 +108,96 @@ export function sliceVisible<T>(items: readonly T[], limit: number): { visible: 
   const visible = items.slice(0, Math.max(0, limit));
   return { visible, rest: items.length - visible.length };
 }
+
+/* ---------------- 合一的输入框（0.3.4） ---------------- */
+
+export type InputIntent = "empty" | "repo" | "search";
+
+const REPO_SHAPE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
+
+/**
+ * 顶部唯一一个输入框里的内容是什么：像仓库地址（owner/name、https://github.com/…、github.com/…）
+ * 就是 "repo"（浏览 / 加入仓库列表），否则是 skills.sh 搜索关键词。
+ */
+export function inputIntent(text: string): InputIntent {
+  const value = text.trim();
+  if (value === "") return "empty";
+  if (/^https?:\/\//i.test(value) || /^(www\.)?github\.com\//i.test(value)) return "repo";
+  return REPO_SHAPE.test(value) ? "repo" : "search";
+}
+
+/** 宿主只认 owner/name 或带协议的链接：github.com/… 补上 https://。 */
+export function normalizeRepoInput(text: string): string {
+  const value = text.trim();
+  return /^(www\.)?github\.com\//i.test(value) ? "https://" + value : value;
+}
+
+/* ---------------- 汇总按仓库分组（0.3.4） ---------------- */
+
+/** 技能数超过这个数的仓库默认折叠（例如 ComposioHQ 一个仓库就有 800 多个）。 */
+export const LARGE_REPO = 50;
+
+export interface DiscoveryGroup {
+  repo: string;
+  /** 该仓库在汇总里的技能总数（不受筛选影响，决定默认是否折叠） */
+  total: number;
+  /** 通过筛选的技能（保持 filterDiscovered 的顺序） */
+  skills: DiscoveredSkill[];
+}
+
+/** 把筛选后的技能按仓库分组：顺序跟仓库列表一致，列表里没有的仓库排在后面（按名称）；没有技能的组不出现。 */
+export function groupDiscovered(all: readonly DiscoveredSkill[], filtered: readonly DiscoveredSkill[], repoOrder: readonly string[]): DiscoveryGroup[] {
+  const totals = new Map<string, number>();
+  for (const skill of all) totals.set(skill.repo.toLowerCase(), (totals.get(skill.repo.toLowerCase()) ?? 0) + 1);
+  const groups = new Map<string, DiscoveryGroup>();
+  for (const skill of filtered) {
+    const key = skill.repo.toLowerCase();
+    const group = groups.get(key) ?? { repo: skill.repo, total: totals.get(key) ?? 0, skills: [] };
+    group.skills.push(skill);
+    groups.set(key, group);
+  }
+  const order = repoOrder.map((repo) => repo.toLowerCase());
+  const rank = (repo: string): number => {
+    const index = order.indexOf(repo.toLowerCase());
+    return index === -1 ? order.length : index;
+  };
+  return [...groups.values()].sort((left, right) => rank(left.repo) - rank(right.repo) || left.repo.localeCompare(right.repo));
+}
+
+/** 这一次筛选的标识；不筛选时是 ""。 */
+export function discoveryFilterKey(filter: DiscoveryFilter): string {
+  const query = filter.query.trim().toLowerCase();
+  if (query === "" && filter.installed === "all" && filter.repo === "") return "";
+  return [query, filter.installed, filter.repo.toLowerCase()].join("\u0000");
+}
+
+/**
+ * 仓库分组的折叠：只记用户点过的（true = 展开），没点过的用默认值。
+ *   不筛选：默认 = 技能数不超过 LARGE_REPO 就展开；
+ *   筛选中：有匹配的分组默认全部展开，仍可手动折叠，只对这一次筛选有效。
+ */
+export interface RepoFold {
+  normal: ReadonlyMap<string, boolean>;
+  filtered: { filterKey: string; open: ReadonlyMap<string, boolean> };
+}
+
+export function initialRepoFold(): RepoFold {
+  return { normal: new Map(), filtered: { filterKey: "", open: new Map() } };
+}
+
+function filteredOpen(fold: RepoFold, filterKey: string): ReadonlyMap<string, boolean> {
+  return fold.filtered.filterKey === filterKey ? fold.filtered.open : new Map();
+}
+
+export function repoExpanded(fold: RepoFold, filterKey: string, group: Pick<DiscoveryGroup, "repo" | "total">): boolean {
+  const key = group.repo.toLowerCase();
+  if (filterKey === "") return fold.normal.get(key) ?? group.total <= LARGE_REPO;
+  return filteredOpen(fold, filterKey).get(key) ?? true;
+}
+
+export function toggleRepoFold(fold: RepoFold, filterKey: string, group: Pick<DiscoveryGroup, "repo" | "total">): RepoFold {
+  const key = group.repo.toLowerCase();
+  const next = !repoExpanded(fold, filterKey, group);
+  if (filterKey === "") return { ...fold, normal: new Map(fold.normal).set(key, next) };
+  return { ...fold, filtered: { filterKey, open: new Map(filteredOpen(fold, filterKey)).set(key, next) } };
+}

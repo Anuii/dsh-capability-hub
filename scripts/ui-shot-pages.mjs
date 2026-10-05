@@ -289,11 +289,12 @@ FACTS.repoListToggled = await clickTestId("skills-repo-group-toggle");
 FACTS.checked = await evaluate("(() => { const boxes = [...document.querySelectorAll('[data-testid=skills-discovery-list] input[type=checkbox]:not(:disabled)')].slice(0, 2); boxes.forEach((b) => b.click()); return boxes.length; })()");
 await sleep(600);
 FACTS.footerVisible = await evaluate("!!document.querySelector('[data-testid=skills-install-submit]')");
+FACTS.discoveryGroups = await evaluate("[...document.querySelectorAll('[data-testid^=skills-discovery-group-][data-testid$=-toggle]')].map((n) => n.textContent.trim().slice(0, 40) + ' ' + n.getAttribute('aria-expanded'))");
 FACTS.addSkillAudit = await evaluate("(() => { const d = document.querySelector('[data-testid=kit-drawer]'); if (!d) return null; const rows = [...d.querySelectorAll('[data-testid=skills-discovery-list] li')]; return rows.slice(0, 50).map((r) => [...r.querySelectorAll('button, input, [role=switch], [role=checkbox], select')].filter((c) => getComputedStyle(c).opacity !== '0' && c.getBoundingClientRect().width > 0 && getComputedStyle(c.closest('[class]')).opacity !== '0').length).reduce((m, n) => Math.max(m, n), 0); })()");
 await pair("p13", "add-skill-selected");
 // 搜索 skills.sh → 结果框；再从结果里「浏览」一个仓库（--no-network 时跳过）
 if (!process.argv.includes("--no-network")) {
-  await evaluate("(() => { const n = document.querySelector('[data-testid=skills-remote-search-input]'); const input = n && (n.tagName === 'INPUT' ? n : n.querySelector('input')); if (!input) return false; input.focus(); return true; })()");
+  await evaluate("(() => { const n = document.querySelector('[data-testid=skills-repo-entry]'); const input = n && (n.tagName === 'INPUT' ? n : n.querySelector('input')); if (!input) return false; input.focus(); return true; })()");
   await send("Input.insertText", { text: "pdf" });
   await clickTestId("skills-remote-search-button");
   await sleep(4000);
@@ -313,6 +314,9 @@ await sleep(1200);
 await evaluate("(() => { const p = document.querySelector('[data-testid=capability-hub-panel-mcp]'); if (p) p.scrollIntoView({ block: 'end' }); const s = [...document.querySelectorAll('*')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); if (s) s.scrollIntoView({ block: 'center' }); return true; })()");
 await sleep(400);
 FACTS.mcpAudit = await evaluate(AUDIT);
+FACTS.runningQuiet = await evaluate("(() => { const n = document.querySelector('[data-testid=running-quiet]'); return n ? n.textContent : null; })()");
+FACTS.mcpTabDot = await evaluate("!!document.querySelector('[data-testid=capability-hub-tab-dot-mcp]')");
+FACTS.mcpRowSubtitle = await evaluate("(() => { const n = document.querySelector('[data-testid^=mcp-row-] .chk_rowSub'); return n ? [n.textContent, n.title] : null; })()");
 FACTS.runningHeader = await evaluate("(() => { const s = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] *')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); return s ? s.textContent.trim() : null; })()");
 await pair("p07", "mcp");
 

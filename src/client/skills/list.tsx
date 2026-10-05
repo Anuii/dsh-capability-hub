@@ -2,7 +2,7 @@
  * 技能列表（UI-DESIGN §3，D-B14 / D-B15）：**只通过 kit 拼界面**。
  *
  * 一处一事：一行只回答「这是什么、开没开」——
- *   标题 = name（没有 name 时用目录名 + 「无名称」标记）+ 淡色目录标签（.agents / .dsh）
+ *   标题 = name（没有 name 时用目录名 + 「无名称」标记）+ 淡色目录标签（.agents / .dsh；层级里只有一个目录时不显示）
  *   副标题 = description（没有就是空行，保持行高一致）
  *   标记 = 不可加载 / 可更新 / 被遮蔽（最多 2 个，由 kit 截断）
  *   行尾 = 调用权限文字（模型、用户 / 仅模型 / 仅用户 / 不可调用，D-B17）+ 开关（模型调用；只读或不可安全改写时禁用，工具提示写原因）
@@ -92,19 +92,24 @@ function SkillRow(props: {
       testId: "skills-badge-" + badge.key + "-" + skill.id,
     }, badge.label)),
     // 调用权限（D-B17）：开关管模型调用，这段文字把两种调用一起说清楚，悬停看来源。
+    // 默认的「模型、用户」调淡，例外（仅模型 / 仅用户 / 不可调用）才醒目。
     note: {
       text: invocationLabel(access),
       title: invocationTitle(access),
-      muted: !access.model && !access.user,
+      muted: access.model && access.user,
       testId: "skills-access-" + skill.id,
     },
-    trailing: React.createElement(Switch, {
-      checked: !skill.modelInvocationDisabled,
-      disabled: props.busy || blocked !== undefined,
-      label: toggleLabel(skill),
-      ...(blocked === undefined ? {} : { title: blocked }),
-      onChange: (next: boolean) => props.onToggle(skill, next),
-    }),
+    // 只读技能（DSH 内置、自定义只读目录）不放开关——禁用的开关容易被看成「已关闭」；
+    // 留一个同宽空位让行尾文字仍对齐。层级标题上已标「只读」。
+    trailing: !skill.writable
+      ? React.createElement("span", { className: kit.trailingSpacer, "aria-hidden": "true" })
+      : React.createElement(Switch, {
+        checked: !skill.modelInvocationDisabled,
+        disabled: props.busy || blocked !== undefined,
+        label: toggleLabel(skill),
+        ...(blocked === undefined ? {} : { title: blocked }),
+        onChange: (next: boolean) => props.onToggle(skill, next),
+      }),
     onOpen: () => props.onOpen(skill),
   });
 }
@@ -159,10 +164,11 @@ export function SkillList(props: SkillListProps): React.ReactElement {
   const toggle = (key: string): void => setFold((current) => toggleFold(current, filterKey, key));
   const expanded = (key: string): boolean => isFoldExpanded(fold, filterKey, key);
 
-  const row = (skill: SkillSummary): React.ReactElement => React.createElement(SkillRow, {
+  /** 一行；目录标签只在该层级里有不止一个技能目录时显示。 */
+  const rowIn = (level: LevelView) => (skill: SkillSummary): React.ReactElement => React.createElement(SkillRow, {
     key: skill.id,
     skill,
-    tag: tags.get(skill.rootId),
+    tag: level.multiDir ? tags.get(skill.rootId) : undefined,
     context: props.context,
     busy: props.busyIds.has(skill.id),
     onToggle: props.onToggle,
@@ -175,7 +181,7 @@ export function SkillList(props: SkillListProps): React.ReactElement {
   const levelBody = (level: LevelView): React.ReactNode => {
     if (level.noWorkspace === true) return note(level.level, t("skills.tree.noWorkspace"));
     if (level.flat) {
-      if (level.skills.length > 0) return level.skills.map(row);
+      if (level.skills.length > 0) return level.skills.map(rowIn(level));
       return note(level.level, level.level === "project" ? t("skills.tree.projectEmpty") : t("skills.tree.levelEmpty"));
     }
     return level.repos.map((repo) => React.createElement(ListGroup, {
@@ -186,7 +192,7 @@ export function SkillList(props: SkillListProps): React.ReactElement {
       expanded: expanded(repo.key),
       onToggle: () => toggle(repo.key),
       testId: "skills-repo-" + level.level + "-" + (repo.repo ?? "none"),
-    }, repo.skills.map(row)));
+    }, repo.skills.map(rowIn(level))));
   };
 
   const empty = props.list.skills.length === 0 && !tree.filtering;

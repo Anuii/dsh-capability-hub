@@ -435,13 +435,16 @@ export interface InvocationAccess {
   user: boolean;
   /** user-invocable 是否在 frontmatter 里显式写了 */
   userExplicit: boolean;
+  /** 模型调用能不能在界面上改（技能所在目录可写） */
+  editable: boolean;
 }
 
-export function invocationAccess(skill: Pick<SkillSummary, "modelInvocationDisabled" | "userInvocable">): InvocationAccess {
+export function invocationAccess(skill: Pick<SkillSummary, "modelInvocationDisabled" | "userInvocable"> & { writable?: boolean }): InvocationAccess {
   return {
     model: !skill.modelInvocationDisabled,
     user: skill.userInvocable !== false,
     userExplicit: skill.userInvocable !== null,
+    editable: skill.writable !== false,
   };
 }
 
@@ -455,6 +458,7 @@ export function invocationLabel(access: InvocationAccess): string {
 
 /** 模型调用的说明（详情与悬停提示共用）。 */
 export function modelAccessText(access: InvocationAccess): string {
+  if (!access.editable) return access.model ? t("skills.access.modelAllowedReadonly") : t("skills.access.modelDeniedReadonly");
   return access.model ? t("skills.access.modelAllowed") : t("skills.access.modelDenied");
 }
 

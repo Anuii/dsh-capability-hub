@@ -6,7 +6,7 @@
  *   二级 = 来源仓库（owner/name，来自 lock 或插件自己的来源记录），名称排序，「无来源」最后；
  *          DSH 内置不细分；某层级全是无来源、或来源数据不可用时，不显示二级、直接列技能。
  *   目录标签 = 技能所在技能目录路径里最后一个 skills 段之前的那一段（.agents / .dsh），
- *          没有 skills 段时取最后一段；完整路径做悬停提示。
+ *          没有 skills 段时取最后一段；完整路径做悬停提示。只在层级里有不止一个目录的技能时显示（multiDir）。
  *   目录筛选 = 按技能目录（rootId）筛选；选项含空目录、带技能数、按层级分段。
  *   折叠 = 调用方持有「被用户折叠的分组 key 集合」；搜索 / 任何筛选生效时一律展开，
  *          清空后回到用户原来的折叠状态（集合本身没被改动过）。
@@ -113,6 +113,8 @@ export interface LevelView {
   shown: number;
   /** true = 不分二级，直接列 skills */
   flat: boolean;
+  /** 层级里的技能来自不止一个技能目录：只有这时行上才显示目录标签（只有一个目录时它是噪音） */
+  multiDir: boolean;
   skills: SkillSummary[];
   repos: RepoGroupView[];
   /** 项目级且没有当前工作区：只显示一行说明 */
@@ -230,7 +232,8 @@ export function buildSkillTree(input: TreeInput): TreeView {
     const shown = sortSkills(kept.filter((skill) => levelOf(skill) === level));
     if (filtering && shown.length === 0) continue;
     if (!filtering && level === "builtin" && all.length === 0) continue;
-    const view: LevelView = { level, key: levelKey(level), label: levelLabel(level), total: all.length, shown: shown.length, flat: true, skills: shown, repos: [] };
+    const multiDir = new Set(all.map((skill) => skill.rootId)).size > 1;
+    const view: LevelView = { level, key: levelKey(level), label: levelLabel(level), total: all.length, shown: shown.length, flat: true, multiDir, skills: shown, repos: [] };
     if (level === "project" && !input.hasWorkspace) view.noWorkspace = true;
     if (level !== "builtin" && input.sources !== undefined && shown.length > 0) {
       const groups = repoGroups(level, shown, input.sources);

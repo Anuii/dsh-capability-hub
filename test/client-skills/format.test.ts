@@ -399,7 +399,7 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
 
 test("调用权限（D-B17）：与 DSH 口径一致，四种组合各有一段文字，悬停说明来源", () => {
   const both = invocationAccess(makeSkill({ id: "a:x" }));
-  assert.deepEqual(both, { model: true, user: true, userExplicit: false });
+  assert.deepEqual(both, { model: true, user: true, userExplicit: false, editable: true });
   assert.equal(invocationLabel(both), "模型、用户");
   assert.match(invocationTitle(both), /模型调用：允许/);
   assert.match(invocationTitle(both), /用户调用：允许（未设置 user-invocable，默认允许）/);
@@ -409,11 +409,15 @@ test("调用权限（D-B17）：与 DSH 口径一致，四种组合各有一段�
   assert.match(invocationTitle(modelOnly), /用户调用：禁止（user-invocable: false）/);
 
   const userOnly = invocationAccess(makeSkill({ id: "a:x", modelInvocationDisabled: true, userInvocable: true }));
-  assert.deepEqual(userOnly, { model: false, user: true, userExplicit: true });
+  assert.deepEqual(userOnly, { model: false, user: true, userExplicit: true, editable: true });
   assert.equal(invocationLabel(userOnly), "仅用户");
   assert.match(invocationTitle(userOnly), /模型调用：禁止（disable-model-invocation: true/);
   assert.match(invocationTitle(userOnly), /用户调用：允许（user-invocable: true）/);
 
   const none = invocationAccess(makeSkill({ id: "a:x", modelInvocationDisabled: true, userInvocable: false }));
   assert.equal(invocationLabel(none), "不可调用");
+
+  const readonly = invocationAccess(makeSkill({ id: "custom-1:x", writable: false }));
+  assert.equal(readonly.editable, false);
+  assert.match(invocationTitle(readonly), /模型调用：允许（只读目录/, "只读技能不说「右侧开关可关闭」");
 });

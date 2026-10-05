@@ -75,6 +75,8 @@ const CSS = [
   `.${PREFIX}repoEdit{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);list-style:none}`,
   // 搜索结果的固定高度滚动框（约 4 行）：结果再多也不把下面的内容顶出视野。
   `.${PREFIX}scrollBox{max-height:232px;overflow:auto;border-radius:10px}`,
+  // 汇总里一个仓库分组 + 它的「再显示 200 个」：贴在一起，组与组之间的距离由 ListSurface 给。
+  `.${PREFIX}groupStack{display:flex;flex-direction:column;gap:8px}`,
   // 汇总发现工具栏右侧的「上次扫描」小字。
   `.${PREFIX}scanMeta{font-size:12px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}`,
 ].join("");
@@ -87,6 +89,7 @@ export const styles = {
   repoEdit: PREFIX + "repoEdit",
   scanMeta: PREFIX + "scanMeta",
   scrollBox: PREFIX + "scrollBox",
+  groupStack: PREFIX + "groupStack",
   loading: PREFIX + "loading",
   note: PREFIX + "note",
   diag: PREFIX + "diag",

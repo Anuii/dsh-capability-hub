@@ -172,3 +172,12 @@ test("折叠：DSH 内置默认折叠；筛选时有匹配的分组先展开、�
   assert.equal(isFiltering("  ", "all", ""), false);
   assert.equal(isFiltering("", "all", "user-dsh"), true);
 });
+
+test("目录标签只在层级里有不止一个技能目录时显示", () => {
+  const tree = buildSkillTree({ list: LIST, query: "", filter: "all", sources: SOURCES, hasWorkspace: true });
+  assert.equal(tree.levels.find((l) => l.level === "user")!.multiDir, true, "用户级有 .agents、.dsh、team-skills");
+  assert.equal(tree.levels.find((l) => l.level === "builtin")!.multiDir, false);
+  assert.equal(tree.levels.find((l) => l.level === "project")!.multiDir, false);
+  const onlyAgents = makeList(ROOTS, SKILLS.filter((s) => s.rootId === "user-agents"));
+  assert.equal(buildSkillTree({ list: onlyAgents, query: "", filter: "all", hasWorkspace: true }).levels.find((l) => l.level === "user")!.multiDir, false);
+});
