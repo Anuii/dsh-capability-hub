@@ -166,15 +166,23 @@ test("ListGroup 的 title 可选：不传时整条标题行都不渲染", () => 
   assert.ok(KIT_CSS.includes("." + kit.group + "{"));
 });
 
-test("ListFoot 是 kit 的组件，技能页不再自己写那一行脚注", () => {
+test("ListFoot 是 kit 的组件；技能页 0.3.0 起用目录筛选取代「空目录」脚注", () => {
   const listSurface = fs.readFileSync(path.join(shellDir, "kit", "ListSurface.tsx"), "utf8");
   assert.ok(listSurface.includes("export function ListFoot"));
   assert.ok(KIT_CSS.includes("." + kit.foot + "{"));
   assert.ok(KIT_CSS.includes("." + kit.footText + "{"));
   assert.ok(KIT_CSS.includes("." + kit.footAction + "{"));
   const skillsList = fs.readFileSync(path.resolve(shellDir, "..", "skills", "list.tsx"), "utf8");
-  assert.ok(skillsList.includes("ListFoot"), "技能页要用 kit 的 ListFoot");
   assert.equal(skillsList.includes("listFootAction"), false, "技能页不该再手写脚注按钮");
+  assert.ok(skillsList.includes("DirFilter"), "空目录改由「目录」筛选呈现（D-B15）");
+});
+
+test("可折叠分组：标题行是按钮、带 aria-expanded，二级分组无外框", () => {
+  const listSurface = fs.readFileSync(path.join(shellDir, "kit", "ListSurface.tsx"), "utf8");
+  assert.ok(listSurface.includes('"aria-expanded": expanded'));
+  assert.ok(KIT_CSS.includes("." + kit.groupHead + "[data-fold]{cursor:pointer"));
+  assert.ok(KIT_CSS.includes("." + kit.group + "[data-depth='1']{border:none"));
+  assert.ok(KIT_CSS.includes("." + kit.rowTag + "{"), "目录标签有自己的最弱样式");
 });
 
 test("菜单项的 data-testid 挂在包文字的 span 上（宿主 MenuItemButton 不透传未知 props）", () => {

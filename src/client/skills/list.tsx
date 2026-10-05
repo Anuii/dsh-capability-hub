@@ -1,33 +1,42 @@
 /**
- * 技能列表（UI-DESIGN §4）：**只通过 kit 拼界面**。
+ * 技能列表（UI-DESIGN §3，D-B14 / D-B15）：**只通过 kit 拼界面**。
  *
  * 一处一事：一行只回答「这是什么、开没开」——
- *   标题 = name（没有 name 时用目录名 + 「无名称」标记）
+ *   标题 = name（没有 name 时用目录名 + 「无名称」标记）+ 淡色目录标签（.agents / .dsh）
  *   副标题 = description（没有就是空行，保持行高一致）
  *   标记 = 不可加载 / 可更新 / 被遮蔽（最多 2 个，由 kit 截断）
  *   trailing = 开关（只读或不可安全改写时禁用，工具提示写原因）
  * 其余信息（来源、更新、诊断、文件、SKILL.md）全在详情抽屉里。
  *
- * 分组：空的与不存在的根**隐藏**，底部用一行次要色小字「另有 N 个空的技能目录 · 显示」切换。
+ * 分组（tree.ts）：一级 = 层级（DSH 内置默认折叠 / 用户级 / 项目级），二级 = 来源仓库。
+ * 折叠状态在本组件里（标签隐藏而不卸载，切标签不会丢）；搜索或任何筛选时一律展开。
  */
 import * as React from "react";
 import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge, EmptyState, ListFoot, ListGroup, ListRow, ListSurface, SkeletonRows } from "../shell/kit/index.ts";
+import { Badge, EmptyState, ListGroup, ListRow, ListSurface, SkeletonRows, kit } from "../shell/kit/index.ts";
+import { useRemoteState } from "./remote/use-store.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import {
   displayName,
-  listView,
-  rootGroupTitle,
-  rootMetaPath,
-  rootPathTitle,
   rowBadges,
   toggleBlockReason,
   toggleLabel,
   type FilterId,
   type MatchContext,
 } from "./format.ts";
-import type { ListResult, RootInfo, SkillSummary } from "./types.ts";
+import {
+  DEFAULT_COLLAPSED,
+  LEVELS,
+  buildSkillTree,
+  dirOptions,
+  dirTagIndex,
+  isExpanded,
+  levelLabel,
+  toggleCollapsed,
+  type LevelView,
+} from "./tree.ts";
+import type { ListResult, SkillSummary } from "./types.ts";
 
 export interface SkillListProps {
   list: ListResult;
@@ -36,6 +45,8 @@ export interface SkillListProps {
   homeDir?: string;
   query: string;
   filter: FilterId;
+  /** 目录筛选（rootId）；"" = 全部目录 */
+  dir: string;
   context: MatchContext;
   /** 启停在途的技能 id（开关置灰） */
   busyIds: ReadonlySet<string>;
@@ -51,6 +62,7 @@ export interface SkillListProps {
 /** 一行技能。 */
 function SkillRow(props: {
   skill: SkillSummary;
+  tag: { text: string; title: string } | undefined;
   context: MatchContext;
   busy: boolean;
   onToggle(skill: SkillSummary, next: boolean): void;
@@ -63,6 +75,7 @@ function SkillRow(props: {
   return React.createElement(ListRow, {
     testId: "skills-row-" + skill.id,
     title: name.text,
+    ...(props.tag === undefined ? {} : { tag: { ...props.tag, testId: "skills-dir-tag-" + skill.id } }),
     // 空描述也渲染副标题：行高保持 52px，列表看起来是一条直线（UI-DESIGN §1）
     subtitle: skill.description ?? "",
     badges: badges.map((badge) => React.createElement(Badge, {
@@ -82,81 +95,118 @@ function SkillRow(props: {
   });
 }
 
-/** 一个分组的标题行上的标记：只读 / 目录不存在（可写且存在时什么也不显示）。 */
-function groupBadges(root: RootInfo): React.ReactNode[] {
-  const badges: React.ReactNode[] = [];
-  if (!root.writable) {
-    badges.push(React.createElement(Badge, { key: "ro", tone: "neutral", testId: "skills-root-readonly-" + root.rootId }, t("skills.root.readonly")));
-  }
-  if (!root.exists) {
-    badges.push(React.createElement(Badge, { key: "missing", tone: "neutral", testId: "skills-root-missing-" + root.rootId }, t("skills.root.missing")));
-  }
-  return badges;
+/** 工具栏里的「目录」筛选：原生下拉，按层级分段，含空目录与技能数。 */
+export function DirFilter(props: {
+  list: ListResult;
+  value: string;
+  onChange(rootId: string): void;
+}): React.ReactElement {
+  const options = dirOptions(props.list);
+  return React.createElement("select", {
+    className: kit.select,
+    value: props.value,
+    "aria-label": t("skills.dirFilter.label"),
+    title: options.find((option) => option.rootId === props.value)?.title ?? t("skills.dirFilter.label"),
+    "data-testid": "skills-dir-filter",
+    "data-active": props.value === "" ? undefined : "",
+    onChange: (event: React.ChangeEvent<HTMLSelectElement>) => props.onChange(event.target.value),
+  },
+  React.createElement("option", { value: "" }, t("skills.dirFilter.all")),
+  LEVELS.map((level) => {
+    const items = options.filter((option) => option.level === level);
+    if (items.length === 0) return null;
+    return React.createElement("optgroup", { key: level, label: levelLabel(level) },
+      items.map((option) => React.createElement("option", {
+        key: option.rootId,
+        value: option.rootId,
+        title: option.title,
+      }, t("skills.dirFilter.option", { tag: option.tag, count: option.count }))));
+  }));
 }
 
 /** 技能列表（工具栏由 index.tsx 渲染）。 */
 export function SkillList(props: SkillListProps): React.ReactElement {
-  const [showEmpty, setShowEmpty] = React.useState<boolean>(false);
-  const view = listView(props.list, props.query, props.filter, props.context);
-  const filtering = props.query.trim() !== "" || props.filter !== "all";
-  const groups = showEmpty ? [...view.visible, ...view.hidden] : view.visible;
+  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set(DEFAULT_COLLAPSED));
+  const remote = useRemoteState();
+  const sourcesReady = remote.sourcesLoaded && remote.sourcesError === undefined;
+  const hasWorkspace = typeof props.workspace === "string" && props.workspace.trim() !== "";
+  const tree = buildSkillTree({
+    list: props.list,
+    query: props.query,
+    filter: props.filter,
+    context: props.context,
+    dir: props.dir,
+    hasWorkspace,
+    ...(sourcesReady ? { sources: remote.sources } : {}),
+  });
+  const tags = React.useMemo(() => dirTagIndex(props.list.roots), [props.list.roots]);
+  const toggle = (key: string): void => setCollapsed((current) => toggleCollapsed(current, key));
+  const expanded = (key: string): boolean => isExpanded(key, collapsed, tree.filtering);
 
-  const surface = groups.length === 0
+  const row = (skill: SkillSummary): React.ReactElement => React.createElement(SkillRow, {
+    key: skill.id,
+    skill,
+    tag: tags.get(skill.rootId),
+    context: props.context,
+    busy: props.busyIds.has(skill.id),
+    onToggle: props.onToggle,
+    onOpen: props.onOpen,
+  });
+
+  const note = (key: string, text: string): React.ReactElement =>
+    React.createElement("li", { key, className: styles.treeNote, "data-testid": "skills-tree-note-" + key }, text);
+
+  const levelBody = (level: LevelView): React.ReactNode => {
+    if (level.noWorkspace === true) return note(level.level, t("skills.tree.noWorkspace"));
+    if (level.flat) {
+      if (level.skills.length > 0) return level.skills.map(row);
+      return note(level.level, level.level === "project" ? t("skills.tree.projectEmpty") : t("skills.tree.levelEmpty"));
+    }
+    return level.repos.map((repo) => React.createElement(ListGroup, {
+      key: repo.key,
+      depth: 1,
+      title: repo.label,
+      count: repo.skills.length,
+      expanded: expanded(repo.key),
+      onToggle: () => toggle(repo.key),
+      testId: "skills-repo-" + level.level + "-" + (repo.repo ?? "none"),
+    }, repo.skills.map(row)));
+  };
+
+  const empty = props.list.skills.length === 0 && !tree.filtering;
+  const surface = empty || (tree.filtering && tree.shown === 0)
     ? React.createElement(EmptyState, {
       testId: "skills-empty",
-      title: filtering ? t("skills.emptyFiltered.title") : t("skills.empty.title"),
-      description: filtering ? t("skills.emptyFiltered.description") : t("skills.empty.description"),
-      ...(filtering
+      title: tree.filtering ? t("skills.emptyFiltered.title") : t("skills.empty.title"),
+      description: tree.filtering ? t("skills.emptyFiltered.description") : t("skills.empty.description"),
+      ...(tree.filtering
         ? {}
         : { action: { label: t("skills.addSkill"), onClick: props.onAdd, testId: "skills-empty-add" } }),
     })
     : React.createElement(ListSurface, { testId: "skills-surface" },
-      groups.map((entry) => {
-        const root = entry.group.root;
-        const badges = groupBadges(root);
-        const meta = rootMetaPath(root, props.workspace, props.homeDir);
-        return React.createElement(ListGroup, {
-          key: root.rootId,
-          title: rootGroupTitle(root),
-          // DSH 内置根的 meta 是 undefined：标题上不显示那串 asar 路径，完整路径只走 title 提示。
-          ...(meta === undefined ? {} : { meta, metaTitle: rootPathTitle(root) }),
-          headTitle: rootPathTitle(root),
-          count: t("skills.root.count", { count: entry.total }),
-          badges: badges.length === 0 ? undefined : badges,
-          testId: "skills-root-" + root.rootId,
-        }, entry.shown.map((skill) => React.createElement(SkillRow, {
-          key: skill.id,
-          skill,
-          context: props.context,
-          busy: props.busyIds.has(skill.id),
-          onToggle: props.onToggle,
-          onOpen: props.onOpen,
-        })));
-      }));
+      tree.levels.map((level) => React.createElement(ListGroup, {
+        key: level.key,
+        title: level.label,
+        count: t("skills.root.count", { count: tree.filtering ? level.shown : level.total }),
+        badges: level.level === "builtin"
+          ? React.createElement(Badge, { tone: "neutral", testId: "skills-level-readonly" }, t("skills.root.readonly"))
+          : undefined,
+        expanded: expanded(level.key),
+        onToggle: () => toggle(level.key),
+        nested: !level.flat,
+        testId: "skills-level-" + level.level,
+      }, levelBody(level))));
 
   return React.createElement("div", {
     className: styles.root,
     "data-testid": "skills-list",
-    "data-shown": String(view.shown),
-    "data-total": String(view.total),
+    "data-shown": String(tree.shown),
+    "data-total": String(tree.total),
   },
   props.error === undefined
     ? null
     : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-list-error" }, props.error),
   props.loading && props.list.skills.length === 0
     ? React.createElement(SkeletonRows, { testId: "skills-skeleton" })
-    : surface,
-  view.hidden.length === 0
-    ? null
-    : React.createElement(ListFoot, {
-      testId: "skills-empty-roots",
-      textTestId: "skills-empty-roots-text",
-      text: t("skills.list.emptyRoots", { count: view.hidden.length }),
-      action: {
-        label: showEmpty ? t("skills.list.hideEmpty") : t("skills.list.showEmpty"),
-        testId: "skills-empty-roots-toggle",
-        expanded: showEmpty,
-        onClick: () => setShowEmpty((value) => !value),
-      },
-    }));
+    : surface);
 }

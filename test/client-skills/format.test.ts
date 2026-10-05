@@ -32,7 +32,6 @@ import {
   isProjectRoot,
   levelLabel,
   levelTone,
-  listView,
   matches,
   matchesFilter,
   matchesQuery,
@@ -256,37 +255,6 @@ test("分段计数", () => {
   ];
   assert.deepEqual(filterCounts(skills), { all: 3, enabled: 2, disabled: 1, attention: 1 });
   assert.deepEqual(filterCounts(skills, { updatable: new Set<string>(["a:1"]) }), { all: 3, enabled: 2, disabled: 1, attention: 2 });
-});
-
-test("列表视图：空的与不存在的根被隐藏，筛选后不留空分组", () => {
-  const roots = [
-    root("user-agents"),
-    root("user-dsh"),
-    root("project-dsh", { exists: false }),
-  ];
-  const skills = [
-    makeSkill({ id: "user-agents:a", name: "a", rootId: "user-agents" }),
-    makeSkill({ id: "user-agents:b", name: "b", rootId: "user-agents", modelInvocationDisabled: true, modelVisible: false }),
-  ];
-  const list = makeList(roots, skills);
-
-  const view = listView(list, "", "all");
-  assert.deepEqual(view.visible.map((entry) => entry.group.root.rootId), ["user-agents"]);
-  // UI-C 起分组顺序是「项目级 → 用户级 → 只读根」，空的根被隐藏后仍按这个顺序排。
-  assert.deepEqual(view.hidden.map((entry) => entry.group.root.rootId), ["project-dsh", "user-dsh"]);
-  assert.equal(view.shown, 2);
-  assert.equal(view.total, 2);
-  assert.equal(view.visible[0]!.total, 2);
-
-  const disabled = listView(list, "", "disabled");
-  assert.deepEqual(disabled.visible.map((entry) => entry.group.root.rootId), ["user-agents"]);
-  assert.equal(disabled.visible[0]!.shown.length, 1);
-
-  const none = listView(list, "不存在的词", "all");
-  assert.deepEqual(none.visible, []);
-  assert.equal(none.shown, 0);
-  assert.equal(none.total, 2);
-  assert.deepEqual(none.hidden.map((entry) => entry.group.root.rootId), ["project-dsh", "user-dsh"], "根级别是否为空的判据不受搜索影响");
 });
 
 test("诊断计数、级别文案与色调", () => {

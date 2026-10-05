@@ -353,52 +353,6 @@ export function filterCounts(skills: readonly SkillSummary[], context?: MatchCon
   return counts;
 }
 
-/** 一个根在界面上的样子：显示哪些行、这个根一共有多少技能、是不是「空的根」。 */
-export interface GroupView {
-  group: RootGroup;
-  /** 通过搜索/筛选的技能 */
-  shown: SkillSummary[];
-  /** 该根下的技能总数（不受搜索/筛选影响） */
-  total: number;
-  /** 空的或目录不存在的根 —— 默认隐藏（UI-DESIGN §4） */
-  empty: boolean;
-}
-
-export interface ListView {
-  /** 默认显示的分组（有内容、且筛选后仍有行） */
-  visible: GroupView[];
-  /** 被隐藏的空根 / 不存在的根（用户切换「显示」时才渲染） */
-  hidden: GroupView[];
-  /** 通过筛选的技能数 */
-  shown: number;
-  /** 列表里的技能总数（不受筛选影响） */
-  total: number;
-}
-
-/**
- * 分组的可见性：空的与不存在的根进 hidden，其余按筛选结果决定；
- * 筛选后一行不剩的分组也不渲染（界面上给空状态）。
- */
-export function listView(
-  list: ListResult,
-  query: string,
-  filter: FilterId,
-  context?: MatchContext,
-): ListView {
-  const groups = groupByRoot(list.roots, list.skills);
-  const kept = list.skills.filter((skill) => matches(skill, query, filter, context));
-  const views: GroupView[] = groups.map((group) => {
-    const shown = sortSkills(kept.filter((skill) => skill.rootId === group.root.rootId));
-    return { group, shown, total: group.skills.length, empty: group.missing || group.skills.length === 0 };
-  });
-  return {
-    visible: views.filter((view) => !view.empty && view.shown.length > 0),
-    hidden: views.filter((view) => view.empty),
-    shown: kept.length,
-    total: list.skills.length,
-  };
-}
-
 /* ---------------- 行标记与启停 ---------------- */
 
 /** kit Badge 的 tone（UI-DESIGN §1：neutral / accent / warn / danger）。 */

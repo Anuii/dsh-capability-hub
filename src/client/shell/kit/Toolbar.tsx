@@ -16,6 +16,8 @@ export interface ToolbarProps {
   search?: { value: string; onChange(value: string): void; placeholder?: string; testId?: string };
   /** 筛选分段。 */
   filters?: { items: readonly FilterItem[]; value: string; onChange(id: string): void; label?: string };
+  /** 紧跟在筛选分段之后的额外筛选（例如技能页的「目录」下拉）。 */
+  afterFilters?: React.ReactNode;
   /** 主按钮：直接执行，或者展开一个菜单。 */
   primary?: { label: string; onClick(): void; testId?: string } | { label: string; menu: readonly MenuItem[]; testId?: string };
   /** 右侧「⋯」。 */
@@ -60,6 +62,7 @@ export function Toolbar(props: ToolbarProps): React.ReactElement {
       },
       React.createElement("span", null, item.label),
       item.count === undefined ? null : React.createElement("span", { className: kit.segmentCount }, String(item.count))))),
+    props.afterFilters === undefined ? null : React.createElement("span", { className: kit.toolbarAfterFilters }, props.afterFilters),
     React.createElement("span", { className: kit.toolbarSpacer }),
     props.end === undefined ? null : React.createElement("span", { className: kit.toolbarEnd }, props.end),
     primary === undefined

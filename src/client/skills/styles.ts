@@ -68,12 +68,16 @@ const CSS = [
   // 宿主 Modal 的内容区（对话框用）
   `.${PREFIX}modalBody{display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto}`,
   `.${PREFIX}fieldError{margin:0;font-size:12px;color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-primary))}`,
+  // 技能树里的一行说明（没有工作区 / 该层级还没有技能）：与行同样的左右留白、次要色小字。
+  `.${PREFIX}treeNote{padding:12px 16px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-tertiary);border-top:1px solid var(--dsw-alias-border-l1)}`,
+  `.${PREFIX}treeNote:first-child{border-top:none}`,
 ].join("");
 
 /** 类名表。 */
 export const styles = {
   root: PREFIX + "root",
   errorBox: PREFIX + "errorBox",
+  treeNote: PREFIX + "treeNote",
   loading: PREFIX + "loading",
   note: PREFIX + "note",
   diag: PREFIX + "diag",

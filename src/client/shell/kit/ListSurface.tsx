@@ -144,6 +144,11 @@ export interface ListRowProps {
   /** 行首：StatusTone 时渲染状态点，ReactNode 时原样渲染。 */
   leading?: StatusTone | React.ReactNode;
   badges?: React.ReactNode[];
+  /**
+   * 标题后的一枚淡色小标签（技能所在的技能目录，如 .agents）：比状态标记更弱——
+   * 不是描边胶囊、不计入「每行最多 2 个标记」、不带颜色；title 放完整路径。
+   */
+  tag?: { text: string; title?: string; testId?: string };
   trailing?: React.ReactNode;
   hoverActions?: RowAction[];
   /** 传入任意节点即渲染成拖动把手（MCP 页用）。 */
@@ -199,6 +204,9 @@ export function ListRow(props: ListRowProps): React.ReactElement {
   React.createElement("span", { className: kit.rowMain },
     React.createElement("span", { className: kit.rowTitleLine },
       React.createElement("span", { className: kit.rowTitle, title: typeof props.title === "string" ? props.title : undefined }, props.title),
+      props.tag === undefined
+        ? null
+        : React.createElement("span", { className: kit.rowTag, title: props.tag.title, "data-testid": props.tag.testId }, props.tag.text),
       badges.length === 0
         ? null
         : React.createElement("span", { className: kit.rowBadges }, badges)),

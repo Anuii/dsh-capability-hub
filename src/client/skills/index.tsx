@@ -37,7 +37,7 @@ import { injectSkillsStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import { DeleteSkillDialog, PurgeAllDialog, PurgeOneDialog, RestoreConflictDialog } from "./dialogs.tsx";
 import { SkillDetailDrawer } from "./detail.tsx";
-import { SkillList } from "./list.tsx";
+import { DirFilter, SkillList } from "./list.tsx";
 import { TrashDrawer } from "./trash.tsx";
 import type { ListResult, SkillSummary, TrashItem } from "./types.ts";
 
@@ -91,6 +91,8 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
   const [purgingAll, setPurgingAll] = React.useState<boolean>(false);
   const [query, setQuery] = React.useState<string>("");
   const [filter, setFilter] = React.useState<FilterId>("all");
+  /** 目录筛选（rootId）；"" = 全部目录（D-B15）。 */
+  const [dir, setDir] = React.useState<string>("");
   const [detailId, setDetailId] = React.useState<string | undefined>(undefined);
   const [pendingDelete, setPendingDelete] = React.useState<SkillSummary | undefined>(undefined);
   const [deleteErrors, setDeleteErrors] = React.useState<readonly FieldError[]>([]);
@@ -299,6 +301,7 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
       onChange: (next: string) => setFilter(next as FilterId),
       label: t("skills.filterLabel"),
     },
+    afterFilters: React.createElement(DirFilter, { list: list ?? EMPTY, value: dir, onChange: setDir }),
     primary: { label: t("skills.addSkill"), onClick: () => setAddOpen(true), testId: "skills-add-button" },
     more,
   });
@@ -318,6 +321,7 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
       ...(homeDir === undefined ? {} : { homeDir }),
       query,
       filter,
+      dir,
       context,
       busyIds,
       error: listError,
