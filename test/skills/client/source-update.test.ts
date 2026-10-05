@@ -60,19 +60,14 @@ test("抽屉副标题与「位置」都用缩写后的路径，完整路径走 t
   assert.ok(detail.includes("title: skill.path"), "位置那一项要给出完整路径的悬停提示");
 });
 
-test("添加技能 = 仓库视图：地址输入占满、分支固定 140px、仓库列表默认折叠、汇总发现分批渲染", () => {
+test("添加技能 = 仓库视图的版式：地址输入占满、分支固定 140px、汇总按仓库分组分批渲染、宽抽屉", () => {
+  // 行为（默认折叠仓库列表、首次自动扫描、跨仓库安装……）在 repo-view-store.test.ts 里通过仓库的接口测。
   const install = fs.readFileSync(path.join(skillsDir, "remote", "install-view.tsx"), "utf8");
   assert.ok(install.includes("styles.repoGrow"));
   assert.ok(install.includes("styles.refGrow"));
   assert.ok(SKILLS_CSS.includes(".chsk_refGrow{display:flex;flex:0 0 140px"), "分支输入框固定 140px");
-  assert.ok(install.includes("React.useState<boolean>(false);\n  const [editing"), "仓库列表默认折叠");
-  assert.ok(install.includes("shouldAutoScan(view)"), "第一次没有缓存时自动扫一次");
-  assert.ok(
-    install.includes("sliceVisible(group.skills, limitOf(group.repo))"),
-    "上千行分批渲染（按仓库分组，每组 200 行）",
-  );
+  assert.ok(install.includes("sliceVisible(group.skills, groupLimit(s, group.repo))"), "上千行分批渲染（每组 200 行）");
   assert.ok(/groupDiscovered\(\s*all,\s*filtered/.test(install), "汇总按仓库分组");
   assert.ok(install.includes("inputIntent(entry)"), "仓库地址与搜索合成一个输入框");
-  assert.ok(install.includes("installPlan(selected.values())"), "跨仓库按仓库分组安装");
   assert.ok(install.includes("width={860}"), "宽抽屉");
 });

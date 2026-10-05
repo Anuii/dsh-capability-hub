@@ -7,7 +7,8 @@
  */
 
 import { api } from "../../../platform/client/api.ts";
-import { workspaceQuery } from "../data.ts";
+import { listSkills, workspaceQuery } from "../data.ts";
+import type { RepoViewAdapter } from "./repo-view-store.ts";
 import type {
   BrowseResult,
   DiscoverCandidate,
@@ -235,3 +236,18 @@ export async function fetchGithubAuth(): Promise<GithubAuth> {
     ...(typeof data?.rateLimitRemaining === "number" ? { rateLimitRemaining: data.rateLimitRemaining } : {}),
   };
 }
+
+/* ---------------- 仓库视图的 adapter ---------------- */
+
+/** 仓库视图（repo-view-store.ts）的 HTTP adapter。 */
+export const repoViewApi: RepoViewAdapter = {
+  roots: async (workspace) => (await listSkills(workspace)).roots,
+  discovery: fetchDiscovery,
+  scan: refreshDiscovery,
+  browse: browseRepo,
+  search: (query) => searchSkills(query),
+  addRepo: async (repo, ref, workspace) => (await addRepo(repo, ref, workspace)).discovery,
+  updateRepo: async (repo, patch, workspace) => (await updateRepo(repo, patch, workspace)).discovery,
+  removeRepo: async (repo, workspace) => (await removeRepo(repo, workspace)).discovery,
+  install: installSkills,
+};
