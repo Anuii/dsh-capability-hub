@@ -11,3 +11,4 @@
 | [0005](0005-client-stores.md) | 客户端状态用「状态仓库 + 数据 adapter」，逻辑在组件之外测 |
 | [0006](0006-dsh-yaml.md) | frontmatter 用 DSH 自带的 yaml 库解析 |
 | [0007](0007-runtime-layout.md) | MCP 懒加载运行时按职责分文件，对外入口不变 |
+| [0008](0008-feature-rules.md) | 同一功能的宿主与界面共用一份纯规则（`src/<功能>/rules/`） |

@@ -2,14 +2,14 @@
  * model.ts 的纯逻辑单测（不碰 DOM / React / 网络）。
  *
  * 覆盖：草稿与默认值（D-C1）、遮罩值往返（D-C5）、JSON 互转（D-C3）、
- * 校验镜像与错误路径映射、排序、全局设置。
+ * 校验（表单检查 + 与宿主同一份规则）与错误路径映射、排序、全局设置。
  */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compactSummaryText, isPathLike, shortPart } from "../../../src/mcp/client/model.ts";
+import { HIDDEN, SERVER_FIELDS } from "../../../src/mcp/rules/server.ts";
+import { isHttpUrl } from "../../../src/mcp/rules/values.ts";
 import {
-  HIDDEN_VALUE,
-  SERVER_FIELD_ORDER,
   activeInstanceCount,
   cacheLineText,
   cachedToolNames,
@@ -30,7 +30,6 @@ import {
   fieldOfPath,
   formatTimestamp,
   groupErrors,
-  isHttpUrl,
   lifecycleLabel,
   parseJsonServer,
   reorderNames,
@@ -104,10 +103,10 @@ test("draftToSubmit 按传输方式裁剪，但草稿本身保留（切换传输
 test("遮罩值原样往返（D-C5）", () => {
   const view = makeServerView({
     setFields: ["serverName", "transport", "command", "env"],
-    env: { TOKEN: HIDDEN_VALUE },
+    env: { TOKEN: HIDDEN },
   });
   const submit = draftToSubmit(draftFromView(view));
-  assert.deepEqual(submit.env, { TOKEN: HIDDEN_VALUE });
+  assert.deepEqual(submit.env, { TOKEN: HIDDEN });
 });
 
 test("withMetaField 写子字段，空值把 meta 整个删掉", () => {
@@ -125,7 +124,7 @@ test("draftToJsonText 按字段顺序输出，parseJsonServer 能解析回来", 
   const view = makeServerView({
     setFields: ["serverName", "transport", "command", "args", "env", "idleTimeout"],
     args: ["-y", "pkg"],
-    env: { TOKEN: HIDDEN_VALUE },
+    env: { TOKEN: HIDDEN },
     idleTimeoutMin: 4,
   });
   const text = draftToJsonText(draftFromView(view));
@@ -211,11 +210,10 @@ test("validateDraft：envFrom / allowEmpty / env 冲突 / 非 stdio", () => {
   );
   const withEnvFrom = withField(allowEmpty, "envFrom", { NOPE: "echo 1" });
   assert.deepEqual(validateDraft(withEnvFrom, {}), []);
+  // 切到 http 后草稿里还留着 envFrom（来回切换不丢内容），但提交体按传输方式裁掉它，所以不算错
   const http = withField(withField(emptyServerDraft("streamable-http"), "serverName", "w"), "envFrom", { A: "echo" });
-  assert.equal(
-    validateDraft(withField(http, "url", "https://x"), {}).some((e) => e.path === "server.envFrom"),
-    true,
-  );
+  assert.deepEqual(validateDraft(withField(http, "url", "https://x"), {}), []);
+  assert.equal("envFrom" in draftToSubmit(withField(http, "url", "https://x")), false);
 });
 
 test("validateDraft：searchKeywords / meta.tags 形状", () => {
@@ -313,9 +311,9 @@ test("validateSettingsDraft 拒绝非法数值", () => {
   assert.deepEqual(validateSettingsDraft({ values: { idleTimeout: "0", "outputGuard.maxBytes": "1" } }), []);
 });
 
-test("字段顺序与宿主白名单一致（19 个字段 + meta）", () => {
-  assert.equal(SERVER_FIELD_ORDER.length, 20);
-  assert.equal(SERVER_FIELD_ORDER[SERVER_FIELD_ORDER.length - 1], "meta");
+test("字段白名单（19 个字段 + meta）与宿主是同一份", () => {
+  assert.equal(SERVER_FIELDS.length, 20);
+  assert.equal(SERVER_FIELDS[SERVER_FIELDS.length - 1], "meta");
 });
 /* ---------------- UI-B：列表筛选 / 状态点 / 副标题 ---------------- */
 
@@ -506,7 +504,7 @@ test("draftFromView 只搬显式设置过的字段", () => {
   const view = makeServerView({
     setFields: ["serverName", "transport", "command", "args", "env"],
     args: ["-y", "pkg"],
-    env: { TOKEN: HIDDEN_VALUE },
+    env: { TOKEN: HIDDEN },
   });
   const draft = draftFromView(view);
   for (const field of ["serverName", "transport", "command", "args", "env"])

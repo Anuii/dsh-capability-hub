@@ -8,6 +8,7 @@
  *   客户端外壳    src/platform/client（页头、标签、HTTP 客户端 api.ts、标签契约 tab-props.ts）
  *   kit          src/kit（界面组件，不知道任何功能）
  *   契约          src/<功能>/contract（只放类型，宿主与客户端共用）
+ *   规则          src/<功能>/rules（纯函数的业务规则，同一功能的宿主与客户端共用；ADR-0008）
  *   共享          src/version.ts、src/shared/（错误码等不知道任何功能的叶子工具）
  *
  * 规则：
@@ -17,6 +18,8 @@
  *   4. kit 只引用 kit。
  *   5. 客户端功能之间互不 import；只能用客户端外壳公开的 api.ts 与 tab-props.ts。
  *   6. 契约只引用契约，且别人只能 import type 它（构建时擦除，浏览器产物里没有宿主代码）。
+ *   7. 规则只给本功能用（宿主模块与客户端都可以）；规则只引用本功能的规则、契约（仅类型）与共享，
+ *      且不能 import 任何包（node:、react……），保证在宿主与浏览器里都能跑。
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -37,6 +40,7 @@ type Zone =
   | "client:platform"
   | "kit"
   | "contract"
+  | "rules"
   | "shared"
   | "unknown";
 
@@ -51,6 +55,7 @@ const ZONES: Array<[RegExp, Zone]> = [
   [/^platform\/client\//, "client:platform"],
   [/^kit\//, "kit"],
   [/^[a-z-]+\/contract\//, "contract"],
+  [/^[a-z-]+\/rules\//, "rules"],
   [/^version\.ts$/, "shared"],
   [/^shared\//, "shared"],
 ];
@@ -86,6 +91,8 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 }
 
 const rel = (full: string): string => path.relative(SRC, full).split(path.sep).join("/");
+/** 功能名：路径的第一段（skills / mcp / platform / kit / shared）。 */
+const featureOf = (relPath: string): string => relPath.split("/")[0]!;
 
 function edges(): Edge[] {
   const out: Edge[] = [];
@@ -108,6 +115,15 @@ function violation(edge: Edge): string | undefined {
   if (a === "unknown") return "文件不在任何区域里";
   if (b === "unknown") return "引用了不在任何区域里的文件";
   if (b === "contract" && !edge.typeOnly) return "契约只能 import type";
+  if (a === "rules") {
+    if (b === "shared") return undefined;
+    if ((b === "rules" || b === "contract") && featureOf(edge.from) === featureOf(edge.to)) return undefined;
+    return "规则只引用本功能的规则、契约与共享（规则 7）";
+  }
+  if (b === "rules") {
+    if (a === "contract") return "契约只能引用契约";
+    return featureOf(edge.from) === featureOf(edge.to) ? undefined : "规则只给本功能用（规则 7）";
+  }
   if (a === b) return undefined;
   if (b === "shared") return undefined;
   if (a === "contract") return "契约只能引用契约";
@@ -133,6 +149,20 @@ test("架构规则：没有越界的 import", () => {
   assert.deepEqual(bad, []);
 });
 
+test("架构规则：规则区不 import 任何包，宿主与浏览器都能跑（规则 7）", () => {
+  const bad: string[] = [];
+  for (const file of sourceFiles(SRC)) {
+    if (zoneOf(rel(file)) !== "rules") continue;
+    const text = fs.readFileSync(file, "utf8");
+    for (const match of text.matchAll(
+      /(?:^|\n)\s*(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?["']([^."'][^"']*)["']/g,
+    )) {
+      bad.push(rel(file) + " → " + match[1]);
+    }
+  }
+  assert.deepEqual(bad, []);
+});
+
 test("架构规则本身：每条规则都能拦住它要拦的东西", () => {
   const check = (from: string, to: string, typeOnly = false): string | undefined => violation({ from, to, typeOnly });
   assert.match(check("skills/remote/x.ts", "skills/local/y.ts")!, /规则 1/);
@@ -146,4 +176,11 @@ test("架构规则本身：每条规则都能拦住它要拦的东西", () => {
   assert.equal(check("skills/client/x.ts", "skills/contract/types.ts", true), undefined);
   assert.match(check("skills/client/x.ts", "skills/contract/types.ts", false)!, /import type/);
   assert.equal(check("platform/host/modules.ts", "mcp/runtime/module.ts"), undefined);
+  assert.equal(check("mcp/client/x.ts", "mcp/rules/server.ts"), undefined);
+  assert.equal(check("mcp/config/x.ts", "mcp/rules/server.ts"), undefined);
+  assert.match(check("skills/client/x.ts", "mcp/rules/server.ts")!, /规则 7/);
+  assert.match(check("mcp/rules/x.ts", "mcp/config/y.ts")!, /规则 7/);
+  assert.match(check("mcp/rules/x.ts", "skills/rules/y.ts")!, /规则 7/);
+  assert.equal(check("mcp/rules/x.ts", "mcp/contract/config.ts", true), undefined);
+  assert.match(check("mcp/contract/x.ts", "mcp/rules/y.ts", true)!, /契约只能引用契约/);
 });

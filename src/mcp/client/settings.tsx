@@ -7,8 +7,8 @@ import * as React from "react";
 import { Button, Input, Switch } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../kit/index.ts";
 import { updateSettings } from "./data.ts";
+import { DEFAULT_OUTPUT_GUARD, SETTINGS_DEFAULTS } from "../rules/settings.ts";
 import {
-  SETTINGS_DEFAULTS,
   fieldErrorsOf,
   groupErrors,
   numericText,
@@ -103,10 +103,10 @@ export function SettingsPanel(props: SettingsPanelProps): React.ReactElement {
       {row(
         "idleTimeout",
         t("mcp.settings.idleTimeout"),
-        t("mcp.settings.idleTimeoutHint", { value: SETTINGS_DEFAULTS.idleTimeoutMin }),
+        t("mcp.settings.idleTimeoutHint", { value: SETTINGS_DEFAULTS.idleTimeout }),
         <Input
           value={numericText(draft.values.idleTimeout)}
-          placeholder={String(SETTINGS_DEFAULTS.idleTimeoutMin)}
+          placeholder={String(SETTINGS_DEFAULTS.idleTimeout)}
           data-testid="mcp-settings-input-idleTimeout"
           onChange={(event: { target: { value: string } }) => setValue("idleTimeout", event.target.value)}
         />,
@@ -115,8 +115,8 @@ export function SettingsPanel(props: SettingsPanelProps): React.ReactElement {
         "outputGuard.enabled",
         t("mcp.settings.outputGuard"),
         t("mcp.settings.outputGuardHint", {
-          bytes: SETTINGS_DEFAULTS.outputGuard.maxBytes,
-          lines: SETTINGS_DEFAULTS.outputGuard.maxLines,
+          bytes: DEFAULT_OUTPUT_GUARD.maxBytes,
+          lines: DEFAULT_OUTPUT_GUARD.maxLines,
         }),
         <Switch
           checked={
@@ -131,10 +131,10 @@ export function SettingsPanel(props: SettingsPanelProps): React.ReactElement {
       {row(
         "outputGuard.maxBytes",
         t("mcp.settings.maxBytes"),
-        t("mcp.settings.maxBytesHint", { value: SETTINGS_DEFAULTS.outputGuard.maxBytes }),
+        t("mcp.settings.maxBytesHint", { value: DEFAULT_OUTPUT_GUARD.maxBytes }),
         <Input
           value={numericText(draft.values["outputGuard.maxBytes"])}
-          placeholder={String(SETTINGS_DEFAULTS.outputGuard.maxBytes)}
+          placeholder={String(DEFAULT_OUTPUT_GUARD.maxBytes)}
           data-testid="mcp-settings-input-outputGuard-maxBytes"
           onChange={(event: { target: { value: string } }) => setValue("outputGuard.maxBytes", event.target.value)}
         />,
@@ -142,10 +142,10 @@ export function SettingsPanel(props: SettingsPanelProps): React.ReactElement {
       {row(
         "outputGuard.maxLines",
         t("mcp.settings.maxLines"),
-        t("mcp.settings.maxLinesHint", { value: SETTINGS_DEFAULTS.outputGuard.maxLines }),
+        t("mcp.settings.maxLinesHint", { value: DEFAULT_OUTPUT_GUARD.maxLines }),
         <Input
           value={numericText(draft.values["outputGuard.maxLines"])}
-          placeholder={String(SETTINGS_DEFAULTS.outputGuard.maxLines)}
+          placeholder={String(DEFAULT_OUTPUT_GUARD.maxLines)}
           data-testid="mcp-settings-input-outputGuard-maxLines"
           onChange={(event: { target: { value: string } }) => setValue("outputGuard.maxLines", event.target.value)}
         />,

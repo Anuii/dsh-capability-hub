@@ -6,9 +6,10 @@
  * - 只有 reveal 接口返回明文；任何日志都不得出现这些值 —— 用 redact() 后再交给 logger。
  */
 
+import { HIDDEN } from "../rules/server.ts";
 import type { EffectiveServer, RawMcpServer } from "../contract/config.ts";
 
-export const HIDDEN = "***hidden***";
+export { HIDDEN };
 
 /** FIX-3：没有原值可回填时的统一中文说明（upsert 与 validate 逐字一致）。 */
 export const HIDDEN_PLACEHOLDER_MESSAGE = "这是遮罩占位符，不是真实值。新建服务器时请填写实际的值。";

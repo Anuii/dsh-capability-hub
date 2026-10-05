@@ -11,9 +11,9 @@
 import * as React from "react";
 import { Button, Input, Switch } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge } from "../../kit/index.ts";
-import { HIDDEN_VALUE } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
+import { HIDDEN } from "../rules/server.ts";
 
 /** 字段外壳。 */
 export function FieldShell(props: {
@@ -336,7 +336,7 @@ export function RecordField(props: {
           ) : null}
           {props.secret === true && props.revealed !== true && list.length > 0 ? (
             <span className={styles.small} data-testid={"mcp-hidden-" + props.field}>
-              {t("mcp.editor.hidden") + " · " + HIDDEN_VALUE}
+              {t("mcp.editor.hidden") + " · " + HIDDEN}
             </span>
           ) : null}
         </div>

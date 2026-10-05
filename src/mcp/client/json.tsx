@@ -10,11 +10,12 @@ import * as React from "react";
 import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../kit/index.ts";
 import { upsertServer, validateServer } from "./data.ts";
-import { fieldErrorsOf, isPlainObject, parseJsonServer } from "./model.ts";
+import { fieldErrorsOf, parseJsonServer } from "./model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { FieldError, ServerView } from "../contract/config.ts";
 import { errorText } from "../../shared/error-text.ts";
+import { isPlainObject } from "../rules/values.ts";
 
 export interface JsonEditorProps {
   originalName?: string;

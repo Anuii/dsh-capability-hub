@@ -18,7 +18,9 @@ import {
   type ImportContext,
 } from "./intake.ts";
 import { HIDDEN_PLACEHOLDER_MESSAGE, findHiddenPlaceholders, maskRawServer, mergeHiddenSecrets } from "./mask.ts";
-import { parseServerInput, parseSettingsInput, serverView } from "./schema.ts";
+import { serverView } from "./schema.ts";
+import { parseServerInput } from "../rules/server.ts";
+import { parseSettingsInput } from "../rules/settings.ts";
 import { createMcpStore, type McpStore, type McpStoreOptions } from "./store.ts";
 import type { McpConfigModule } from "./types.ts";
 import type { EffectiveServer, ServerView } from "../contract/config.ts";

@@ -1,5 +1,8 @@
 /**
- * MCP 标签页的**纯逻辑**（草稿模型、默认值/已设置、JSON 互转、校验镜像、错误路径映射、排序、全局设置）。
+ * MCP 标签页的**纯逻辑**（草稿模型、默认值/已设置、JSON 互转、校验、错误路径映射、排序、全局设置）。
+ *
+ * 字段白名单、默认值与校验规则不在这里写：它们在 ../rules/，宿主落盘前也用同一份（ADR-0008）。
+ * 这里只补「表单才有」的检查——数值框里填的不是数字、列表编辑器里留了空行。
  *
  * 这里刻意不碰 DOM、不碰 React、不发请求：全部可以用 node:test 直接测
  * （见 test/mcp/client/model.test.ts）。文案一律走 strings.ts 的 t()，
@@ -13,78 +16,20 @@
  */
 
 import { t } from "./strings.ts";
-import type { FieldError, Lifecycle, McpSettings, ServerView, Transport } from "../contract/config.ts";
+import {
+  HIDDEN,
+  NUMERIC_FIELDS,
+  SERVER_FIELDS,
+  SHARED_FIELDS,
+  TRANSPORT_FIELDS,
+  parseServerInput,
+} from "../rules/server.ts";
+import { DEFAULT_OUTPUT_GUARD, parseSettingsInput } from "../rules/settings.ts";
+import { isPlainObject } from "../rules/values.ts";
+import type { FieldError, McpSettings, ServerView, Transport } from "../contract/config.ts";
 import type { RuntimeFailureView, RuntimeServerView, RuntimeStatus } from "../contract/runtime.ts";
 
-/** 遮罩占位符（与宿主 src/mcp/config/mask.ts 的 HIDDEN 一致）。 */
-export const HIDDEN_VALUE = "***hidden***";
-
-/** 与宿主 schema.ts 同一套正则与枚举（改一处要改两处）。 */
-export const SERVER_NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
-export const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-export const TRANSPORTS: readonly Transport[] = ["stdio", "streamable-http"];
-export const LIFECYCLES: readonly Lifecycle[] = ["lazy", "lazy-keep-alive", "eager", "keep-alive"];
-
-/** 服务器字段顺序（= 宿主 SERVER_FIELDS，也是 JSON 模式里的键顺序）。 */
-export const SERVER_FIELD_ORDER: readonly string[] = [
-  "serverName",
-  "transport",
-  "command",
-  "args",
-  "env",
-  "envFrom",
-  "allowEmpty",
-  "envFromTimeoutMs",
-  "cwd",
-  "url",
-  "headers",
-  "toolCallTimeoutMs",
-  "lifecycle",
-  "idleTimeout",
-  "includeTools",
-  "excludeTools",
-  "searchKeywords",
-  "disabled",
-  "debug",
-  "meta",
-];
-
-/** 数值型字段（草稿里存字符串，提交时转成数字）。 */
-export const NUMERIC_FIELDS: readonly string[] = ["envFromTimeoutMs", "toolCallTimeoutMs", "idleTimeout"];
-
-/** 与传输方式相关的字段（切换传输方式时会被裁剪）。 */
-export const TRANSPORT_FIELDS: Record<Transport, readonly string[]> = {
-  stdio: ["command", "args", "cwd", "env", "envFrom", "allowEmpty", "envFromTimeoutMs"],
-  "streamable-http": ["url", "headers"],
-};
-
-/** 两种传输方式都适用的字段。 */
-export const SHARED_FIELDS: readonly string[] = [
-  "serverName",
-  "transport",
-  "toolCallTimeoutMs",
-  "lifecycle",
-  "idleTimeout",
-  "includeTools",
-  "excludeTools",
-  "searchKeywords",
-  "disabled",
-  "debug",
-  "meta",
-];
-
-/** 全局设置默认值（与宿主 schema.ts 的 SETTINGS_DEFAULTS / DEFAULT_OUTPUT_GUARD 一致）。 */
-export const SETTINGS_DEFAULTS = {
-  idleTimeoutMin: 10,
-  outputGuard: { enabled: true, maxBytes: 51200, maxLines: 2000 },
-  failureBackoffMs: 60000,
-} as const;
-
 /* ---------------- 小工具 ---------------- */
-
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function cloneValue<T>(value: T): T {
   if (value === null || typeof value !== "object") return value;
@@ -112,7 +57,7 @@ export function numericText(value: unknown): string {
 /** 是不是「空值」（空串 / 空数组 / 空对象 / null / undefined = 未设置）。 */
 export function isEmptyValue(value: unknown): boolean {
   if (value === undefined || value === null) return true;
-  if (typeof value === "string") return value.trim() === "" && value !== HIDDEN_VALUE;
+  if (typeof value === "string") return value.trim() === "" && value !== HIDDEN;
   if (Array.isArray(value)) return value.length === 0;
   if (isPlainObject(value)) return Object.keys(value).length === 0;
   return false;
@@ -137,7 +82,7 @@ export function emptyServerDraft(transport: Transport = "stdio"): ServerDraft {
 export function draftFromView(view: ServerView): ServerDraft {
   const values: Record<string, unknown> = {};
   const raw = view as unknown as Record<string, unknown>;
-  for (const field of SERVER_FIELD_ORDER) {
+  for (const field of SERVER_FIELDS) {
     if (!view.setFields.includes(field)) continue;
     if (field === "idleTimeout") {
       values.idleTimeout = view.idleTimeoutMin;
@@ -154,7 +99,7 @@ export function draftFromView(view: ServerView): ServerDraft {
 /** 从任意对象（JSON 模式 / 导入）建草稿：只保留白名单字段，数值字段转成文本。 */
 export function draftFromValues(input: Record<string, unknown>): ServerDraft {
   const values: Record<string, unknown> = {};
-  for (const field of SERVER_FIELD_ORDER) {
+  for (const field of SERVER_FIELDS) {
     if (!(field in input)) continue;
     const value = input[field];
     if (value === undefined || value === null) continue;
@@ -216,7 +161,7 @@ export function draftToSubmit(draft: ServerDraft): Record<string, unknown> {
   const transport: Transport = draft.values.transport === "streamable-http" ? "streamable-http" : "stdio";
   const allowed = new Set<string>([...SHARED_FIELDS, ...TRANSPORT_FIELDS[transport]]);
   const out: Record<string, unknown> = {};
-  for (const field of SERVER_FIELD_ORDER) {
+  for (const field of SERVER_FIELDS) {
     if (!draftHas(draft, field)) continue;
     if (!allowed.has(field)) continue;
     const value = draft.values[field];
@@ -257,7 +202,7 @@ export function parseJsonServer(text: string): {
   return { values: parsed, draft: draftFromValues(parsed) };
 }
 
-/* ---------------- 校验（宿主 schema.ts 的镜像） ---------------- */
+/* ---------------- 校验 ---------------- */
 
 export interface ValidateDraftOptions {
   /** 已占用的服务器名（应包含除被编辑服务器之外的全部名字）。 */
@@ -266,99 +211,26 @@ export interface ValidateDraftOptions {
   originalName?: string;
 }
 
-/** 校验草稿；返回的 path 形如 "server.<field>"，可被 fieldOfPath 映射回字段。 */
-export function validateDraft(draft: ServerDraft, opts: ValidateDraftOptions = {}): FieldError[] {
+function numericErrorText(field: string): string {
+  if (field === "toolCallTimeoutMs") return "必须是数字（≤0 表示不设超时）。";
+  if (field === "idleTimeout") return "必须是不小于 0 的整数（分钟，0 表示不回收）。";
+  return "必须是不小于 0 的整数（毫秒）。";
+}
+
+/** 只有表单才有的问题：数值框里不是数字、列表编辑器里留了空行（这些在提交体里已经看不出来）。 */
+function draftOnlyErrors(draft: ServerDraft): FieldError[] {
   const errors: FieldError[] = [];
   const values = draft.values;
-
-  const serverName = typeof values.serverName === "string" ? values.serverName : "";
-  if (serverName.trim() === "") {
-    errors.push({ path: "server.serverName", message: t("mcp.field.serverName") + "不能为空。" });
-  } else if (!SERVER_NAME_RE.test(serverName)) {
-    errors.push({ path: "server.serverName", message: "只能包含字母、数字、下划线、连字符，长度 1–32。" });
-  } else {
-    const occupied = (opts.existingNames ?? []).filter((name) => name !== opts.originalName);
-    if (occupied.includes(serverName)) {
-      errors.push({ path: "server.serverName", message: "服务器名称「" + serverName + "」已存在。" });
-    }
-  }
-
-  const transport = values.transport;
-  if (transport !== "stdio" && transport !== "streamable-http") {
-    errors.push({ path: "server.transport", message: "传输方式只能是 stdio 或 streamable-http。" });
-  }
-
   for (const field of NUMERIC_FIELDS) {
-    if (!draftHas(draft, field)) continue;
-    const parsed = toNumeric(values[field]);
-    if (parsed === undefined) {
-      errors.push({ path: "server." + field, message: numericErrorText(field) });
-      continue;
-    }
-    if (field === "toolCallTimeoutMs") continue;
-    if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    if (draftHas(draft, field) && toNumeric(values[field]) === undefined) {
       errors.push({ path: "server." + field, message: numericErrorText(field) });
     }
   }
-
-  const envFrom = isPlainObject(values.envFrom) ? (values.envFrom as Record<string, unknown>) : {};
-  if (draftHas(draft, "envFrom") && transport !== "stdio") {
-    errors.push({ path: "server.envFrom", message: "envFrom 只能用于 stdio 传输的服务器。" });
-  }
-  for (const [key, value] of Object.entries(envFrom)) {
-    if (key.trim() === "") {
-      errors.push({ path: "server.envFrom", message: "变量名不能为空。" });
-      continue;
-    }
-    if (!ENV_NAME_RE.test(key)) {
-      errors.push({
-        path: "server.envFrom." + key,
-        message: "环境变量名「" + key + "」不合法（字母、数字、下划线，不能以数字开头）。",
-      });
-    }
-    if (typeof value !== "string" || value.trim() === "") {
-      errors.push({ path: "server.envFrom." + key, message: "取值命令不能为空。" });
-    }
-  }
-
-  const env = isPlainObject(values.env) ? (values.env as Record<string, unknown>) : {};
-  for (const key of Object.keys(env)) {
-    if (key.trim() === "") errors.push({ path: "server.env", message: "变量名不能为空。" });
-    if (Object.prototype.hasOwnProperty.call(envFrom, key)) {
-      errors.push({
-        path: "server.envFrom." + key,
-        message: "变量「" + key + "」同时出现在 env 与 envFrom 中，只能二选一。",
-      });
-    }
-  }
-
-  const allowEmpty = Array.isArray(values.allowEmpty) ? (values.allowEmpty as unknown[]) : [];
-  allowEmpty.forEach((item, index) => {
-    const name = typeof item === "string" ? item : "";
-    if (!ENV_NAME_RE.test(name)) {
-      errors.push({
-        path: "server.allowEmpty[" + String(index) + "]",
-        message: "「" + String(item) + "」不是合法的环境变量名。",
-      });
-      return;
-    }
-    if (!Object.prototype.hasOwnProperty.call(envFrom, name)) {
-      errors.push({
-        path: "server.allowEmpty[" + String(index) + "]",
-        message: "「" + name + "」没有在 envFrom 里声明。",
-      });
-    }
-  });
-
   for (const field of ["args", "includeTools", "excludeTools"] as const) {
-    if (!draftHas(draft, field)) continue;
     const list = values[field];
-    if (!Array.isArray(list)) {
-      errors.push({ path: "server." + field, message: "必须是字符串数组。" });
-      continue;
-    }
+    if (!Array.isArray(list)) continue;
     list.forEach((item, index) => {
-      if (typeof item !== "string" || item.trim() === "") {
+      if (typeof item === "string" && item.trim() === "") {
         errors.push({
           path: "server." + field + "[" + String(index) + "]",
           message: "第 " + String(index + 1) + " 项不能为空。",
@@ -366,59 +238,33 @@ export function validateDraft(draft: ServerDraft, opts: ValidateDraftOptions = {
       }
     });
   }
-
-  if (draftHas(draft, "searchKeywords")) {
-    const keywords = values.searchKeywords;
-    if (!isPlainObject(keywords)) {
-      errors.push({ path: "server.searchKeywords", message: "必须是「工具名 → 字符串数组」的对象。" });
-    } else {
-      for (const [tool, list] of Object.entries(keywords)) {
-        if (tool.trim() === "") errors.push({ path: "server.searchKeywords", message: "工具名不能为空。" });
-        if (!Array.isArray(list) || list.some((item) => typeof item !== "string" || item.trim() === "")) {
-          errors.push({ path: "server.searchKeywords." + tool, message: "关键词必须是非空字符串数组。" });
-        }
+  if (isPlainObject(values.searchKeywords)) {
+    for (const [tool, list] of Object.entries(values.searchKeywords)) {
+      if (tool.trim() === "") errors.push({ path: "server.searchKeywords", message: "工具名不能为空。" });
+      if (Array.isArray(list) && list.some((item) => typeof item === "string" && item.trim() === "")) {
+        errors.push({ path: "server.searchKeywords." + tool, message: "关键词不能为空。" });
       }
     }
   }
-
-  if (transport === "stdio") {
-    const command = typeof values.command === "string" ? values.command.trim() : "";
-    if (command === "") errors.push({ path: "server.command", message: "stdio 传输必须填写启动命令（command）。" });
-  } else if (transport === "streamable-http") {
-    const url = typeof values.url === "string" ? values.url.trim() : "";
-    if (url === "") errors.push({ path: "server.url", message: "streamable-http 传输必须填写服务器地址（url）。" });
-    else if (!isHttpUrl(url)) errors.push({ path: "server.url", message: "url 必须是合法的 http/https 地址。" });
+  const tags = draftMeta(draft).tags;
+  if (Array.isArray(tags) && tags.some((item) => typeof item === "string" && item.trim() === "")) {
+    errors.push({ path: "server.meta.tags", message: "标签不能为空。" });
   }
-
-  if (draftHas(draft, "meta")) {
-    const meta = draftMeta(draft);
-    if (isPlainObject(values.meta)) {
-      const tags = meta.tags;
-      if (tags !== undefined) {
-        if (!Array.isArray(tags) || tags.some((item) => typeof item !== "string" || item.trim() === "")) {
-          errors.push({ path: "server.meta.tags", message: "标签必须是非空字符串数组。" });
-        }
-      }
-    }
-  }
-
   return errors;
 }
 
-function numericErrorText(field: string): string {
-  if (field === "toolCallTimeoutMs") return "必须是不小于 0 的整数（≤0 表示不设超时）。";
-  if (field === "idleTimeout") return "必须是不小于 0 的整数（分钟，0 表示不回收）。";
-  return "必须是不小于 0 的整数（毫秒）。";
-}
-
-export function isHttpUrl(value: string): boolean {
-  if (value.trim() === "") return false;
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
+/**
+ * 校验草稿：表单自己的检查 + 与宿主同一份规则（对提交体做校验）。
+ * 返回的 path 形如 "server.<field>"，可被 fieldOfPath 映射回字段；同一路径只报表单那条。
+ */
+export function validateDraft(draft: ServerDraft, opts: ValidateDraftOptions = {}): FieldError[] {
+  const own = draftOnlyErrors(draft);
+  const rules = parseServerInput(draftToSubmit(draft), {
+    ...(opts.existingNames === undefined ? {} : { existingNames: opts.existingNames }),
+    ...(opts.originalName === undefined ? {} : { originalName: opts.originalName }),
+  }).errors;
+  const taken = new Set(own.map((error) => error.path));
+  return [...own, ...rules.filter((error) => !taken.has(error.path))];
 }
 
 /* ---------------- 错误映射 ---------------- */
@@ -609,7 +455,7 @@ export function settingsToSubmit(draft: SettingsDraft): Record<string, unknown> 
     const maxLines = toNumeric(draft.values["outputGuard.maxLines"]);
     const enabled = draft.values["outputGuard.enabled"];
     out.outputGuard = {
-      enabled: typeof enabled === "boolean" ? enabled : SETTINGS_DEFAULTS.outputGuard.enabled,
+      enabled: typeof enabled === "boolean" ? enabled : DEFAULT_OUTPUT_GUARD.enabled,
       ...(maxBytes === undefined ? {} : { maxBytes }),
       ...(maxLines === undefined ? {} : { maxLines }),
     };
@@ -617,21 +463,21 @@ export function settingsToSubmit(draft: SettingsDraft): Record<string, unknown> 
   return out;
 }
 
-/** 校验设置草稿（path = 设置字段 id）。 */
+/** 校验设置草稿（path = 设置字段 id）：数值框里不是数字由这里报，其余与宿主同一份规则。 */
 export function validateSettingsDraft(draft: SettingsDraft): FieldError[] {
-  const errors: FieldError[] = [];
-  const natural = (field: string, label: string, min: number): void => {
-    if (!settingsHas(draft, field)) return;
-    const parsed = toNumeric(draft.values[field]);
-    if (parsed === undefined || !Number.isSafeInteger(parsed) || parsed < min) {
-      errors.push({ path: "settings." + field, message: label });
+  const own: FieldError[] = [];
+  for (const [field, label] of [
+    ["idleTimeout", "必须是不小于 0 的整数（分钟，0 表示不回收）。"],
+    ["failureBackoffMs", "必须是不小于 0 的整数（毫秒）。"],
+    ["outputGuard.maxBytes", "必须是大于 0 的整数（字节）。"],
+    ["outputGuard.maxLines", "必须是大于 0 的整数（行）。"],
+  ] as const) {
+    if (settingsHas(draft, field) && toNumeric(draft.values[field]) === undefined) {
+      own.push({ path: "settings." + field, message: label });
     }
-  };
-  natural("idleTimeout", "必须是不小于 0 的整数（分钟，0 表示不回收）。", 0);
-  natural("failureBackoffMs", "必须是不小于 0 的整数（毫秒）。", 0);
-  natural("outputGuard.maxBytes", "必须是大于 0 的整数（字节）。", 1);
-  natural("outputGuard.maxLines", "必须是大于 0 的整数（行）。", 1);
-  return errors;
+  }
+  const taken = new Set(own.map((error) => error.path));
+  return [...own, ...parseSettingsInput(settingsToSubmit(draft)).errors.filter((error) => !taken.has(error.path))];
 }
 
 /* ------------------------------------------------------------------ *

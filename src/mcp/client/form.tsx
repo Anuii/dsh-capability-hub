@@ -20,7 +20,6 @@ import { Banner, Section } from "../../kit/index.ts";
 import { checkCommand, revealServer, upsertServer, validateServer } from "./data.ts";
 import { ArrayField, FieldShell, NumberField, RecordField, SelectField, SwitchField, TextField } from "./fields.tsx";
 import {
-  LIFECYCLES,
   draftHas,
   draftMeta,
   draftToSubmit,
@@ -28,7 +27,6 @@ import {
   errorsFor as errorsOf,
   fieldErrorsOf,
   groupErrors,
-  isPlainObject,
   lifecycleLabel,
   numericText,
   validateDraft,
@@ -41,6 +39,8 @@ import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { FieldError, ServerView, Transport } from "../contract/config.ts";
 import { errorText } from "../../shared/error-text.ts";
+import { LIFECYCLES } from "../rules/server.ts";
+import { isPlainObject } from "../rules/values.ts";
 
 export interface ServerFormProps {
   /** 被编辑服务器的原名；新建时省略。 */

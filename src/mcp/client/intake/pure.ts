@@ -7,8 +7,9 @@
  * 预设与导入还可能多出 lifecycle / disabled / debug。
  */
 
-import { HIDDEN_VALUE, SERVER_NAME_RE, isPlainObject } from "../model.ts";
 import type { ParsedServer, SkippedServer } from "../../contract/config.ts";
+import { HIDDEN, SERVER_NAME_RE } from "../../rules/server.ts";
+import { isPlainObject } from "../../rules/values.ts";
 
 /** 粘贴预览里一行的状态。 */
 export type PasteRowStatus = "new" | "conflict" | "invalid";
@@ -45,7 +46,7 @@ export function hiddenKeys(server: ParsedServer): string[] {
     const raw = server[field];
     if (!isPlainObject(raw)) continue;
     for (const [key, value] of Object.entries(raw)) {
-      if (value === HIDDEN_VALUE) out.push(field + "." + key);
+      if (value === HIDDEN) out.push(field + "." + key);
     }
   }
   return out;

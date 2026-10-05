@@ -5,15 +5,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { setFieldsOf, toEffectiveServer } from "../../../src/mcp/config/schema.ts";
 import {
   DEFAULT_ENV_FROM_TIMEOUT_MS,
   DEFAULT_TOOL_CALL_TIMEOUT_MS,
   parseServerInput,
-  parseSettingsInput,
-  effectiveSettings,
-  setFieldsOf,
-  toEffectiveServer,
-} from "../../../src/mcp/config/schema.ts";
+} from "../../../src/mcp/rules/server.ts";
+import { effectiveSettings, parseSettingsInput } from "../../../src/mcp/rules/settings.ts";
 
 const stdio = { serverName: "demo", transport: "stdio", command: "node" };
 

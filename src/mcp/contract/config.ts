@@ -217,3 +217,20 @@ export interface ImportApplyResponse extends ImportApplyResult {
   servers: ServerView[];
   warnings: string[];
 }
+
+/** 输出护栏的输入形态：true/false 或部分对象（缺的子字段取默认）。 */
+export type OutputGuardInput = boolean | { enabled?: boolean; maxBytes?: number; maxLines?: number };
+
+/** 落盘的全局设置：只含非默认项。 */
+export interface RawMcpSettings {
+  idleTimeout?: number;
+  outputGuard?: OutputGuardInput;
+  failureBackoffMs?: number;
+}
+
+/** hubHome/mcp/config.json 的内容（磁盘格式，不能随意改）。 */
+export interface RawMcpConfigFile {
+  version: 1;
+  settings: RawMcpSettings;
+  servers: RawMcpServer[];
+}

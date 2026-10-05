@@ -14,7 +14,8 @@ src/
     client/     技能页（列表、详情、回收站）与「添加技能」仓库视图（remote/）
     contract/   local.ts、remote.ts（HTTP 形状与进程内接口）、yaml.ts（注入的 yaml 库）
   mcp/        MCP
-    config/     宿主·MCP 配置：落盘、校验、遮罩、粘贴 JSON / 预设 / 只读导入
+    rules/      宿主与界面共用的纯规则：服务器字段、默认值、校验（ADR-0008）
+    config/     宿主·MCP 配置：落盘、遮罩、粘贴 JSON / 预设 / 只读导入
     runtime/    宿主·MCP 懒加载运行时：core.ts（缓存、连接池、探测）、actions/（mcp 工具的各个动作）、status-view.ts
     client/     MCP 页；running/ 是页面底部的「运行中」区域
     contract/   config.ts、runtime.ts
@@ -31,7 +32,8 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 2. 宿主外壳不引用客户端；客户端（功能、外壳、kit）不引用宿主代码；
 3. 客户端功能之间互不 import，只用客户端外壳公开的 `api.ts` 与 `tab-props.ts`；kit 只引用 kit；
 4. 契约只放类型，只引用契约，别人只能 `import type` 它（构建时擦除，浏览器产物里没有宿主代码，ADR-0002）；
-5. `shared/` 与 `version.ts` 谁都能用。
+5. 规则（`<功能>/rules/`）是纯函数，只给本功能的宿主与界面用；它只引用本功能的规则、契约与 `shared/`，不 import 任何包（ADR-0008）；
+6. `shared/` 与 `version.ts` 谁都能用。
 
 ## 宿主半
 
@@ -57,6 +59,7 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 | 技能能不能加载、启停怎么改写 SKILL.md | `skills/local/frontmatter/`（规则在 rules.ts，改写在 toggle.ts） |
 | 技能列表一行显示什么 | `skills/client/row.ts`；分组在 `tree.ts`；折叠规则在 `kit/fold.ts` |
 | 仓库列表、发现、补扫规则 | 宿主 `skills/remote/repo-catalog.ts`；界面流程 `skills/client/remote/repo-view-store.ts` |
+| MCP 服务器能填哪些字段、怎么校验 | `mcp/rules/server.ts`（宿主与表单共用） |
 | mcp 工具的某个动作 | `mcp/runtime/actions/`；冷却规则在 `failures.ts` |
 | MCP 页的状态点、红点、「运行中」 | `mcp/client/runtime-store.ts`（唯一的运行状态读取处） |
 | 新接口 | 宿主模块的 routes + `contract/` 里的形状 + 客户端 `data.ts` |

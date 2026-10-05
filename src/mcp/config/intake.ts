@@ -14,7 +14,7 @@ import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { isPlainObject } from "./schema.ts";
+import { isPlainObject } from "../rules/values.ts";
 import { HIDDEN, maskRawServer } from "./mask.ts";
 import type { ImportSourceView, McpPreset, ParsedServer, ParseResult, Transport } from "../contract/config.ts";
 
