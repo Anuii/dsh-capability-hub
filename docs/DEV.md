@@ -335,8 +335,8 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 
 `GET health` 里的 `wiring` 字段：`runtimeSource`（real/stub）、`runtimeReason`、
 `lockStashBound`、`runtimeStarted`、`runtimeStartError`、`notes`。启动报告
-`<hubHome>/boot.json` 里还有 `skillSources.skillProviders`（技能根扫描）与
-`skillSources.presetSpecs`（agent 预设里的插件声明）。
+`<hubHome>/boot.json` 的 `skillSources` 记录技能目录是怎么来的：`skillProviders`（逐来源的贡献、
+预设表达式的推导过程 `presetResolve`）、`tree`（组合树结构快照）、`bundledEnv`。推导规则见 `src/platform/host/skill-roots.ts`。
 
 页面控制台里可以跑：
 
@@ -355,7 +355,7 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
     routes / registeredPaths / registrationError
     sdk / modules / toolRegistered / toolError / toolDescription（当前注册给模型的 mcp 工具描述）
     services（逐项探测 connection、webServer、tools、loader、profileContext ... 是否可见）
-    skillSources（loader 条目名 + skill 相关条目的配置）
+    skillSources（技能目录来源：skillProviders / tree / bundledEnv）
 
 **为什么需要它**：降级状态本来只暴露在 `GET health` 上，但「路由都没注册成功」时 health
 根本不可达。`boot.json` 是唯一能自查启动结果的通道，排查插件激活问题先看它。

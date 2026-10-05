@@ -21,7 +21,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { PlatformContext } from "./types.ts";
 import type { RouteTable } from "../contract/host.ts";
-import { makeLogger, probeSkillSources, resolveHubContext, safeGet, type PlatformConfig } from "./hub-context.ts";
+import { resolveHubContext, type PlatformConfig } from "./hub-context.ts";
+import { makeLogger, safeGet } from "./host-ctx.ts";
+import { skillSourceDiagnostics } from "./diagnostics.ts";
+import { scanSkillRoots } from "./skill-roots.ts";
 import { ROUTE_PREFIX, registerRoutes, type ConnectionFace } from "./router.ts";
 import {
   ModuleRegistry,
@@ -377,7 +380,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
             startedAt,
             writtenAt: new Date().toISOString(),
             services: probeServices(hostCtx),
-            skillSources: probeSkillSources(hostCtx),
+            skillSources: skillSourceDiagnostics(hostCtx, scanSkillRoots(hostCtx)),
             toolError: toolError ?? null,
             hasInjectApi: typeof (hostCtx as { inject?: unknown })?.inject === "function",
             ...snapshotOf(),

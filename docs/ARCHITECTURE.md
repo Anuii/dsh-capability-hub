@@ -53,6 +53,7 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 
 | 要改的 | 位置 |
 |---|---|
+| DSH 从哪些目录加载技能（只读技能目录） | `platform/host/skill-roots.ts`（读组合树在 `composition.ts`，诊断在 `diagnostics.ts`） |
 | 技能能不能加载、启停怎么改写 SKILL.md | `skills/local/frontmatter/`（规则在 rules.ts，改写在 toggle.ts） |
 | 技能列表一行显示什么 | `skills/client/row.ts`；分组在 `tree.ts`；折叠规则在 `kit/fold.ts` |
 | 仓库列表、发现、补扫规则 | 宿主 `skills/remote/repo-catalog.ts`；界面流程 `skills/client/remote/repo-view-store.ts` |
