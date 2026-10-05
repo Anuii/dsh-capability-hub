@@ -173,7 +173,7 @@ export const zh = {
   "mcp.hint.searchKeywords": "工具名 → 关键词（逗号分隔），用于 search 排序。",
   "mcp.hint.disabled": "停用后运行时不启动这个服务器。默认值：启用",
   "mcp.hint.debug": "打开后写更详细的日志。默认值：关闭",
-  "mcp.hint.meta.description": "只用于展示。",
+  "mcp.hint.meta.description": "一句话说明它能做什么；第一行会写进 mcp 工具的描述，帮模型判断何时用它。",
   "mcp.hint.meta.tags": "逗号分隔，只用于展示。",
   "mcp.hint.meta.homepage": "只用于展示，点开在浏览器里打开。",
 

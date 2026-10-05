@@ -330,7 +330,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     void writeBootReport();
   };
 
-  // ---- 6. 启动报告（落盘到 <hubHome>/boot.json，覆盖写）----
+  // ---- 6. 启动报告（落盘到 <hubHome>/boot.json，覆盖写；工具描述变化时也重写）----
   // 为什么需要它：外壳的降级状态本来只暴露在 GET health 上，但「路由都没注册成功」时
   // health 根本不可达。落一份小 JSON 是唯一能自查启动结果的通道（DEV.md 有说明）。
   const wiringSnapshot = (): WiringSnapshot => ({
@@ -352,7 +352,13 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     ...(registrationError === undefined ? {} : { registrationError }),
     wiring: wiringSnapshot(),
   });
-  const writeBootReport = async (): Promise<void> => {
+  /** 启动报告的写入排队进行：描述变化与路由注册可能同时触发，不能让两次覆盖写交错。 */
+  let bootWrite: Promise<void> = Promise.resolve();
+  const writeBootReport = (): Promise<void> => {
+    bootWrite = bootWrite.then(writeBootReportNow, writeBootReportNow);
+    return bootWrite;
+  };
+  const writeBootReportNow = async (): Promise<void> => {
     try {
       const bootPath = join(ctx.hubHome, "boot.json");
       await mkdir(dirname(bootPath), { recursive: true });
@@ -404,6 +410,14 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     }
   }
   await writeBootReport();
+  // 工具描述随配置变化（例如新增服务器、改了 meta.description）：启动报告跟着重写，
+  // 免得 boot.json 里的 toolDescription 停在启动那一刻、被误当成当前状态（writtenAt 是重写时间）。
+  let unsubscribeBootReport: (() => void) | undefined;
+  try {
+    unsubscribeBootReport = runtime.onDescriptionChange(() => void writeBootReport());
+  } catch (error) {
+    logger.warn(`订阅工具描述变化失败（启动报告不再跟随更新）：${errorText(error)}`);
+  }
 
   return {
     ctx,
@@ -422,6 +436,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
       // 最后才收桩 runtime。
       registration?.dispose();
       bridge?.dispose();
+      unsubscribeBootReport?.();
       toolState.current?.dispose();
       await registry.disposeAll();
       if (runtimeState.source === "stub") await runtime.dispose();

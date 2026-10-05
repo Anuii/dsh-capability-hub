@@ -182,11 +182,11 @@ test("toolParameters 逐字节恒定：增删服务器与刷新缓存都不改�
   }
 });
 
-test("toolDescription 只随「已启用服务器名」变化，绝不写工具数量", async () => {
+test("toolDescription 只随已启用服务器清单变化，绝不写工具数量", async () => {
   const h = await makeModule();
   try {
-    // 逐字节等于「恒定前缀 + 已启用服务器名」：这是 D-D1 要的形式，也顺带证明描述里没有任何数字统计。
-    const expected = DESCRIPTION_PREFIX + "\n\n" + describeEnabledServers(["alpha"]);
+    // 逐字节等于「恒定前缀 + 已启用服务器清单」：这是 D-D1 要的形式，也顺带证明描述里没有任何数字统计。
+    const expected = DESCRIPTION_PREFIX + "\n\n" + describeEnabledServers([{ serverName: "alpha" }]);
     assert.equal(h.module.runtime.toolDescription(), expected);
     assert.ok(!/beta/.test(h.module.runtime.toolDescription()), "停用的服务器不进描述");
 

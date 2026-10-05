@@ -348,12 +348,12 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 
 ## 8. 启动报告 boot.json
 
-外壳每次启动会把一份小 JSON 覆盖写到 `<hubHome>/boot.json`（夹具下即
+外壳每次启动（以及之后 `mcp` 工具描述每次变化时）会把一份小 JSON 覆盖写到 `<hubHome>/boot.json`（夹具下即
 `.dev\home\.dsh\storages\dsh-capability-hub\boot.json`），字段：
 
-    profileName / homeDir / dshHome / hubHome / pid / startedAt
+    profileName / homeDir / dshHome / hubHome / pid / startedAt / writtenAt（最后一次重写的时间）
     routes / registeredPaths / registrationError
-    sdk / modules / toolRegistered / toolError
+    sdk / modules / toolRegistered / toolError / toolDescription（当前注册给模型的 mcp 工具描述）
     services（逐项探测 connection、webServer、tools、loader、profileContext ... 是否可见）
     skillSources（loader 条目名 + skill 相关条目的配置）
 

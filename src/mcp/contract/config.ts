@@ -13,7 +13,7 @@ export type { FieldError };
 export type Transport = "stdio" | "streamable-http";
 export type Lifecycle = "lazy" | "lazy-keep-alive" | "eager" | "keep-alive";
 
-/** 仅展示用的元信息（D-C4：描述 / 标签 / 主页）。 */
+/** 元信息（D-C4）：description 也会写进 mcp 工具的描述（第一行、最多 160 字，D-D1）；tags / homepage 只用于界面展示。 */
 export interface McpServerMeta {
   description?: string;
   tags?: string[];
@@ -86,7 +86,7 @@ export interface EffectiveServer {
   searchKeywords: Record<string, string[]>;
   disabled: boolean;
   debug: boolean;
-  /** 仅展示用（运行时不读） */
+  /** 元信息：运行时只读 description（写进 mcp 工具描述），其余仅展示 */
   meta?: McpServerMeta;
 }
 

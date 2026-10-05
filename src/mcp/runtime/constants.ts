@@ -69,7 +69,7 @@ export const PROXY_ENV_KEYS = [
   "NODE_EXTRA_CA_CERTS",
 ];
 
-/** 工具描述恒定前缀（D-D1：描述 = 恒定前缀 + 已启用服务器名，不写工具数量）。 */
+/** 工具描述恒定前缀（D-D1：描述 = 恒定前缀 + 已启用服务器清单，不写工具数量）。 */
 export const DESCRIPTION_PREFIX =
   "MCP 服务器统一网关。它把本机配置的所有 MCP 服务器合成一个工具：" +
   "用 { search } 在本地工具缓存里检索工具，用 { describe } 查看某个工具的完整参数，" +
@@ -80,10 +80,43 @@ export const DESCRIPTION_PREFIX =
 /** 没有任何已启用服务器时的固定文案。 */
 export const DESCRIPTION_NO_SERVERS = "当前没有已启用的 MCP 服务器。";
 
-/** 已启用服务器的描述后缀模板。 */
-export function describeEnabledServers(names: string[]): string {
-  if (names.length === 0) return DESCRIPTION_NO_SERVERS;
-  return `已启用的 MCP 服务器（按配置顺序）：${names.join("，")}。`;
+/**
+ * 一段描述的摘要：只取**第一行**，最多 CACHE_TOOL_DESCRIPTION_MAX_CHARS（160）个字符。
+ *
+ * 用在两处：运行态里每个工具的描述（FIX-9），以及 mcp 工具描述里每个服务器的 meta.description。
+ * - 只取第一行：「一句话 + 空行 + 详细说明」的写法只要那句话；
+ * - 截断**不追加省略号**：上限就是上限，追加符号会让长度变成 161；
+ *   长度按 UTF-16 码元算（与 JavaScript 的 `length` 一致），若切口正好落在代理对中间就把那个字符整字丢掉，
+ *   绝不吐半个代理对。
+ */
+export function clipToolDescription(text: string): string {
+  const firstLine = text.split(/\r\n|\r|\n/, 1)[0] ?? "";
+  const trimmed = firstLine.trim();
+  if (trimmed.length <= CACHE_TOOL_DESCRIPTION_MAX_CHARS) return trimmed;
+  const clipped = trimmed.slice(0, CACHE_TOOL_DESCRIPTION_MAX_CHARS);
+  const last = clipped.charCodeAt(clipped.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? clipped.slice(0, -1) : clipped;
+}
+
+/** 描述里一个服务器需要的字段。 */
+export interface DescribedServer {
+  serverName: string;
+  meta?: { description?: string };
+}
+
+/**
+ * 已启用服务器的清单（D-D1）：每行一个服务器，按配置顺序；有 meta.description 时接在名字后面
+ * （摘要规则同 clipToolDescription），没有就只写名字。只读 meta.description ——
+ * 标签、主页、工具数量都不进描述，改它们不会让描述变一个字节。
+ */
+export function describeEnabledServers(servers: readonly DescribedServer[]): string {
+  if (servers.length === 0) return DESCRIPTION_NO_SERVERS;
+  const lines = servers.map((server) => {
+    const raw = server.meta?.description;
+    const summary = typeof raw === "string" ? clipToolDescription(raw) : "";
+    return summary === "" ? "- " + server.serverName : "- " + server.serverName + "：" + summary;
+  });
+  return "已启用的 MCP 服务器（按配置顺序）：\n" + lines.join("\n");
 }
 
 /** 缓存目录相对 hubHome 的位置。 */

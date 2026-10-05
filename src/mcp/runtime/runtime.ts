@@ -2,7 +2,8 @@
  * mcp-runtime：把「一个恒定的 mcp 工具」实现为一个懒加载的 MCP 网关。
  *
  * 对应决策：
- * - D-D1 只注册一个工具 mcp，参数 schema 恒定；描述 = 恒定前缀 + 已启用服务器名，不写工具数量。
+ * - D-D1 只注册一个工具 mcp，参数 schema 恒定；描述 = 恒定前缀 + 已启用服务器清单（名字 + meta.description 摘要），
+ *        不写工具数量。
  * - D-D2 动作 search / describe / call / connect / instructions / status；
  *        search、describe、instructions、status 只读缓存，**绝不起进程**（actions/read.ts）。
  * - D-D3 会话隔离：实例键 = 会话 id + 服务器名；子代理会话各持一套；会话结束全部回收。
@@ -55,10 +56,10 @@ export interface McpRuntimeInternal extends McpRuntime {
   backgroundCount(): number;
 }
 
-/** 工具描述 = 恒定前缀 + 已启用服务器名（配置顺序），不写工具数量（D-D1）。 */
+/** 工具描述 = 恒定前缀 + 已启用服务器清单（名字 + meta.description 摘要，配置顺序），不写工具数量（D-D1）。 */
 function composeDescription(config: EffectiveMcpConfig): string {
-  const names = (config.servers ?? []).filter((server) => !server.disabled).map((server) => server.serverName);
-  return DESCRIPTION_PREFIX + "\n\n" + describeEnabledServers(names);
+  const enabled = (config.servers ?? []).filter((server) => !server.disabled);
+  return DESCRIPTION_PREFIX + "\n\n" + describeEnabledServers(enabled);
 }
 
 export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal {

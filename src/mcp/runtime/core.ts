@@ -10,7 +10,6 @@
  */
 
 import {
-  CACHE_TOOL_DESCRIPTION_MAX_CHARS,
   DEFAULT_FAILURE_BACKOFF_MS,
   DEFAULT_IDLE_TIMEOUT_MINUTES,
   DEFAULT_OUTPUT_MAX_BYTES,
@@ -47,23 +46,8 @@ export function probeSessionId(serverName: string): string {
   return "probe:" + serverName;
 }
 
-/**
- * 运行态里一个工具的描述（FIX-9）：只取**第一行**，最多 CACHE_TOOL_DESCRIPTION_MAX_CHARS（160）个字符。
- *
- * 两条边界都是刻意的：
- * - 只取第一行：MCP 工具的 description 常常是「一句话 + 空行 + 用法示例」，UI 只要那行摘要；
- * - 截断**不追加省略号**：上限就是上限，追加符号会让长度变成 161；
- *   长度按 UTF-16 码元算（与 JavaScript 的 \`length\` 一致），若切口正好落在代理对中间就把那个字符整字丢掉，
- *   绝不吐半个代理对给前端。
- */
-export function clipToolDescription(text: string): string {
-  const firstLine = text.split(/\r\n|\r|\n/, 1)[0] ?? "";
-  const trimmed = firstLine.trim();
-  if (trimmed.length <= CACHE_TOOL_DESCRIPTION_MAX_CHARS) return trimmed;
-  const clipped = trimmed.slice(0, CACHE_TOOL_DESCRIPTION_MAX_CHARS);
-  const last = clipped.charCodeAt(clipped.length - 1);
-  return last >= 0xd800 && last <= 0xdbff ? clipped.slice(0, -1) : clipped;
-}
+/** 运行态里一个工具的描述（FIX-9）：规则见 constants.ts。 */
+export { clipToolDescription } from "./constants.ts";
 
 /** 检索用的一个工具：排序文档 + 所在服务器 + 缓存里的工具。 */
 export interface DocEntry {
