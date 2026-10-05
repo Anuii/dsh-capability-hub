@@ -1,7 +1,7 @@
 {
   "name": "dsh-capability-hub",
   "description": "DSH 能力中心：技能管理与 MCP 服务器管理（含自研 MCP 懒加载运行时）",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "files": [
