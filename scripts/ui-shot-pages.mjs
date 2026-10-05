@@ -13,6 +13,8 @@
  *   p09/p10  MCP 标签，?hubPreviewRunning=1 的示例实例（预览数据，不新建会话）
  *   p11/p12  MCP 服务器详情抽屉
  *   p13/p14  仓库视图：展开仓库列表、勾选两项（底部出现安装区）
+ *   p15      仓库视图：skills.sh 搜索结果（固定高度滚动框；会联网）
+ *   p16      仓库视图：从搜索结果「浏览」某个仓库后（结果出现在输入区下方并自动滚到可见）
  *   pages-facts.json  每一步的 DOM 事实（标签、彩色元素统计、每行可见控件数）
  *
  * 不新建会话：会话存储与桌面版共用（AGENTS.md 硬规则 3）。
@@ -274,6 +276,20 @@ await sleep(600);
 FACTS.footerVisible = await evaluate("!!document.querySelector('[data-testid=skills-install-submit]')");
 FACTS.addSkillAudit = await evaluate("(() => { const d = document.querySelector('[data-testid=kit-drawer]'); if (!d) return null; const rows = [...d.querySelectorAll('[data-testid=skills-discovery-list] li')]; return rows.slice(0, 50).map((r) => [...r.querySelectorAll('button, input, [role=switch], [role=checkbox], select')].filter((c) => getComputedStyle(c).opacity !== '0' && c.getBoundingClientRect().width > 0 && getComputedStyle(c.closest('[class]')).opacity !== '0').length).reduce((m, n) => Math.max(m, n), 0); })()");
 await pair("p13", "add-skill-selected");
+// 搜索 skills.sh → 结果框；再从结果里「浏览」一个仓库（--no-network 时跳过）
+if (!process.argv.includes("--no-network")) {
+  await evaluate("(() => { const n = document.querySelector('[data-testid=skills-remote-search-input]'); const input = n && (n.tagName === 'INPUT' ? n : n.querySelector('input')); if (!input) return false; input.focus(); return true; })()");
+  await send("Input.insertText", { text: "pdf" });
+  await clickTestId("skills-remote-search-button");
+  await sleep(4000);
+  FACTS.searchBoxHeight = await evaluate("(() => { const n = document.querySelector('[data-testid=skills-remote-search-box]'); return n ? Math.round(n.getBoundingClientRect().height) : null; })()");
+  await shot("p15-add-skill-search-light.png");
+  FACTS.browsedFromSearch = await clickTestId("skills-remote-search-browse-0");
+  await sleep(6000);
+  FACTS.searchCollapsedAfterBrowse = await evaluate("!document.querySelector('[data-testid=skills-remote-search-box]')");
+  FACTS.browseVisible = await evaluate("(() => { const n = document.querySelector('[data-testid=skills-remote-browse-result]'); if (!n) return null; const r = n.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; })()");
+  await shot("p16-add-skill-browse-light.png");
+}
 await escape();
 
 // ---- MCP --------------------------------------------------------------------

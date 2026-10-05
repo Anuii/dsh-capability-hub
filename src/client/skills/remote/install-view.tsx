@@ -94,6 +94,15 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
   const [searching, setSearching] = React.useState<boolean>(false);
   const [searchResults, setSearchResults] = React.useState<SearchResultItem[] | undefined>(undefined);
   const [searchError, setSearchError] = React.useState<string | undefined>(undefined);
+  /** 搜索结果是否展开：从结果里浏览或加入仓库后自动收起，免得把下面的内容顶出视野。 */
+  const [searchOpen, setSearchOpen] = React.useState<boolean>(false);
+  /** 浏览结果 / 安装反馈出现时滚到这里，让用户看见下面的内容变了。 */
+  const focusRef = React.useRef<HTMLDivElement | null>(null);
+  const [focusTick, setFocusTick] = React.useState<number>(0);
+  React.useEffect(() => {
+    if (focusTick === 0) return;
+    focusRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [focusTick]);
   // 仓库列表与汇总发现
   const [discovery, setDiscovery] = React.useState<DiscoveryView | undefined>(undefined);
   const [discoveryError, setDiscoveryError] = React.useState<string | undefined>(undefined);
@@ -177,6 +186,8 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
     void browseRepo(repo, ref, workspace).then(
       (payload) => {
         setBrowse(payload);
+        setSearchOpen(false);
+        if (!keepResults) setFocusTick((tick) => tick + 1);
         const wanted = preselectPath === undefined ? undefined : payload.skills.find((skill) => skill.skillPath === preselectPath);
         if (wanted !== undefined && wanted.installedId === undefined) {
           setSelected(new Map([[discoveredKey({ repo: payload.repo, skillPath: wanted.skillPath }), { repo: payload.repo, ref: payload.ref, skillPath: wanted.skillPath }]]));
@@ -205,6 +216,7 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
     setRepoBusy(true);
     setRepoError(undefined);
     setRepoNote(undefined);
+    setSearchOpen(false);
     void addRepo(repo, ref, workspace).then(
       (change) => {
         applyRepoChange(change.discovery);
@@ -261,6 +273,7 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
     void searchSkills(q).then(
       (list) => {
         setSearchResults(list);
+        setSearchOpen(true);
         setSearching(false);
       },
       (failure: unknown) => {
@@ -301,6 +314,7 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
     }
     setResults(collected);
     setInstalling(false);
+    setFocusTick((tick) => tick + 1);
     if (failures.length > 0) setInstallError(failures.join("；"));
     const ok = collected.filter((item) => item.ok).length;
     setInstallSummary(installSummaryText(ok, collected.length - ok));
@@ -378,21 +392,36 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
       ? null
       : searchResults.length === 0
         ? React.createElement("p", { className: styles.note, "data-testid": "skills-remote-search-empty" }, t("skills.remote.search.empty"))
-        : React.createElement(ListSurface, { testId: "skills-remote-search-list" },
-          React.createElement(ListGroup, { title: t("skills.remote.search.results"), count: searchResults.length, testId: "skills-remote-search-group" },
-            searchResults.map((item, index) => React.createElement(ListRow, {
-              key: item.repo + "-" + item.name + "-" + String(index),
-              testId: "skills-remote-search-item-" + String(index),
-              title: item.name,
-              subtitle: item.repo + (item.installs === undefined ? "" : " · " + t("skills.remote.search.installs", { count: item.installs })),
-              badges: inList(item.repo) ? [React.createElement(Badge, { key: "in", tone: "neutral" }, t("skills.repoView.inList"))] : [],
-              hoverActions: [
-                { label: t("skills.remote.search.browse"), testId: "skills-remote-search-browse-" + String(index), onClick: () => doBrowse(item.repo, undefined, item.skillPath) },
-                ...(inList(item.repo)
-                  ? []
-                  : [{ label: t("skills.repoView.addToList"), testId: "skills-remote-search-add-" + String(index), onClick: () => doAddToList(item.repo) }]),
-              ],
-            })))));
+        : React.createElement("div", { className: styles.form, "data-testid": "skills-remote-search-results", "data-count": String(searchResults.length) },
+          // 一行摘要 + 展开 / 收起：结果再多也只占一个固定高度的滚动框，不把下面的内容顶出视野。
+          React.createElement("div", { className: styles.inlineRow },
+            React.createElement("span", { className: styles.note }, t("skills.repoView.searchSummary", { count: searchResults.length })),
+            React.createElement("span", { className: styles.grow }),
+            React.createElement(Button, {
+              size: "sm",
+              variant: "ghost",
+              "aria-expanded": searchOpen,
+              "data-testid": "skills-remote-search-toggle",
+              onClick: () => setSearchOpen((open) => !open),
+            }, searchOpen ? t("skills.repoView.collapse") : t("skills.repoView.expand"))),
+          !searchOpen
+            ? null
+            : React.createElement("div", { className: styles.scrollBox, "data-testid": "skills-remote-search-box" },
+              React.createElement(ListSurface, { testId: "skills-remote-search-list" },
+                React.createElement(ListGroup, { testId: "skills-remote-search-group" },
+                  searchResults.map((item, index) => React.createElement(ListRow, {
+                    key: item.repo + "-" + item.name + "-" + String(index),
+                    testId: "skills-remote-search-item-" + String(index),
+                    title: item.name,
+                    subtitle: item.repo + (item.installs === undefined ? "" : " · " + t("skills.remote.search.installs", { count: item.installs })),
+                    badges: inList(item.repo) ? [React.createElement(Badge, { key: "in", tone: "neutral" }, t("skills.repoView.inList"))] : [],
+                    hoverActions: [
+                      { label: t("skills.remote.search.browse"), testId: "skills-remote-search-browse-" + String(index), onClick: () => doBrowse(item.repo, undefined, item.skillPath) },
+                      ...(inList(item.repo)
+                        ? []
+                        : [{ label: t("skills.repoView.addToList"), testId: "skills-remote-search-add-" + String(index), onClick: () => doAddToList(item.repo) }]),
+                    ],
+                  })))))));
 
   const repoRow = (record: DiscoveryRepoView): React.ReactNode[] => {
     const failed = record.error !== undefined;
@@ -498,7 +527,7 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
       browse.skills.map((skill) => skillRow({ ...skill, repo: browse.repo, ref: browse.ref }, false)))));
 
   const discoveryBlock = ((): React.ReactNode => {
-    if (browse !== undefined) return browseBlock;
+    if (browse !== undefined) return null;
     const all = discovery?.skills ?? [];
     const counts = installedCounts(all, dq, repoFilter);
     const filtered = filterDiscovered(all, { query: dq, installed: installedFilter, repo: repoFilter });
@@ -592,19 +621,23 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
   },
   React.createElement("div", { className: styles.form, "data-testid": "skills-install-view", "data-browsing": browsing ? "1" : "0" },
     topRow,
+    // 紧跟输入区的「焦点区」：安装反馈与临时浏览的结果都出现在这里，并自动滚到可见，
+    // 不会被埋在仓库列表与汇总下面。
+    React.createElement("div", { className: styles.form, ref: focusRef, "data-testid": "skills-repo-focus" },
+      installSummary === undefined ? null : React.createElement("p", { className: styles.note, "data-testid": "skills-remote-install-summary" }, installSummary),
+      installError === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-install-error" }, installError),
+      results === undefined
+        ? null
+        : React.createElement("ul", { className: styles.resultList, "data-testid": "skills-remote-install-results" },
+          results.map((result, index) => React.createElement("li", {
+            key: result.repo + result.skillPath + "-" + String(index),
+            className: styles.resultRow,
+            "data-ok": result.ok ? "1" : "0",
+            "data-skill-path": result.skillPath,
+          },
+          React.createElement(Badge, { tone: result.ok ? "neutral" : "danger" }, result.ok ? t("skills.install.ok") : t("skills.install.failed")),
+          React.createElement("span", { className: styles.note }, result.repo + " · " + installResultText(result))))),
+      browseBlock),
     repoList,
-    discoveryBlock,
-    installSummary === undefined ? null : React.createElement("p", { className: styles.note, "data-testid": "skills-remote-install-summary" }, installSummary),
-    installError === undefined ? null : React.createElement("p", { className: styles.errorBox, "data-testid": "skills-remote-install-error" }, installError),
-    results === undefined
-      ? null
-      : React.createElement("ul", { className: styles.resultList, "data-testid": "skills-remote-install-results" },
-        results.map((result, index) => React.createElement("li", {
-          key: result.repo + result.skillPath + "-" + String(index),
-          className: styles.resultRow,
-          "data-ok": result.ok ? "1" : "0",
-          "data-skill-path": result.skillPath,
-        },
-        React.createElement(Badge, { tone: result.ok ? "neutral" : "danger" }, result.ok ? t("skills.install.ok") : t("skills.install.failed")),
-        React.createElement("span", { className: styles.note }, result.repo + " · " + installResultText(result)))))));
+    discoveryBlock));
 }
