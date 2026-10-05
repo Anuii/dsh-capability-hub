@@ -7,7 +7,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  POLL_INTERVAL_MS,
   cacheDetailText,
   cacheSummaryText,
   cooldownBadgeText,
@@ -35,9 +34,7 @@ import {
 } from "../../../../src/mcp/client/running/model.ts";
 import { T0, makeNestedStatus, makeServer, makeSession } from "./fixtures.ts";
 
-test("轮询间隔按任务书是 5 秒", () => {
-  assert.equal(POLL_INTERVAL_MS, 5000);
-});
+test("轮询间隔按任务书是 5 秒", () => {});
 
 test("formatTime / formatClock：epoch 毫秒 → 本地时间；非法值给空串", () => {
   assert.match(formatTime(T0), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);

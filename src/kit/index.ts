@@ -18,6 +18,9 @@ export type { Sheet } from "./css.ts";
 export { EMPTY_FOLD, foldExpanded, foldToggle } from "./fold.ts";
 export type { FoldState } from "./fold.ts";
 export { useFold } from "./use-fold.ts";
+export { createStore } from "./store.ts";
+export type { Store } from "./store.ts";
+export { useStoreState } from "./use-store.ts";
 export type { Fold } from "./use-fold.ts";
 export {
   countByPredicates,

@@ -9,7 +9,7 @@
  *   - 三种添加方式（粘贴 JSON / 预设模板 / 导入）仍在外壳的模态框里，沿用 T4b-2 的逻辑。
  *
  * 职责划分：
- *   - 本文件：数据加载（config + runtime）、列表与抽屉的路由、删除确认、Toast、错误边界；
+ *   - 本文件：配置加载、运行状态仓库（runtime-store.ts，轮询与重读都在里面）、列表与抽屉的路由、删除确认、Toast、错误边界；
  *   - list.tsx / detail.tsx / form.tsx / json.tsx / settings.tsx / dialogs.tsx / intake/*：纯展示；
  *   - model.ts：纯逻辑（可单测）；data.ts：接口封装；strings.ts：全部文案。
  *
@@ -21,14 +21,25 @@
 import * as React from "react";
 import { Button, Modal, Switch, Toast } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { TabProps } from "../../platform/client/tab-props.ts";
-import { Banner, Drawer, EmptyState, SkeletonRows, Toolbar, kit, searchFlag, type MenuItem } from "../../kit/index.ts";
+import {
+  Banner,
+  Drawer,
+  EmptyState,
+  SkeletonRows,
+  Toolbar,
+  kit,
+  searchFlag,
+  useStoreState,
+  type MenuItem,
+} from "../../kit/index.ts";
 import { RunningSection } from "./running/index.tsx";
-import { disconnectServer } from "./running/data.ts";
 import { DisconnectDialog, type DisconnectTarget } from "./running/dialogs.tsx";
 import { ImportView } from "./intake/import.tsx";
 import { JsonPasteView } from "./intake/json-paste.tsx";
 import { PresetView } from "./intake/presets.tsx";
-import { deleteServer, fetchConfig, fetchRuntime, refreshServerCache, reorderServers, toggleServer } from "./data.ts";
+import { deleteServer, fetchConfig, reorderServers, runtimeApi, toggleServer } from "./data.ts";
+import { createRuntimeStore, previewAdapter } from "./runtime-store.ts";
+import { runningPreviewStatus } from "./running/region.ts";
 import { ServerDetailBody } from "./detail.tsx";
 import { DeleteServerDialog } from "./dialogs.tsx";
 import { JsonEditor } from "./json.tsx";
@@ -56,7 +67,6 @@ import { SettingsPanel } from "./settings.tsx";
 import { injectMcpStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { ConfigPayload, ServerView } from "../contract/config.ts";
-import type { RuntimeStatus } from "../contract/runtime.ts";
 
 /* 样式只注入一次（模块加载时；无 document 时自动跳过）。 */
 injectMcpStyles();
@@ -114,7 +124,6 @@ function McpTabInner(props: TabProps): React.ReactElement {
   const [config, setConfig] = React.useState<ConfigPayload | undefined>(undefined);
   const [configError, setConfigError] = React.useState<string | undefined>(undefined);
   const [loading, setLoading] = React.useState<boolean>(true);
-  const [runtime, setRuntime] = React.useState<RuntimeStatus | undefined>(undefined);
   const [panel, setPanel] = React.useState<Panel | undefined>(undefined);
   const [intake, setIntake] = React.useState<IntakeView | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = React.useState<boolean>(false);
@@ -129,9 +138,14 @@ function McpTabInner(props: TabProps): React.ReactElement {
   /** 抽屉里「断开全部实例」的确认目标与进行中标记。 */
   const [pendingDisconnect, setPendingDisconnect] = React.useState<DisconnectTarget | undefined>(undefined);
   const [disconnecting, setDisconnecting] = React.useState<boolean>(false);
-  /** 递增即让底部「运行中」区域立即刷新一次。 */
-  const [runningTick, setRunningTick] = React.useState<number>(0);
   const previewRunning = React.useMemo(previewRunningFlag, []);
+  /** 运行状态只有这一份：服务器行、详情抽屉、「运行中」、标签红点都读它（runtime-store.ts）。 */
+  const runtimeStore = React.useMemo(
+    () => createRuntimeStore(previewRunning ? previewAdapter(runtimeApi, runningPreviewStatus) : runtimeApi),
+    [previewRunning],
+  );
+  const runtime = useStoreState(runtimeStore.state).status;
+  React.useEffect(() => runtimeStore.startPolling(), [runtimeStore]);
   const seq = React.useRef<number>(0);
 
   const showToast = React.useCallback((text: string, tone?: "success"): void => {
@@ -152,11 +166,8 @@ function McpTabInner(props: TabProps): React.ReactElement {
         setLoading(false);
       },
     );
-    void fetchRuntime().then(
-      (payload) => setRuntime(payload),
-      () => undefined,
-    );
-  }, []);
+    void runtimeStore.reload(false);
+  }, [runtimeStore]);
 
   React.useEffect(() => load(), [load]);
 
@@ -185,29 +196,16 @@ function McpTabInner(props: TabProps): React.ReactElement {
     });
   };
 
-  /** 保存成功后：立刻刷新配置，并轮询运行态拿到后台探测的工具数（D-C6）。 */
+  /** 保存成功后：等后台探测把工具数写进缓存（D-C6），拿到就提示；silent 时只更新列表。 */
   const probeTools = React.useCallback(
-    (name: string, attempt: number, silent = false): void => {
-      if (attempt >= 6) {
-        if (!silent) showToast(t("mcp.form.probeTimeout", { name }));
-        return;
-      }
-      setTimeout(() => {
-        void fetchRuntime().then(
-          (payload) => {
-            setRuntime(payload);
-            const row = payload.servers.find((item) => item.name === name);
-            if (row !== undefined && row.cache !== undefined) {
-              if (!silent) showToast(t("mcp.form.savedWithTools", { name, count: row.cache.toolCount }), "success");
-              return;
-            }
-            probeTools(name, attempt + 1, silent);
-          },
-          () => probeTools(name, attempt + 1, silent),
-        );
-      }, 1500);
+    (name: string, silent = false): void => {
+      void runtimeStore.waitForTools(name).then((count) => {
+        if (silent) return;
+        if (count === undefined) showToast(t("mcp.form.probeTimeout", { name }));
+        else showToast(t("mcp.form.savedWithTools", { name, count }), "success");
+      });
     },
-    [showToast],
+    [runtimeStore, showToast],
   );
 
   /**
@@ -218,7 +216,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
     (saved: readonly string[]): void => {
       if (saved.length === 0) return;
       load();
-      for (const name of saved) probeTools(name, 0, true);
+      for (const name of saved) probeTools(name, true);
       showToast(t("mcp.paste.savedMany", { count: saved.length }), "success");
     },
     [load, probeTools, showToast],
@@ -228,7 +226,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
   const onIntakeImported = React.useCallback(
     (saved: readonly string[]): void => {
       load();
-      for (const name of saved) probeTools(name, 0, true);
+      for (const name of saved) probeTools(name, true);
     },
     [load, probeTools],
   );
@@ -241,7 +239,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
         warnings.length > 0 ? warnings.join("；") : t("mcp.form.saved", { name: server.serverName }),
         "success",
       );
-      probeTools(server.serverName, 0);
+      probeTools(server.serverName);
     },
     [load, probeTools, showToast],
   );
@@ -293,15 +291,10 @@ function McpTabInner(props: TabProps): React.ReactElement {
 
   const refreshCache = (view: ServerView): void => {
     setRefreshing(view.serverName);
-    void refreshServerCache(view.serverName)
+    void runtimeStore
+      .refresh(view.serverName)
       .then(
-        (result) => {
-          showToast(t("mcp.detail.refreshOk", { name: view.serverName, count: result.toolCount }), "success");
-          void fetchRuntime().then(
-            (payload) => setRuntime(payload),
-            () => undefined,
-          );
-        },
+        (result) => showToast(t("mcp.detail.refreshOk", { name: view.serverName, count: result.toolCount }), "success"),
         (error: unknown) =>
           showToast(t("mcp.detail.refreshFailed", { name: view.serverName, message: errorMessage(error) })),
       )
@@ -311,17 +304,13 @@ function McpTabInner(props: TabProps): React.ReactElement {
   /** 抽屉里的「断开全部实例」：该服务器在全部会话里的实例（D-E1，0.3.0 从运行态移入）。 */
   const confirmDisconnectAll = (target: DisconnectTarget): void => {
     setDisconnecting(true);
-    void disconnectServer(target.name)
+    void runtimeStore
+      .disconnect(target.name)
       .then(
         (result) => {
           setPendingDisconnect(undefined);
           if (result.closed === 0) showToast(t("mcp.detail.disconnectNone", { name: target.name }));
           else showToast(t("mcp.detail.disconnectOk", { name: target.name, count: result.closed }), "success");
-          void fetchRuntime().then(
-            (payload) => setRuntime(payload),
-            () => undefined,
-          );
-          setRunningTick((tick) => tick + 1);
         },
         (error: unknown) => {
           setPendingDisconnect(undefined);
@@ -492,18 +481,16 @@ function McpTabInner(props: TabProps): React.ReactElement {
       {body}
       {/* 0.3.0：原「运行态」标签并入这里，成为页面底部可折叠的「运行中」区域（D-E1）。 */}
       <RunningSection
+        store={runtimeStore}
         {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
         preview={previewRunning}
-        reloadSignal={runningTick}
       />
       {/* 详情 / 编辑抽屉（同一个抽屉，内容按 panel 切换）。 */}
       <Drawer
         open={panel !== undefined}
         title={panelTitle}
-        /* 抽屉头部的等宽副标题只放一行：命令可能很长，全文在「概览」里（UI-DESIGN §1「安静」）。 */ {...(detailView ===
-        undefined
-          ? {}
-          : { subtitle: drawerSubtitle(viewSummaryText(detailView)) })}
+        // 抽屉头部的等宽副标题只放一行：命令可能很长，全文在「概览」里（UI-DESIGN §1「安静」）。
+        {...(detailView === undefined ? {} : { subtitle: drawerSubtitle(viewSummaryText(detailView)) })}
         testId="mcp-drawer"
         onClose={() => setPanel(undefined)}
         {...(detailView === undefined

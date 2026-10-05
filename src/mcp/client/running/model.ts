@@ -15,9 +15,6 @@ import type {
   RuntimeSessionView,
 } from "../../contract/runtime.ts";
 
-/** 自动刷新间隔（任务书：可见时每 5 秒一次）。 */
-export const POLL_INTERVAL_MS = 5000;
-
 /** 状态点的语义色调（与 kit 的 StatusTone 同形，这里不 import React 侧模块）。 */
 export type RuntimeTone = "idle" | "active" | "failed" | "cooling";
 

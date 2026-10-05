@@ -1,5 +1,5 @@
 /**
- * MCP 标签页的接口封装（PLAN §3.7 的「MCP·配置」与「MCP·运行态」）。
+ * MCP 标签页的接口封装：配置的各条路由 + 运行状态的 HTTP adapter（runtimeApi）。
  *
  * 只做三件事：调 api.get/api.post、把 data 里的字段取出来、给缺省值。
  * 错误一律原样抛出（都是 shell/api.ts 的 ApiError，message 是服务端给的中文），
@@ -22,7 +22,8 @@ import type {
   UpsertResult,
   ValidateResult,
 } from "../contract/config.ts";
-import type { RuntimeStatus } from "../contract/runtime.ts";
+import type { RuntimeDisconnectResult, RuntimeRefreshResult, RuntimeStatus } from "../contract/runtime.ts";
+import { normalizeRuntimeStatus, type RuntimeAdapter } from "./runtime-store.ts";
 
 /** GET mcp/config → { settings, settingsSet, servers, warnings }。 */
 export async function fetchConfig(): Promise<ConfigPayload> {
@@ -35,30 +36,22 @@ export async function fetchConfig(): Promise<ConfigPayload> {
   };
 }
 
-/** GET mcp/runtime → { servers, sessions }（本标签读 servers 与实例计数）。 */
-export async function fetchRuntime(): Promise<RuntimeStatus> {
-  const data = await api.get<Partial<RuntimeStatus>>("mcp/runtime");
-  return {
-    servers: Array.isArray(data?.servers) ? data.servers : [],
-    sessions: Array.isArray(data?.sessions)
-      ? data.sessions.map((session) => ({
-          ...session,
-          sessionId: typeof session?.sessionId === "string" ? session.sessionId : "",
-          instances: Array.isArray(session?.instances)
-            ? session.instances.filter(
-                (instance) => instance !== null && typeof instance === "object" && typeof instance.server === "string",
-              )
-            : [],
-        }))
-      : [],
-  };
-}
-
-/** POST mcp/runtime/refresh { name } → { toolCount }（抽屉「工具」小节的刷新）。 */
-export async function refreshServerCache(name: string): Promise<{ toolCount: number }> {
-  const data = await api.post<{ toolCount?: number }>("mcp/runtime/refresh", { name });
-  return { toolCount: typeof data?.toolCount === "number" ? data.toolCount : 0 };
-}
+/** 运行状态的 HTTP adapter（给 runtime-store.ts 用）：GET mcp/runtime、POST mcp/runtime/refresh · disconnect。 */
+export const runtimeApi: RuntimeAdapter = {
+  async status() {
+    return normalizeRuntimeStatus(await api.get<Partial<RuntimeStatus>>("mcp/runtime"));
+  },
+  async refresh(name) {
+    const data = await api.post<Partial<RuntimeRefreshResult>>("mcp/runtime/refresh", { name });
+    return { toolCount: typeof data?.toolCount === "number" ? data.toolCount : 0 };
+  },
+  async disconnect(name, sessionId) {
+    const body: Record<string, unknown> = { name };
+    if (typeof sessionId === "string" && sessionId !== "") body.sessionId = sessionId;
+    const data = await api.post<Partial<RuntimeDisconnectResult>>("mcp/runtime/disconnect", body);
+    return { closed: typeof data?.closed === "number" ? data.closed : 0 };
+  },
+};
 
 /** POST mcp/servers/upsert { originalName?, server } → { server, warnings }。 */
 export async function upsertServer(

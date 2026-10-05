@@ -8,18 +8,18 @@
  * 折叠（region.ts）：没有活跃实例时自动收起、有实例时默认展开；用户手动折叠 / 展开后尊重用户，
  * 直到实例数在 0 与非 0 之间跃迁。标题行显示实例数，展开时右侧有「只看当前会话」与刷新。
  *
- * 刷新：每 5 秒轮询一次（页面不可见时跳过）；reloadSignal 变化时立即刷新（MCP 页在抽屉里断开后通知）。
- * 预览：URL 带 ?hubPreviewRunning=1 时用 region.ts 的示例数据（走查不新建会话，测试 profile 里没有实例），
+ * 数据：读 MCP 页的运行状态仓库（../runtime-store.ts）——轮询、刷新、断开后的重读都在仓库里，
+ * 与服务器行、详情抽屉、标签红点是同一份快照。
+ * 预览：URL 带 ?hubPreviewRunning=1 时仓库用示例会话（走查不新建会话，测试 profile 里没有实例），
  * 标题行标「预览数据」，断开不调用接口。
  */
 
 import * as React from "react";
 import { Switch, Toast } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge, Banner, ListGroup, ListRow, RefreshIcon, SkeletonRows } from "../../../kit/index.ts";
-import { disconnectServer, fetchRuntimeStatus } from "./data.ts";
+import { Badge, Banner, ListGroup, ListRow, RefreshIcon, SkeletonRows, useStoreState } from "../../../kit/index.ts";
+import type { RuntimeStore } from "../runtime-store.ts";
 import { DisconnectDialog, type DisconnectTarget } from "./dialogs.tsx";
 import {
-  POLL_INTERVAL_MS,
   errorMessage,
   filterSessions,
   instanceSubtitleText,
@@ -32,7 +32,6 @@ import {
 import {
   RUNNING_REGION_INITIAL,
   runningInstanceCount,
-  runningPreviewStatus,
   runningRegionExpanded,
   runningRegionNext,
   runningRegionToggle,
@@ -40,7 +39,7 @@ import {
 } from "./region.ts";
 import { injectRuntimeStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { RuntimeInstanceView, RuntimeSessionView, RuntimeStatus } from "../../contract/runtime.ts";
+import type { RuntimeInstanceView, RuntimeSessionView } from "../../contract/runtime.ts";
 
 /* 样式只注入一次（模块加载时；无 document 时自动跳过）。 */
 injectRuntimeStyles();
@@ -52,12 +51,12 @@ interface ToastState {
 }
 
 export interface RunningSectionProps {
+  /** MCP 页的运行状态仓库（轮询由 MCP 页启动）。 */
+  store: RuntimeStore;
   /** 当前会话 id（「只看当前会话」用）。 */
   sessionId?: string;
-  /** 用示例数据渲染（?hubPreviewRunning=1）。 */
+  /** 仓库用的是示例会话（?hubPreviewRunning=1）：标「预览数据」，断开不调用接口。 */
   preview?: boolean;
-  /** 变化时立即刷新一次（MCP 页在抽屉里断开实例后递增）。 */
-  reloadSignal?: number;
 }
 
 /** 渲染异常兜底：区域崩了也只影响这一块。 */
@@ -86,58 +85,20 @@ class SectionErrorBoundary extends React.Component<{ children: React.ReactNode }
 
 function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
   const preview = props.preview === true;
-  const [status, setStatus] = React.useState<RuntimeStatus | undefined>(undefined);
-  const [error, setError] = React.useState<string | undefined>(undefined);
-  const [pollError, setPollError] = React.useState<string | undefined>(undefined);
+  const { status, error, pollError } = useStoreState(props.store.state);
   const [onlyCurrent, setOnlyCurrent] = React.useState<boolean>(false);
   const [busy, setBusy] = React.useState<boolean>(false);
   const [pending, setPending] = React.useState<DisconnectTarget | undefined>(undefined);
   const [toast, setToast] = React.useState<ToastState | undefined>(undefined);
   const [region, setRegion] = React.useState<RunningRegionState>(RUNNING_REGION_INITIAL);
   const seq = React.useRef<number>(0);
-  const hasData = React.useRef<boolean>(false);
 
   const showToast = React.useCallback((text: string, tone?: "success"): void => {
     seq.current += 1;
     setToast({ seq: seq.current, text, ...(tone === undefined ? {} : { tone }) });
   }, []);
 
-  const load = React.useCallback(
-    (silent: boolean): void => {
-      if (preview) {
-        hasData.current = true;
-        setStatus(runningPreviewStatus(Date.now()));
-        return;
-      }
-      if (!silent) setError(undefined);
-      void fetchRuntimeStatus().then(
-        (payload) => {
-          hasData.current = true;
-          setStatus(payload);
-          setError(undefined);
-          setPollError(undefined);
-        },
-        (failure: unknown) => {
-          // 自动刷新失败时保留上一次的数据，只加一行提示
-          if (silent && hasData.current) setPollError(errorMessage(failure));
-          else setError(errorMessage(failure));
-        },
-      );
-    },
-    [preview],
-  );
-
-  React.useEffect(() => load(false), [load, props.reloadSignal]);
-
-  /** 5 秒轮询：组件卸载即停，页面不可见时跳过这一轮；预览数据不轮询。 */
-  React.useEffect(() => {
-    if (preview) return;
-    const timer = setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      load(true);
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [load, preview]);
+  const reload = (): void => void props.store.reload(false);
 
   const count = runningInstanceCount(status);
   React.useEffect(() => setRegion((prev) => runningRegionNext(prev, count)), [count]);
@@ -153,13 +114,13 @@ function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
       return;
     }
     setBusy(true);
-    void disconnectServer(target.name, target.sessionId)
+    void props.store
+      .disconnect(target.name, target.sessionId)
       .then(
         (result) => {
           setPending(undefined);
           if (result.closed === 0) showToast(t("runtime.instance.disconnectNone"));
           else showToast(t("runtime.instance.disconnectOk"), "success");
-          load(true);
         },
         (failure: unknown) => {
           setPending(undefined);
@@ -216,7 +177,7 @@ function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
           <Banner
             tone="danger"
             testId="running-load-error"
-            action={{ label: t("runtime.retry"), onClick: () => load(false), testId: "running-retry" }}
+            action={{ label: t("runtime.retry"), onClick: reload, testId: "running-retry" }}
           >
             {t("runtime.loadFailed", { message: error })}
           </Banner>
@@ -276,7 +237,7 @@ function RunningSectionInner(props: RunningSectionProps): React.ReactElement {
         data-testid="running-refresh"
         aria-label={t("runtime.refresh")}
         title={t("runtime.pollHint")}
-        onClick={() => load(false)}
+        onClick={reload}
       >
         <RefreshIcon />
       </button>
