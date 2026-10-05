@@ -12,14 +12,15 @@ Licensed under the MIT License.
 
 「能力中心」是 DSH 的一个插件，把两件平时要靠手改文件完成的事收进一个页面：
 
-- **技能（Skills）**：浏览、只读查看、启用/停用、删除（回收站）、体检、从 GitHub 安装、
-  检查更新与更新；
+- **技能（Skills）**：按层级（DSH 内置 / 用户级 / 项目级）与来源仓库两级折叠浏览，
+  按技能目录筛选；只读查看、启用/停用、删除（回收站）、体检、检查更新与更新；
+  「添加技能」是仓库视图：维护仓库列表（可设分支与子目录），汇总发现所有仓库的技能后勾选安装；
 - **MCP 服务器**：粘贴 JSON / 表单 / 预置模板 / 从 Claude Code、Codex 只读导入，
   保存前校验，敏感值打码；
 - **MCP 懒加载运行时**：只向模型注册**一个**工具 `mcp`（`search` / `describe` / `call` /
   `connect` / `instructions` / `status`），服务器进程按需启动、空闲回收，按会话隔离；
-- **运行态面板**：各服务器的工具缓存、各会话的活跃实例、最近失败与退避冷却，
-  可手动刷新缓存、断开实例。
+- **运行中**：MCP 页底部按会话列出活跃实例（子代理缩进），可断开；服务器详情里看工具缓存、
+  最近失败与退避冷却，可刷新缓存、断开该服务器的全部实例。
 
 插件是「永不失败外壳」：每个功能模块独立加载，任何一个出问题只降级并给出原因，
 不影响其余模块，也不会让 `dsh web` 启动失败。
@@ -85,9 +86,9 @@ MCP 配置存在插件数据目录下，所有 profile 共用一份；插件**�
 
     build.mjs              esbuild 构建脚本（种子模块 / 外置清单）
     cordis.patch.yml       插件交给 DSH 的装配声明（只 insert，不写 config）
-    scripts/               打包、测试 profile 启停、客户端热同步、接口冒烟、截图
+    scripts/               打包、测试 profile 启停与 link 暂存、客户端热同步、接口冒烟、截图
     src/host/              宿主半：平台外壳 + skills-local / skills-remote / mcp-config / mcp-runtime
-    src/client/            客户端半：外壳、技能 / MCP / 运行态三个标签页、共用 UI kit
+    src/client/            客户端半：外壳、技能 / MCP 两个标签页（运行中区域在 runtime/）、共用 UI kit
     test/                  node:test 单测 + MCP 运行时集成测试 + 夹具
     docs/                  开发指南、客户端指南、宿主 primitives 参考、设计决策、界面规范
 

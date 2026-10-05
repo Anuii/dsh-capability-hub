@@ -1,6 +1,6 @@
 # PRIMITIVES — 宿主 UI 组件与主题变量参考
 
-> 面向 `dsh-capability-hub` 三个标签页（技能 / MCP 服务器 / 运行态）的作者。
+> 面向 `dsh-capability-hub` 两个标签页（技能 / MCP，MCP 页底部含「运行中」区域）的作者。
 > 结论来自 asar 内**已发布产物**的静态阅读（无类型声明可读，props 一律从 JSDoc 与解构签名还原）。版本：`@deepseek-ai/dsh-client-ui-primitives` 0.2.0-rc.2，DSH 0.2.0-rc.2 / Windows。
 
 ## 路径速记（下文全部用这三个别名）
@@ -248,7 +248,7 @@ React.createElement(MarkdownText, { text: skill.description, variant: "compact" 
 
 ### settings-form 四件套（`[PRIM]:6918 / 6973 / 7052 / 7166`）
 
-> 这三个标签页**大概率不需要**它：它服务于"插件设置页"（Host settings 命名空间），需要 `ctx.configForms` 与 `ctx.remote`。仅当能力中心要编辑某个 settings 命名空间时才用。
+> 能力中心的标签页**大概率不需要**它：它服务于"插件设置页"（Host settings 命名空间），需要 `ctx.configForms` 与 `ctx.remote`。仅当能力中心要编辑某个 settings 命名空间时才用。
 
 `SettingsForm` props：`state`、`labels`、`children`、`onSave`、`onDiscard`。
 - `state` 形状（由 `SettingsFormModel.shell()` 产出，`[PRIM]:7190-7201`）：`{ available, writable, dirty, invalid, saving, failed }`；`labels` 形状（实测 `dsh-client-ui-settings-subagent\lib\client.js:94-102`）：`{ unavailable, readOnly, saveFailed, save, saving }`

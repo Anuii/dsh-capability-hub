@@ -1,6 +1,6 @@
 # CLIENT-GUIDE — 怎么写一个能力中心的标签页
 
-面向「拿到任务就要写技能页 / MCP 页 / 运行态页」的人。读完这份就能动手，不用翻 DSH 源码。
+面向「拿到任务就要写技能页 / MCP 页（含底部「运行中」区域）」的人。读完这份就能动手，不用翻 DSH 源码。
 （文中用「」标注代码标识符。）
 
 ---
@@ -47,13 +47,13 @@
 
 > **动手写界面之前先读第 10 节「kit 使用说明」**：列表、工具栏、抽屉、
 > 标记、横幅、空状态、骨架屏都由 `src\client\shell\kit\` 提供，标签页**只通过 kit 拼界面**，
-> 不要再自己写一遍这些样式（否则三个标签又会各长一套样子）。
+> 不要再自己写一遍这些样式（否则各个标签又会各长一套样子）。
 
 **第 1 步：在**你自己标签页的目录**下写组件**（不要在 shell 里堆）：
 
     src\client\skills\    ← 技能标签（入口 index.tsx 导出 SkillsTab，字典 strings.ts）
     src\client\mcp\       ← MCP 服务器标签（入口 index.tsx 导出 McpTab）
-    src\client\runtime\   ← 运行态标签（入口 index.tsx 导出 RuntimeTab）
+    src\client\runtime\   ← MCP 页底部的「运行中」区域（入口 index.tsx 导出 RunningSection，由 mcp/index.tsx 渲染；0.3.0 起不再是独立标签）
 
 每个标签页**自带一份 strings.ts**（key 前缀用 skills.* / mcp.* / runtime.*，互不打扰），
 外壳的 src\client\shell\strings.ts 只放外壳自己的文案（页面标题、标签名、环境卡片）。
@@ -88,8 +88,8 @@
 定义在 `src\client\shell\tab-props.ts`，**形状已经冻结**
 （只能加可选字段，不能改已有字段的语义）：
 
-    /** 三个标签的 id。 */
-    export type PanelTab = "skills" | "mcp" | "runtime";
+    /** 标签 id（0.3.0 起只有两个）。 */
+    export type PanelTab = "skills" | "mcp";
 
     /** 标签页组件收到的 props（panel.tsx 传给它引入的每一个标签组件）。 */
     export interface TabProps {
@@ -107,8 +107,8 @@
     export function SkillsTab(props: TabProps): React.ReactElement { ... }
 
 - `workspace` 来自 slot 标准 prop `useSessions`（见第 4 节），技能页拿它找项目级技能根；
-- `sessionId` 来自同一份快照，运行态页按会话过滤实例时用；
-- `openTab` 是外壳的切标签回调，稳定可调用（例如「保存成功 → 去看运行态」）。
+- `sessionId` 来自同一份快照，「运行中」区域的「只看当前会话」用它过滤实例；
+- `openTab` 是外壳的切标签回调，稳定可调用。
 
 **硬性规则**
 
@@ -223,7 +223,7 @@
 
 ### 10.1 这是什么、为什么必须用
 
-`src\client\shell\kit\` 是三个标签页共用的 UI 组件层，实现的是这套界面的视觉规范：
+`src\client\shell\kit\` 是各标签页共用的 UI 组件层，实现的是这套界面的视觉规范：
 安静、一处一事、只在需要时出现、一个强调色。
 
 它替你做了三件容易做砸的事：
@@ -314,16 +314,17 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 
 ### 10.3 组件与 props（全量）
 
-**`Toolbar({ search?, filters?, primary?, more?, start?, end?, testId? })`**
-一行工具栏：`start` · 搜索 · 筛选分段 ·〔弹性空白〕· `end` · 主按钮 · `⋯`。
+**`Toolbar({ search?, filters?, afterFilters?, primary?, more?, start?, end?, testId? })`**
+一行工具栏：`start` · 搜索 · 筛选分段 · `afterFilters` ·〔弹性空白〕· `end` · 主按钮 · `⋯`。
 
 | 字段 | 说明 |
 |---|---|
 | `search` | `{ value, onChange(value), placeholder?, testId? }`，不传就没有搜索框 |
-| `filters` | `{ items: { id, label, count? }[], value, onChange(id), label? }`；`count` 显示成后面的小数字。**分段 testid**：给了工具栏 `testId` 时是 `<testId>-filter-<id>`，否则是 `kit-filter-<id>`（三个标签同时挂载，不带前缀会撞车） |
+| `filters` | `{ items: { id, label, count? }[], value, onChange(id), label? }`；`count` 显示成后面的小数字。**分段 testid**：给了工具栏 `testId` 时是 `<testId>-filter-<id>`，否则是 `kit-filter-<id>`（两个标签同时挂载，不带前缀会撞车） |
 | `primary` | `{ label, onClick, testId? }` 或 `{ label, menu: MenuItem[], testId? }`；**只有它是强调色按钮** |
 | `more` | `MenuItem[]`，渲染成右侧「⋯」 |
-| `start` / `end` | 两端塞自定义内容（例如运行态页的「只看当前会话」开关） |
+| `afterFilters` | 紧跟分段之后的额外筛选（例如技能页的「目录」下拉，用原生 `<select className={kit.select}>`） |
+| `start` / `end` | 两端塞自定义内容（例如仓库视图的「上次扫描 · 刷新」） |
 
 **`MenuItem`**（`Toolbar.primary.menu` / `Toolbar.more` / `MoreMenu.items` 通用）：
 `{ id?, label, hint?, onClick?, danger?, disabled?, separatorBefore?, info?, testId? }`。
@@ -332,16 +333,22 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 **`ListSurface({ children, testId? })`**
 列表容器，只负责纵向排列若干 `ListGroup`（间距 24）。
 
-**`ListGroup({ title?, meta?, metaTitle?, headTitle?, count?, badges?, children, testId? })`**
+**`ListGroup({ title?, meta?, metaTitle?, headTitle?, count?, badges?, end?, expanded?, onToggle?, nested?, depth?, children, testId? })`**
 分组：标题行是 12/500 次要色小字；`meta` 用等宽字体（路径 / 命令）；`badges` 放右侧
-标记（例如只读根的「只读」）；`count` 是最右的数字。
+标记（例如 DSH 内置的「只读」）；`count` 是最右的数字。
+
+- **可折叠**：给了 `onToggle`，整条标题行就是一个按钮（前面有旋转的「›」，Tab 聚焦、Enter / Space 切换、`aria-expanded`），
+  折叠时不渲染内容；展开状态由调用方用 `expanded` 持有（缺省视为展开）。折叠按钮的 testid 是 `<testId>-toggle`；
+- `end`：标题行最右侧的控件（例如「运行中」的「只看当前会话」与刷新），点它不会触发折叠；
+- **嵌套**：`nested: true` 表示 children 是若干子分组而不是行；子分组传 `depth: 1`（无外框、标题行缩进、底色更浅）。
+  技能页的「层级 → 来源仓库」与「运行中」的会话分组都这样拼。
 
 - **`title` 可选**：不传时整条标题行都不渲染，只留面板外观（圆角 / 边框 / 底色）——
   只有一组时用这个（MCP 页）；
 - `metaTitle` 是 `meta` 的悬停提示（默认等于 `meta`）；没有 `meta` 时用 `headTitle` 把说明挂到标题行上。
 
 **`ListFoot({ text, action?, testId?, textTestId? })`**
-列表脚注：一行次要色小字 + 一个可选的文字按钮（技能页的「另有 N 个空的技能目录 · 显示」）。
+列表脚注：一行次要色小字 + 一个可选的文字按钮（仓库视图的「再显示 200 个」）。
 `action` = `{ label, onClick, testId?, expanded? }`，`expanded` 落到 `aria-expanded` 上。
 
 **`ListRow({ ... })`** —— 一次只回答「这是什么、开没开」
@@ -353,6 +360,7 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 | `subtitleMono` | boolean? | 副标题用等宽（路径 / 命令） |
 | `subtitleTone` | `"default"｜"danger"｜"warn"`? | 副标题语义色（失败信息用 danger） |
 | `leading` | `StatusTone` 或 node? | 传 `"idle"｜"active"｜"failed"｜"cooling"` 会渲染状态点；传节点则原样渲染 |
+| `tag` | `{ text, title?, testId? }`? | 标题后的一枚淡色等宽小字（技能的目录标签、仓库视图里的仓库名）；比标记更弱，不算进「最多 2 个」 |
 | `badges` | node[]? | **最多显示 2 个**（多的自动截掉）。用 `Badge` 造：`tone` 取 neutral/accent/warn/danger |
 | `trailing` | node? | 行尾控件（通常是一个 `Switch`）；**点它不会触发 `onOpen`** |
 | `hoverActions` | `{ label, onClick, danger?, testId? }[]`? | 悬停 / 键盘聚焦时才淡入的文字按钮 |
@@ -368,10 +376,13 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 
 **`StatusDot({ tone, title?, testId? })`**：直径 7px 的圆点。
 `tone` = `idle`（灰，默认）/ `active`（强调色，有活跃实例）/ `failed`（红，最近失败）/
-`cooling`（琥珀，冷却中）。**只在 MCP 与运行态用**。
+`cooling`（琥珀，冷却中）。**只在 MCP 页（含「运行中」区域）用**。
+
+**原生控件的 kit 样式**：`kit.select`（安静的下拉，与分段同高；`data-active` 表示筛选生效）、
+`kit.check`（行首勾选框，中性色；宿主 `Checkbox` 的 label 是可见文字，放在行首会与标题重复，所以列表行里用原生勾选框 + `aria-label`）。
 
 **`Drawer({ open, title, subtitle?, subtitleTitle?, headerEnd?, onClose, footer?, width?, testId?, children })`**
-从右侧滑出的详情抽屉（宽 560px，窄屏 100%；`width` 可覆盖，安装抽屉用 720）。
+从右侧滑出的详情抽屉（宽 560px，窄屏 100%；`width` 可覆盖，仓库视图用 860）。
 `subtitle` **单行截断**，完整内容放进 `subtitleTitle`（省略时用 `subtitle`）——路径被缩写成 `~\…` 时就靠它给全路径。
 
 - 头部：标题 + 等宽副标题 + `headerEnd`（通常放开关）+ 关闭按钮；`testId` 生成
@@ -404,7 +415,7 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles`，一整张 
 > **菜单项的 `data-testid`**：宿主 `MenuItemButton` 不透传未知 props，所以 kit 把菜单项文字包了一层
 > `<span data-testid=...>`，testid 挂在 **span** 上（点它等于点菜单项）。走查脚本按 `testId ?? id` 找它。
 
-**`RefreshIcon({ className? })`**：刷新字形（环形箭头）。运行态页原来在自己目录里手画了一份，现已收进 kit。
+**`RefreshIcon({ className? })`**：刷新字形（环形箭头）。「运行中」区域的刷新按钮用它。
 
 **工具函数**
 `countByPredicates(items, predicates)` 算分段里的 `count`；

@@ -306,7 +306,7 @@ HttpOnly + SameSite=Strict 的签名 cookie（绑定 Host 头的 authority）。
     curl.exe -s -o NUL -c jar.txt "http://127.0.0.1:19411/?token=<令牌>"
     curl.exe -s -b jar.txt "http://127.0.0.1:19411/api/dsh-capability-hub/health"
 
-端到端冒烟（技能 / MCP 配置 / 运行态 / health 全链路）：
+端到端冒烟（技能 / MCP 配置 / 运行时 / health 全链路）：
 
     pwsh -NoProfile -File scripts\smoke-stage-b.ps1
 
@@ -363,10 +363,15 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 
     node scripts\ui-shot.mjs --out <仓库根>\.dev\shots
     node scripts\ui-shot-kit.mjs --out <仓库根>\.dev\shots\ui0
+    node scripts\ui-shot-pages.mjs [--suffix v2]               # 真实页面的亮色 / 暗色验收截图（UI-DESIGN 第 5 节）
 
 脚本自己从启动日志里取令牌，用 Edge headless + CDP 打开页面：关掉「预览版说明」模态框 →
-点开侧栏「能力中心」→ 依次切三个标签（每步一张 PNG）→ 读取 DOM 事实写成 `facts.json`。
+点开侧栏「能力中心」→ 依次切两个标签（每步一张 PNG）→ 读取 DOM 事实写成 `facts.json`。
 `ui-shot-kit.mjs` 额外拍 kit 预览的亮色 / 暗色 / 悬停 / 抽屉态。
+`ui-shot-pages.mjs` 拍技能页（默认 / 展开 DSH 内置并悬停）、仓库视图（默认 / 展开仓库列表并勾选）、
+MCP 页（含「运行中」区域的真实空状态，以及 `?hubPreviewRunning=1` 的示例实例）与服务器抽屉，
+亮色暗色各一张，并在 `pages-facts.json` 里统计每行未悬停时可见的控件数与彩色元素。
+测试 profile 里没有活跃实例（走查不新建会话），所以「运行中」有数据的样子只能看预览数据。
 
 两个坑：
 
@@ -375,7 +380,7 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 - Edge 首次启动会有「预览版说明」模态框挡住页面，截图前要先点掉。
 
 诊断信息只在「ⓘ」模态框里存在（默认折叠 / 关闭时 DOM 里**没有**
-`[data-testid=capability-hub-env]`），读它的脚本必须先点开。三个标签是**同时挂载**的
+`[data-testid=capability-hub-env]`），读它的脚本必须先点开。两个标签是**同时挂载**的
 （切换只改 `hidden`），判断可见性请读 `hidden` 属性。
 
 默认不新建会话（要新建传 `--new-session`）：profile 与桌面版可能共用 `~/.dsh` 的会话存储，
@@ -407,7 +412,7 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
       package.json           files 白名单 = 打包内容
       src/
         host/                宿主半：平台外壳 + skills-local / skills-remote / mcp-config / mcp-runtime
-        client/              客户端半：外壳、三个标签页、共用 UI kit
+        client/              客户端半：外壳、技能 / MCP 两个标签页（运行中区域在 runtime/）、共用 UI kit
       test/                  node:test 单测 + 集成测试 + 夹具
       scripts/               开发脚本：打包、测试 profile、link 暂存、热同步、冒烟、截图
       docs/                  开发文档、客户端指南、宿主 primitives 参考、设计决策
