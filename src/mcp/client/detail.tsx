@@ -18,7 +18,7 @@ import {
   lifecycleLabel,
   transportLabel,
   viewSummaryText,
-} from "./model.ts";
+} from "./view-model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import { Button } from "@deepseek-ai/dsh-client-ui-primitives";

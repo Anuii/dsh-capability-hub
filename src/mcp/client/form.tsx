@@ -14,15 +14,8 @@ import { Banner, Section } from "../../kit/index.ts";
 import { serverFormApi } from "./data.ts";
 import { createServerFormStore } from "./server-form-store.ts";
 import { ArrayField, FieldShell, NumberField, RecordField, SelectField, SwitchField, TextField } from "./fields.tsx";
-import {
-  draftHas,
-  draftMeta,
-  draftValue,
-  errorsFor as errorsOf,
-  lifecycleLabel,
-  numericText,
-  type ServerDraft,
-} from "./model.ts";
+import { draftHas, draftMeta, draftValue, errorsFor as errorsOf, numericText, type ServerDraft } from "./draft.ts";
+import { lifecycleLabel } from "./view-model.ts";
 import { useStoreState } from "../../kit/index.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";

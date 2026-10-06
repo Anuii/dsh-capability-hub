@@ -13,7 +13,7 @@
  *   - runtime-store.ts：运行状态（轮询与重读都在里面）；
  *   - 本文件：把两个仓库接到界面上——列表与抽屉的路由、确认对话框的开合、错误边界；
  *   - list.tsx / detail.tsx / form.tsx / json.tsx / settings.tsx / dialogs.tsx / intake/*：视图；
- *   - model.ts：纯逻辑；data.ts：接口封装；strings.ts：全部文案。
+ *   - draft.ts：编辑逻辑（草稿、校验、错误映射）；view-model.ts：列表与展示逻辑；data.ts：接口封装；strings.ts：全部文案。
  *
  * 决策落点：D-C1（只存改过的字段）、D-C2（四种添加入口）、D-C3（高级区覆盖全部字段 + JSON 模式，
  * 未知字段被服务端拒绝）、D-C4（保存时只查 PATH）、D-C5（每个服务器单独启停；env/headers 默认遮罩，
@@ -48,22 +48,18 @@ import { DeleteServerDialog } from "./dialogs.tsx";
 import { JsonEditor } from "./json.tsx";
 import { ServerForm } from "./form.tsx";
 import { ServerList } from "./list.tsx";
+import { draftFromValues, draftFromView, draftToJsonText, emptyServerDraft, type ServerDraft } from "./draft.ts";
 import {
   SERVER_FILTERS,
   activeInstanceCount,
   cooldownRemainingMs,
-  draftFromValues,
-  draftFromView,
-  draftToJsonText,
-  emptyServerDraft,
   filterLabel,
   runtimeIndex,
   serverFilterCounts,
   viewSummaryText,
   visibleServers,
-  type ServerDraft,
   type ServerFilterId,
-} from "./model.ts";
+} from "./view-model.ts";
 import { SettingsPanel } from "./settings.tsx";
 import { injectMcpStyles, styles } from "./styles.ts";
 import { t } from "./strings.ts";

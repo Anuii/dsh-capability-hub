@@ -22,7 +22,7 @@ import {
   withMetaField,
   withoutField,
   type ServerDraft,
-} from "./model.ts";
+} from "./draft.ts";
 import { t } from "./strings.ts";
 import { errorText } from "../../shared/error-text.ts";
 import type { CommandCheckResult, FieldError, ServerView, Transport, UpsertResult } from "../contract/config.ts";

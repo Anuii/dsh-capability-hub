@@ -2,11 +2,11 @@
  * 运行态纯逻辑单测（不碰 DOM / React / 网络）。
  *
  * 覆盖：实例状态映射与行副标题、会话过滤（当前会话 + 子会话）、排序与父子分组、实例计数。
- * 时间、时长、冷却的格式化与 MCP 页共用，测在 ../model.test.ts。
+ * 时间、时长、冷却的格式化与 MCP 页共用，测在 ../view-model.test.ts。
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formatClock } from "../../../../src/mcp/client/model.ts";
+import { formatClock } from "../../../../src/mcp/client/view-model.ts";
 import {
   filterSessions,
   instanceStateText,

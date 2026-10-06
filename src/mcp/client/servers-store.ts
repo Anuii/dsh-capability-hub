@@ -14,7 +14,7 @@
  */
 
 import { createStore, type Store } from "../../kit/store.ts";
-import { reorderNames } from "./model.ts";
+import { reorderNames } from "./view-model.ts";
 import { t } from "./strings.ts";
 import { errorText } from "../../shared/error-text.ts";
 import type { ConfigPayload, McpSettings, ServerView } from "../contract/config.ts";

@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServerFormStore, type ServerFormAdapter } from "../../../src/mcp/client/server-form-store.ts";
-import { draftFromView, emptyServerDraft, withField, type ServerDraft } from "../../../src/mcp/client/model.ts";
+import { draftFromView, emptyServerDraft, withField, type ServerDraft } from "../../../src/mcp/client/draft.ts";
 import { HIDDEN } from "../../../src/mcp/rules/server.ts";
 import type { UpsertResult } from "../../../src/mcp/contract/config.ts";
 import { makeServerView } from "./fixtures.ts";

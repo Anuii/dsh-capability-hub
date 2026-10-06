@@ -12,7 +12,7 @@ import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../kit/index.ts";
 import { upsertServer } from "./data.ts";
 import { parseServerInput } from "../rules/server.ts";
-import { fieldErrorsOf, parseJsonServer } from "./model.ts";
+import { fieldErrorsOf, parseJsonServer } from "./draft.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { FieldError, ServerView } from "../contract/config.ts";

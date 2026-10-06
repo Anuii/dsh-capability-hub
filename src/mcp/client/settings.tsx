@@ -19,7 +19,7 @@ import {
   withSetting,
   withoutSetting,
   type SettingsDraft,
-} from "./model.ts";
+} from "./draft.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { McpSettings } from "../contract/config.ts";

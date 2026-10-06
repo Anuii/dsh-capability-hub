@@ -1,11 +1,11 @@
 /**
  * 「运行中」区域的**纯逻辑**：实例状态与行文案、会话过滤 / 排序 / 分组、实例计数。
  * 不碰 DOM、不碰 React、不发请求，node:test 直接测（见 test/mcp/client/running/model.test.ts）。
- * 文案一律走 strings.ts 的 t()；时间格式化与 MCP 页共用 ../model.ts 的 formatClock。
+ * 文案一律走 strings.ts 的 t()；时间格式化与 MCP 页共用 ../view-model.ts 的 formatClock。
  */
 
 import { t } from "./strings.ts";
-import { formatClock } from "../model.ts";
+import { formatClock } from "../view-model.ts";
 import type { RuntimeInstanceView, RuntimeSessionView } from "../../contract/runtime.ts";
 
 /** 状态点的语义色调（与 kit 的 StatusTone 同形，这里不 import React 侧模块）。 */

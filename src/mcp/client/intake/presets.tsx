@@ -10,7 +10,7 @@ import * as React from "react";
 import { Button, CodeBlock } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner, SkeletonRows } from "../../../kit/index.ts";
 import { fetchPresets } from "../data.ts";
-import { draftFromValues, type ServerDraft } from "../model.ts";
+import { draftFromValues, type ServerDraft } from "../draft.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { PresetView } from "../../contract/config.ts";

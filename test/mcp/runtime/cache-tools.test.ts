@@ -2,7 +2,7 @@
  * FIX-9：\`GET mcp/runtime\` 的 \`servers[].cache.tools\`。
  *
  * 界面规范（docs/UI-DESIGN.md §5）要求 MCP 详情抽屉的「工具」一节列出**缓存的工具名**，
- * 客户端按可选字段 \`cache.tools[].name\` 已经实现好展示（src/mcp/client/model.ts 的 cachedToolNames），
+ * 客户端按可选字段 \`cache.tools[].name\` 已经实现好展示（src/mcp/client/view-model.ts 的 cachedToolNames），
  * 缺的只是宿主数据。清单必须与 search 看到的是**同一份**：同一套 includeTools / excludeTools 读侧过滤。
  *
  * 覆盖：过滤（include / exclude / 两者叠加 / 限定名）、按名称排序、description 只取第一行并截断、

@@ -19,7 +19,7 @@ import {
   rowSubtitleTitle,
   serverStatusTone,
   statusTitle,
-} from "./model.ts";
+} from "./view-model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { RuntimeServerView, RuntimeStatus } from "../contract/runtime.ts";
