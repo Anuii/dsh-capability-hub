@@ -17,3 +17,8 @@
 - 仓库视图：`skills/client/remote/repo-view-store.ts`（输入框、临时浏览、仓库列表编辑、汇总筛选与分批、勾选与安装），`install-view.tsx` 只渲染。
 - 技能页：`skills/client/skills-store.ts`（列表、回收站、启停 / 删除 / 恢复 / 彻底删除）；对话框与 Toast 仍在组件里——写操作返回 `{ ok, message, fieldErrors, conflict? }`，组件据此决定关不关对话框。
 - 来源与更新的共享状态（`remote/store.ts`）改为建在 `createStore` 之上，删掉了它自己的订阅实现与 `use-store.ts`。
+
+## 第二批（0.5.0）
+- MCP 页：`mcp/client/servers-store.ts`（配置读取、启停、排序、删除、刷新缓存、断开实例、保存后等工具数、页面提示——Toast 也由仓库给出 `notice`）与 `server-form-store.ts`（草稿、错误显示、检查命令、显示遮罩值、保存）；`model.ts` 拆成 `draft.ts`（编辑）与 `view-model.ts`（列表与展示）。
+- 技能详情的「来源」：`skills/client/remote/source-flow.ts`，一个技能一份流程。
+- 操作流程的验收补上 `scripts/ui-walk-mcp.mjs` 与 `ui-walk-skills.mjs`（无头浏览器真实点击）。

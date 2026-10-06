@@ -150,7 +150,7 @@ panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab` 与 `mcp/client
 - 路径**文档相对**（不带前导 /），前缀固定 api/dsh-capability-hub/；
 - 服务端统一信封 { ok: true, data } / { ok: false, error: { code, message, details } }，
   api 客户端解信封并把 error 抛成 ApiError（带 code/details）；VALIDATION 的 details 是 `FieldError[]`（`platform/contract/host.ts`）；
-- 错误转文字一律用 `src/shared/error-text.ts` 的 `errorText`；
+- 错误转文字一律用 `src/shared/error-text.ts` 的 `errorText`；错误码与逐字段错误用 `api.ts` 的 `errorCodeOf` / `fieldErrorsOf`（不要按文案猜）；
 - 401 会被翻译成「未通过 DSH 的浏览器鉴权」；404 会提示「升级后需要重启 DSH」；
 - 鉴权由 DSH 负责：接口挂在 /api 之下，继承签名 cookie，同源 fetch 自动带上。
 

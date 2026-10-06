@@ -45,11 +45,11 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 
 `platform/client/index.tsx` 导出 `apply`：注入样式、注册侧栏行与中央面板。面板（`panel.tsx`）同时挂载技能页与 MCP 页，切换只改 `hidden`。每个页面分三层（ADR-0005）：
 
-- **规则**：视图模型（如 `skills/client/row.ts`「一行技能长什么样」）与状态仓库（如 `mcp/client/runtime-store.ts`、`skills/client/remote/repo-view-store.ts`、`skills/client/skills-store.ts`），不碰 React，经数据 adapter 访问宿主，单测用内存 fake；
-- **数据**：`data.ts` 调 `api.get / api.post`，补成安全形状，类型来自契约；
+- **规则**：视图模型（如 `skills/client/row.ts`「一行技能长什么样」、`mcp/client/view-model.ts`）与状态仓库（技能页 `skills-store.ts`、仓库视图 `remote/repo-view-store.ts`、来源 `remote/source-flow.ts`；MCP 页 `servers-store.ts`、服务器表单 `server-form-store.ts`、运行状态 `runtime-store.ts`），不碰 React，经数据 adapter 访问宿主，单测用内存 fake；
+- **数据**：`data.ts` 调 `api.get / api.post`，补成安全形状，类型来自契约；接口错误的错误码与逐字段错误用 `api.ts` 的 `errorCodeOf` / `fieldErrorsOf` 解析；
 - **组件**：JSX（ADR-0003），只订阅仓库、渲染 kit 组件、转发用户操作。
 
-样式写在 TS 里、紧挨组件（ADR-0004）；文案在各页的 `strings.ts`。渲染效果靠 `scripts/ui-shot-pages.mjs` 的亮 / 暗截图与审计验收，不引入 DOM 测试库。
+样式写在 TS 里、紧挨组件（ADR-0004）；文案在各页的 `strings.ts`（`t` 由 kit 的 `createTranslator` 生成）。不引入 DOM 测试库：渲染效果靠 `scripts/ui-shot-pages.mjs` 的亮 / 暗截图与审计，操作流程靠 `scripts/ui-walk-*.mjs` 在无头浏览器里真实点击。
 
 ## 想改某样东西，先看哪里
 
@@ -62,6 +62,8 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 | MCP 服务器能填哪些字段、怎么校验 | `mcp/rules/server.ts`（宿主与表单共用） |
 | mcp 工具的某个动作 | `mcp/runtime/actions/`；冷却规则在 `failures.ts` |
 | MCP 页的状态点、红点、「运行中」 | `mcp/client/runtime-store.ts`（唯一的运行状态读取处） |
+| MCP 页的启停、排序、删除、保存后的提示 | `mcp/client/servers-store.ts`；表单流程在 `server-form-store.ts`，草稿与校验在 `draft.ts` |
+| 技能「来源」的推测与登记 | `skills/client/remote/source-flow.ts` |
 | 新接口 | 宿主模块的 routes + `contract/` 里的形状 + 客户端 `data.ts` |
 
 决策：产品决策在 [DECISIONS.md](DECISIONS.md)，架构决策在 [adr/](adr/)。
