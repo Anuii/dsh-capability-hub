@@ -7,20 +7,19 @@
  *   平铺 .md 技能 → 直接说明不支持，不发任何请求。
  *
  * 行里**不再**显示任何来源标记（UI-DESIGN §4：一行只说「这是什么、开没开」）。
+ * 推测 / 登记 / 取消登记的流程在 source-flow.ts（可单测），这里只渲染。
  */
 
 import * as React from "react";
-import type { FieldError } from "../../../platform/contract/host.ts";
 import { Button, Checkbox, Input } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, KeyValue, useStoreState } from "../../../kit/index.ts";
-import { ensureSources, reloadSources } from "./cache.ts";
-import { discoverSources, registerSource, unregisterSource } from "./data.ts";
+import { ensureSources, sourceFlowApi } from "./cache.ts";
+import { createSourceFlow } from "./source-flow.ts";
 
 import { remoteStore } from "./store.ts";
 import { SkillUpdateSection } from "./update.tsx";
 import {
   candidateKey,
-  candidateSkillPath,
   confidenceBadgeTone,
   confidenceLabel,
   findSourceFor,
@@ -30,14 +29,11 @@ import {
   sourceTitle,
   storeLabel,
 } from "./model.ts";
-import { fieldErrors, formatDateTime } from "../format.ts";
+import { formatDateTime } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
 import type { DiscoverCandidate } from "../../contract/remote.ts";
-import { errorText } from "../../../shared/error-text.ts";
-
-type Step = "view" | "discover" | "manual" | "unregister";
 
 export interface SkillSourceSectionProps {
   skill: SkillSummary;
@@ -52,129 +48,34 @@ export interface SkillSourceSectionProps {
 export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactElement {
   const { skill, workspace } = props;
   const state = useStoreState(remoteStore.state);
-  const [step, setStep] = React.useState<Step>("view");
-  const [candidates, setCandidates] = React.useState<DiscoverCandidate[] | undefined>(undefined);
-  const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set<string>());
-  const [busy, setBusy] = React.useState<boolean>(false);
-  const [error, setError] = React.useState<string | undefined>(undefined);
-  const [errors, setErrors] = React.useState<readonly FieldError[]>([]);
-  const [done, setDone] = React.useState<string | undefined>(undefined);
-  const [repo, setRepo] = React.useState<string>("");
-  const [ref, setRef] = React.useState<string>("");
-  const [skillPath, setSkillPath] = React.useState<string>("");
+  const onChanged = React.useRef(props.onChanged);
+  onChanged.current = props.onChanged;
+  // 一个技能一份流程：列表重读后 skill 对象会换，但只要还是这个技能，流程（与「已登记」那句结果）就不重置
+  const { id: skillId, dirName } = skill;
+  const flow = React.useMemo(
+    () =>
+      createSourceFlow(sourceFlowApi, {
+        skill: { id: skillId, dirName },
+        workspace,
+        onChanged: () => onChanged.current?.(),
+      }),
+    [skillId, dirName, workspace],
+  );
+  const { step, candidates, selected, busy, error, errors, done, manual } = useStoreState(flow.state);
 
   React.useEffect(() => {
     void ensureSources(workspace);
   }, [workspace]);
 
-  const flat = isFlatSkill(skill);
   const entry = findSourceFor(skill, state.sources);
 
-  if (flat) {
+  if (isFlatSkill(skill)) {
     return (
       <p className={styles.note} data-testid={"skills-remote-flat-source-" + skill.id}>
         {flatUnsupportedText()}
       </p>
     );
   }
-
-  const back = (): void => {
-    setStep("view");
-    setCandidates(undefined);
-    setSelected(new Set<string>());
-    setError(undefined);
-    setErrors([]);
-  };
-
-  const runDiscover = (): void => {
-    setStep("discover");
-    setDone(undefined);
-    setBusy(true);
-    setError(undefined);
-    setErrors([]);
-    void discoverSources([skill.id], workspace).then(
-      (list) => {
-        setCandidates(list);
-        setSelected(new Set(list.map((item) => candidateKey(item))));
-        setBusy(false);
-      },
-      (failure: unknown) => {
-        setCandidates([]);
-        setErrors(fieldErrors(failure));
-        setError(errorText(failure));
-        setBusy(false);
-      },
-    );
-  };
-
-  const doRegister = (input: { repo: string; ref?: string; skillPath?: string }): void => {
-    setDone(undefined);
-    setBusy(true);
-    setError(undefined);
-    setErrors([]);
-    void registerSource({ skillId: skill.id, ...input }, workspace).then(
-      (stored) => {
-        remoteStore.upsertSource(stored);
-        setBusy(false);
-        setStep("view");
-        setCandidates(undefined);
-        setDone(t("skills.remote.source.registered", { repo: sourceRepoRef(stored) }));
-        props.onChanged?.();
-      },
-      (failure: unknown) => {
-        setErrors(fieldErrors(failure));
-        setError(errorText(failure));
-        setBusy(false);
-      },
-    );
-  };
-
-  const doRegisterSelected = (): void => {
-    const picked = (candidates ?? []).filter((item) => selected.has(candidateKey(item)));
-    const first = picked[0];
-    if (first === undefined) {
-      setError(t("skills.remote.source.pickOne"));
-      return;
-    }
-    doRegister({
-      repo: first.repo,
-      ...(first.ref === undefined ? {} : { ref: first.ref }),
-      skillPath: candidateSkillPath(first, skill.dirName),
-    });
-  };
-
-  const doUnregister = (): void => {
-    setDone(undefined);
-    setBusy(true);
-    setError(undefined);
-    setErrors([]);
-    void unregisterSource(skill.id, workspace).then(
-      () => {
-        remoteStore.removeSource(skill.id);
-        setBusy(false);
-        setStep("view");
-        setDone(t("skills.remote.source.unregisterDone"));
-        props.onChanged?.();
-        void reloadSources(workspace);
-      },
-      (failure: unknown) => {
-        setErrors(fieldErrors(failure));
-        setError(errorText(failure));
-        setBusy(false);
-      },
-    );
-  };
-
-  const openManual = (): void => {
-    setStep("manual");
-    setError(undefined);
-    setErrors([]);
-    setRepo(entry?.repo ?? "");
-    setRef(entry?.ref ?? "");
-    // 默认给「<目录名>/SKILL.md」：仓库根级的 SKILL.md 会被宿主派生成错误的 skillId，
-    // 界面上也说不清是哪个技能，所以默认写成带目录的形式（用户可改）。
-    setSkillPath(entry?.skillPath ?? `${skill.dirName}/SKILL.md`);
-  };
 
   const body: React.ReactNode[] = [];
   if (state.sourcesError !== undefined) {
@@ -236,7 +137,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         variant="ghost"
         disabled={busy}
         data-testid="skills-remote-source-discover"
-        onClick={runDiscover}
+        onClick={() => void flow.discover()}
       >
         {t("skills.remote.source.discover")}
       </Button>,
@@ -248,7 +149,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         variant="ghost"
         disabled={busy}
         data-testid="skills-remote-source-manual"
-        onClick={openManual}
+        onClick={() => flow.openManual(entry)}
       >
         {t("skills.remote.source.manual")}
       </Button>,
@@ -277,14 +178,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
                   checked={selected.has(candidateKey(candidate))}
                   label={candidate.skillId}
                   className={styles.candidateLabel}
-                  onChange={(next: boolean) =>
-                    setSelected((previous) => {
-                      const set = new Set(previous);
-                      if (next) set.add(candidateKey(candidate));
-                      else set.delete(candidateKey(candidate));
-                      return set;
-                    })
-                  }
+                  onChange={(next: boolean) => flow.toggleCandidate(candidate, next)}
                 />
                 <Badge tone={confidenceBadgeTone(candidate.confidence)}>{confidenceLabel(candidate.confidence)}</Badge>
                 <span className={styles.candidateMain}>
@@ -305,7 +199,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         variant="outline"
         disabled={busy}
         data-testid="skills-remote-register-cancel"
-        onClick={back}
+        onClick={() => flow.back()}
       >
         {t("skills.cancel")}
       </Button>,
@@ -317,7 +211,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         variant="primary"
         disabled={busy || selected.size === 0}
         data-testid="skills-remote-register-confirm"
-        onClick={doRegisterSelected}
+        onClick={() => void flow.registerSelected()}
       >
         {t("skills.remote.source.register")}
       </Button>,
@@ -336,27 +230,27 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         {field(
           t("skills.remote.form.repo"),
           <Input
-            value={repo}
+            value={manual.repo}
             placeholder={t("skills.install.repoPlaceholder")}
             data-testid="skills-remote-manual-repo"
-            onChange={(event: { target: { value: string } }) => setRepo(event.target.value)}
+            onChange={(event: { target: { value: string } }) => flow.setManual("repo", event.target.value)}
           />,
         )}
         {field(
           t("skills.remote.form.ref"),
           <Input
-            value={ref}
+            value={manual.ref}
             placeholder={t("skills.install.refPlaceholder")}
             data-testid="skills-remote-manual-ref"
-            onChange={(event: { target: { value: string } }) => setRef(event.target.value)}
+            onChange={(event: { target: { value: string } }) => flow.setManual("ref", event.target.value)}
           />,
         )}
         {field(
           t("skills.remote.form.skillPath"),
           <Input
-            value={skillPath}
+            value={manual.skillPath}
             data-testid="skills-remote-manual-skillpath"
-            onChange={(event: { target: { value: string } }) => setSkillPath(event.target.value)}
+            onChange={(event: { target: { value: string } }) => flow.setManual("skillPath", event.target.value)}
           />,
         )}
       </div>,
@@ -369,7 +263,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         variant="outline"
         disabled={busy}
         data-testid="skills-remote-manual-cancel"
-        onClick={back}
+        onClick={() => flow.back()}
       >
         {t("skills.cancel")}
       </Button>,
@@ -381,13 +275,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         variant="primary"
         disabled={busy}
         data-testid="skills-remote-manual-confirm"
-        onClick={() => {
-          if (repo.trim() === "") {
-            setErrors([{ path: "repo", message: t("skills.remote.form.required") }]);
-            return;
-          }
-          doRegister({ repo, ref, skillPath });
-        }}
+        onClick={() => void flow.submitManual()}
       >
         {t("skills.remote.form.submit")}
       </Button>,
@@ -408,7 +296,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         variant="outline"
         disabled={busy}
         data-testid="skills-remote-unregister-cancel"
-        onClick={back}
+        onClick={() => flow.back()}
       >
         {t("skills.cancel")}
       </Button>,
@@ -420,7 +308,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         variant="primary"
         disabled={busy}
         data-testid="skills-remote-unregister-confirm"
-        onClick={doUnregister}
+        onClick={() => void flow.unregister()}
       >
         {t("skills.remote.source.unregister")}
       </Button>,
@@ -461,11 +349,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         hasSource={entry !== undefined && state.sourcesLoaded && state.sourcesError === undefined}
         {...(props.onChanged === undefined ? {} : { onChanged: props.onChanged })}
         {...(props.onOpenTrash === undefined ? {} : { onOpenTrash: props.onOpenTrash })}
-        onUnregister={() => {
-          setStep("unregister");
-          setError(undefined);
-          setErrors([]);
-        }}
+        onUnregister={() => flow.askUnregister()}
       />,
     );
   }
