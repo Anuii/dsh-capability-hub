@@ -19,7 +19,7 @@ import type {
   InstallTarget,
   SearchResultItem,
 } from "../../contract/remote.ts";
-import { fieldErrors } from "../format.ts";
+
 import { t } from "../strings.ts";
 import {
   DISCOVERY_PAGE,
@@ -33,6 +33,7 @@ import {
 } from "./discovery-model.ts";
 import { installSummaryText } from "./model.ts";
 import { errorText } from "../../../shared/error-text.ts";
+import { fieldErrorsOf } from "../../../platform/client/api.ts";
 
 /** 访问宿主的 seam。 */
 export interface RepoViewAdapter {
@@ -230,7 +231,7 @@ export function createRepoViewStore(adapter: RepoViewAdapter): RepoViewStore {
     } catch (failure) {
       patch({
         browse: undefined,
-        browseFieldErrors: fieldErrors(failure),
+        browseFieldErrors: fieldErrorsOf(failure),
         browseError: errorText(failure),
         browsing: false,
       });

@@ -12,12 +12,13 @@ import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../kit/index.ts";
 import { upsertServer } from "./data.ts";
 import { parseServerInput } from "../rules/server.ts";
-import { fieldErrorsOf, parseJsonServer } from "./draft.ts";
+import { parseJsonServer } from "./draft.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { FieldError, ServerView } from "../contract/config.ts";
 import { errorText } from "../../shared/error-text.ts";
 import { isPlainObject } from "../rules/values.ts";
+import { fieldErrorsOf } from "../../platform/client/api.ts";
 
 export interface JsonEditorProps {
   originalName?: string;

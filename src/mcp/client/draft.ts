@@ -374,24 +374,3 @@ export function validateSettingsDraft(draft: SettingsDraft): FieldError[] {
   const taken = new Set(own.map((error) => error.path));
   return [...own, ...parseSettingsInput(settingsToSubmit(draft)).errors.filter((error) => !taken.has(error.path))];
 }
-
-export function errorDetails(error: unknown): unknown {
-  if (error === null || typeof error !== "object") return undefined;
-  return (error as { details?: unknown }).details;
-}
-
-/** ApiError.details（服务端 VALIDATION 的 FieldError[]）→ FieldError[]。 */
-export function fieldErrorsOf(error: unknown): FieldError[] {
-  const details = errorDetails(error);
-  if (!Array.isArray(details)) return [];
-  const out: FieldError[] = [];
-  for (const entry of details) {
-    if (entry === null || typeof entry !== "object") continue;
-    const record = entry as Record<string, unknown>;
-    const path = typeof record.path === "string" ? record.path : typeof record.field === "string" ? record.field : "";
-    const message = typeof record.message === "string" ? record.message : "";
-    if (message === "") continue;
-    out.push({ path, message });
-  }
-  return out;
-}

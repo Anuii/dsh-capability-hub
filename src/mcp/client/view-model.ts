@@ -240,13 +240,6 @@ export function cooldownRemainingMs(failure: RuntimeFailureView | undefined, now
   return Math.max(0, failure.cooldownUntil - now);
 }
 
-/** 「冷却中，剩余 47 秒」；没有冷却时 undefined（不渲染）。 */
-export function cooldownText(failure: RuntimeFailureView | undefined, now: number): string | undefined {
-  const remaining = cooldownRemainingMs(failure, now);
-  if (remaining <= 0) return undefined;
-  return t("mcp.row.cooldown", { remaining: formatDuration(remaining) });
-}
-
 /** 毫秒 → 中文时长（秒 / 分秒）。 */
 export function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms < 1000) return "0 秒";

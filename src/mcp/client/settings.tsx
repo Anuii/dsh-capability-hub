@@ -9,7 +9,6 @@ import { Banner } from "../../kit/index.ts";
 import { updateSettings } from "./data.ts";
 import { DEFAULT_OUTPUT_GUARD, SETTINGS_DEFAULTS } from "../rules/settings.ts";
 import {
-  fieldErrorsOf,
   groupErrors,
   numericText,
   settingsDraftFrom,
@@ -24,6 +23,7 @@ import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { McpSettings } from "../contract/config.ts";
 import { errorText } from "../../shared/error-text.ts";
+import { fieldErrorsOf } from "../../platform/client/api.ts";
 
 export interface SettingsPanelProps {
   settings: McpSettings;

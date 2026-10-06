@@ -32,12 +32,13 @@ import {
   summarizeChecks,
   updatableIds,
 } from "./model.ts";
-import { fieldErrors } from "../format.ts";
+
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
 import type { AuthMode, DiscoverCandidate } from "../../contract/remote.ts";
 import { errorText } from "../../../shared/error-text.ts";
+import { fieldErrorsOf } from "../../../platform/client/api.ts";
 
 export interface RemoteMenuProps {
   /** 列表里的全部技能（不受搜索/筛选影响） */
@@ -149,7 +150,7 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
       },
       (failure: unknown) => {
         setCandidates([]);
-        setErrors(fieldErrors(failure));
+        setErrors(fieldErrorsOf(failure));
         setError(errorText(failure));
         setDiscovering(false);
       },

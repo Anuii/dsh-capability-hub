@@ -14,7 +14,6 @@
 import { createStore, type Store } from "../../kit/store.ts";
 import {
   draftToSubmit,
-  fieldErrorsOf,
   fieldOfPath,
   groupErrors,
   validateDraft,
@@ -26,6 +25,7 @@ import {
 import { t } from "./strings.ts";
 import { errorText } from "../../shared/error-text.ts";
 import type { CommandCheckResult, FieldError, ServerView, Transport, UpsertResult } from "../contract/config.ts";
+import { fieldErrorsOf } from "../../platform/client/api.ts";
 
 export interface ServerFormAdapter {
   checkCommand(command: string, cwd?: string): Promise<CommandCheckResult>;

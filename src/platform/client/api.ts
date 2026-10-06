@@ -132,3 +132,25 @@ export interface HealthPayload {
 export async function fetchHealth(): Promise<HealthPayload> {
   return api.get<HealthPayload>("health");
 }
+
+/** 接口错误的错误码（ApiError.code，例如 CONFLICT）；不是接口错误时 undefined。 */
+export function errorCodeOf(error: unknown): string | undefined {
+  if (error === null || typeof error !== "object") return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+/** VALIDATION 的逐字段错误（ApiError.details）→ FieldError[]；没有就是空数组。没有路径的条目 path 为空串。 */
+export function fieldErrorsOf(error: unknown): FieldError[] {
+  const details = error !== null && typeof error === "object" ? (error as { details?: unknown }).details : undefined;
+  if (!Array.isArray(details)) return [];
+  const out: FieldError[] = [];
+  for (const entry of details) {
+    if (entry === null || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    const path = typeof record.path === "string" ? record.path : typeof record.field === "string" ? record.field : "";
+    if (typeof record.message === "string" && record.message !== "") out.push({ path, message: record.message });
+  }
+  return out;
+}
+import type { FieldError } from "../contract/host.ts";

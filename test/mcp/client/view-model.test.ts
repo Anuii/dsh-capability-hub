@@ -9,7 +9,6 @@ import {
   cacheLineText,
   cachedToolNames,
   cooldownRemainingMs,
-  cooldownText,
   formatClock,
   formatDuration,
   matchesFilter,
@@ -127,12 +126,11 @@ test("serverStatusTone：冷却 > 失败 > 有活跃实例 > 空闲", () => {
   assert.equal(typeof statusTitle("cooling"), "string");
 });
 
-test("cooldownText / formatDuration：倒计时文案随 now 变化，冷却结束就不显示", () => {
+test("cooldownRemainingMs / formatDuration：倒计时随 now 递减，冷却结束为 0", () => {
   const failure = { message: "启动失败", at: NOW, cooldownUntil: NOW + 47_000 };
   assert.equal(cooldownRemainingMs(failure, NOW), 47_000);
-  assert.equal(cooldownText(failure, NOW), "冷却中，剩余 47 秒");
-  assert.equal(cooldownText(failure, NOW + 47_000), undefined);
-  assert.equal(cooldownText(undefined, NOW), undefined);
+  assert.equal(cooldownRemainingMs(failure, NOW + 47_000), 0);
+  assert.equal(cooldownRemainingMs(undefined, NOW), 0);
   assert.equal(formatDuration(65_000), "1 分 05 秒");
   assert.equal(formatDuration(999), "0 秒");
   assert.equal(formatDuration(3_900_000), "1 小时 05 分");

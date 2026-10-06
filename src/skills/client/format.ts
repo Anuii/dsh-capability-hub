@@ -17,6 +17,7 @@ import type {
 import { t } from "./strings.ts";
 import type { BadgeTone } from "../../kit/index.ts";
 import type { FieldError } from "../../platform/contract/host.ts";
+import { errorCodeOf } from "../../platform/client/api.ts";
 
 /* ---------------- 技能根 ---------------- */
 
@@ -312,35 +313,7 @@ export function sortTrash(items: readonly TrashItem[]): TrashItem[] {
 
 /* ---------------- 错误映射 ---------------- */
 
-export function errorCode(error: unknown): string | undefined {
-  if (error === null || typeof error !== "object") return undefined;
-  const code = (error as { code?: unknown }).code;
-  return typeof code === "string" ? code : undefined;
-}
-
-export function errorDetails(error: unknown): unknown {
-  if (error === null || typeof error !== "object") return undefined;
-  return (error as { details?: unknown }).details;
-}
-
-/** 服务端 VALIDATION 的 details → 逐字段消息（没有就返回空数组）。 */
-export function fieldErrors(error: unknown): FieldError[] {
-  const details = errorDetails(error);
-  if (!Array.isArray(details)) return [];
-  const out: FieldError[] = [];
-  for (const entry of details) {
-    if (entry === null || typeof entry !== "object") continue;
-    const record = entry as Record<string, unknown>;
-    const field =
-      typeof record.path === "string" ? record.path : typeof record.field === "string" ? record.field : undefined;
-    const message = typeof record.message === "string" ? record.message : undefined;
-    if (field === undefined || message === undefined) continue;
-    out.push({ path: field, message });
-  }
-  return out;
-}
-
 /** 是否是「原路径已存在」的冲突（恢复时的替换流程要靠它区分）。 */
 export function isConflict(error: unknown): boolean {
-  return errorCode(error) === "CONFLICT";
+  return errorCodeOf(error) === "CONFLICT";
 }

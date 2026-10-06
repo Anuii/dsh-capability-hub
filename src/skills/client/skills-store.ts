@@ -13,9 +13,10 @@
 import { createStore, type Store } from "../../kit/store.ts";
 import type { FieldError } from "../../platform/contract/host.ts";
 import type { ListResult, SkillSummary, TrashItem } from "../contract/local.ts";
-import { displayName, fieldErrors, isConflict, removeSkill, replaceSkill } from "./format.ts";
+import { displayName, isConflict, removeSkill, replaceSkill } from "./format.ts";
 import { t } from "./strings.ts";
 import { errorText } from "../../shared/error-text.ts";
+import { fieldErrorsOf } from "../../platform/client/api.ts";
 
 export interface SkillsAdapter {
   list(workspace: string | undefined): Promise<ListResult>;
@@ -70,7 +71,7 @@ const ok = (message: string): ActionResult => ({ ok: true, message, fieldErrors:
 const failed = (failure: unknown): ActionResult => ({
   ok: false,
   message: t("skills.toast.failed", { message: errorText(failure) }),
-  fieldErrors: fieldErrors(failure),
+  fieldErrors: fieldErrorsOf(failure),
 });
 
 function withId(ids: ReadonlySet<string>, id: string, on: boolean): ReadonlySet<string> {

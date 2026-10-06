@@ -13,8 +13,6 @@ import {
   isDshInstallPath,
   normalizePath,
   eolLabel,
-  errorCode,
-  fieldErrors,
   fileDepth,
   fileName,
   filterCounts,
@@ -42,6 +40,7 @@ import {
 import { workspaceQuery } from "../../../src/skills/client/data.ts";
 import { makeList, makeSkill, makeTrashItem, diag, root } from "./fixtures.ts";
 import { errorText } from "../../../src/shared/error-text.ts";
+import { errorCodeOf, fieldErrorsOf } from "../../../src/platform/client/api.ts";
 
 /* ---------------- UI-C：路径缩写与分组顺序 ---------------- */
 
@@ -268,8 +267,8 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
   }
   const plain = new Error("普通错误");
   assert.equal(errorText(plain), "普通错误");
-  assert.equal(errorCode(plain), undefined);
-  assert.deepEqual(fieldErrors(plain), []);
+  assert.equal(errorCodeOf(plain), undefined);
+  assert.deepEqual(fieldErrorsOf(plain), []);
   assert.equal(isConflict(plain), false);
 
   const validation = new FakeApiError("VALIDATION", "参数不合法", [
@@ -278,9 +277,9 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
     { path: "ignore" },
     "不是对象",
   ]);
-  assert.equal(errorCode(validation), "VALIDATION");
+  assert.equal(errorCodeOf(validation), "VALIDATION");
   assert.equal(errorText(validation), "参数不合法");
-  assert.deepEqual(fieldErrors(validation), [
+  assert.deepEqual(fieldErrorsOf(validation), [
     { path: "id", message: "id 不能为空" },
     { path: "enabled", message: "enabled 必须是布尔值" },
   ]);

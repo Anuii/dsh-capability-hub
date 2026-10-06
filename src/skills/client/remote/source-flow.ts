@@ -13,12 +13,13 @@
 
 import { createStore, type Store } from "../../../kit/store.ts";
 import { candidateKey, candidateSkillPath, sourceRepoRef } from "./model.ts";
-import { fieldErrors } from "../format.ts";
+
 import { t } from "../strings.ts";
 import { errorText } from "../../../shared/error-text.ts";
 import type { FieldError } from "../../../platform/contract/host.ts";
 import type { SkillSummary } from "../../contract/local.ts";
 import type { DiscoverCandidate, SourceEntry } from "../../contract/remote.ts";
+import { fieldErrorsOf } from "../../../platform/client/api.ts";
 
 export interface SourceFlowAdapter {
   discover(skillId: string, workspace: string | undefined): Promise<DiscoverCandidate[]>;
@@ -88,7 +89,7 @@ export function createSourceFlow(adapter: SourceFlowAdapter, options: SourceFlow
   });
   const clean = { error: undefined, errors: [] as readonly FieldError[] };
   const failed = (failure: unknown): void =>
-    state.patch({ busy: false, error: errorText(failure), errors: fieldErrors(failure) });
+    state.patch({ busy: false, error: errorText(failure), errors: fieldErrorsOf(failure) });
 
   const register = async (input: { repo: string; ref?: string; skillPath?: string }): Promise<void> => {
     state.patch({ ...clean, done: undefined, busy: true });

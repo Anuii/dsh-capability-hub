@@ -13,7 +13,7 @@ import * as React from "react";
 import { Button, Checkbox, Input } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../../kit/index.ts";
 import { parseJsonText, upsertServer } from "../data.ts";
-import { fieldErrorsOf } from "../draft.ts";
+
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import {
@@ -27,6 +27,7 @@ import {
   type PasteRow,
 } from "./pure.ts";
 import { errorText } from "../../../shared/error-text.ts";
+import { fieldErrorsOf } from "../../../platform/client/api.ts";
 
 export interface JsonPasteViewProps {
   /** 当前配置里的服务器名（同名冲突判定用）。 */
