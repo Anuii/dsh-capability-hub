@@ -75,9 +75,11 @@ if (Test-Path -LiteralPath $rawPath) { Remove-Item -LiteralPath $rawPath -Force 
 # ---- 3. npm pack --------------------------------------------------------------
 if (-not (Test-Path -LiteralPath $DistDir)) { New-Item -ItemType Directory -Path $DistDir -Force | Out-Null }
 
-$packOut = & $Npm pack --pack-destination $DistDir 2>&1
-if ($LASTEXITCODE -ne 0) { throw "npm pack 失败：" }
-$tgzName = ($packOut | Where-Object { $_ -match '\.tgz$' } | Select-Object -Last 1)
+# stderr 也收进来（失败时给原因），但它们是 ErrorRecord 而不是字符串，先统一转成文本；
+# 「npm notice filename: x.tgz」这类提示行里有空格，文件名只认整行就是 *.tgz 的那一行。
+$packOut = @(& $Npm pack --pack-destination $DistDir 2>&1 | ForEach-Object { "$_" })
+if ($LASTEXITCODE -ne 0) { throw "npm pack 失败：$($packOut -join ' | ')" }
+$tgzName = ($packOut | Where-Object { $_.Trim() -match '^\S+\.tgz$' } | Select-Object -Last 1)
 if (-not $tgzName) { throw "没解析出 tgz 文件名：$($packOut -join ' | ')" }
 $tgzName = $tgzName.Trim()
 $tgzPath = Join-Path $DistDir $tgzName
