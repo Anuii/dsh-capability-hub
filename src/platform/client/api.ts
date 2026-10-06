@@ -99,7 +99,7 @@ export const api = {
   },
 };
 
-/** health 的返回形状（demo 模块）。 */
+/** GET health 的返回形状（宿主 platform/host/health.ts）。 */
 export interface HealthPayload {
   ok: boolean;
   plugin: string;

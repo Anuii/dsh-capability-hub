@@ -6,53 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { assertPathInsideDirectory, safeRelativePath } from "./safepath.ts";
-
-export async function pathExists(p: string): Promise<boolean> {
-  try {
-    await fs.stat(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function readTextFile(p: string): Promise<string | undefined> {
-  try {
-    return await fs.readFile(p, "utf8");
-  } catch {
-    return undefined;
-  }
-}
-
-/** 同目录临时文件 + rename 的原子写；失败清理临时文件。 */
-export async function atomicWriteFile(file: string, data: string | Buffer): Promise<void> {
-  const dir = path.dirname(file);
-  const base = path.basename(file);
-  const suffix = `${process.pid.toString(36)}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
-  const tmp = path.join(dir, `.${base}.${suffix}.tmp`);
-  await fs.mkdir(dir, { recursive: true });
-  const handle = await fs.open(tmp, "wx");
-  try {
-    await handle.writeFile(data);
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  try {
-    await fs.rename(tmp, file);
-  } catch (error) {
-    try {
-      await fs.unlink(tmp);
-    } catch {
-      /* 清理失败不掩盖原始错误 */
-    }
-    throw error;
-  }
-}
-
-export async function removePath(p: string): Promise<void> {
-  await fs.rm(p, { recursive: true, force: true });
-}
+import { atomicWriteFile, readTextFile } from "../../shared/node/fsx.ts";
 
 export async function readJsonFile<T>(p: string): Promise<T | undefined> {
   const text = await readTextFile(p);

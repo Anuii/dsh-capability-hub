@@ -16,7 +16,8 @@
 
 import path from "node:path";
 import { mkdir } from "node:fs/promises";
-import { pathExists, writeDirectoryFiles } from "./fsx.ts";
+import { writeDirectoryFiles } from "./fsx.ts";
+import { pathExists } from "../../shared/node/fsx.ts";
 import { recordedHash } from "./hash.ts";
 import { locateSkillDirectory } from "./tar.ts";
 import { rootSkillNameOf, skillMdTextOf, upstreamSkillFiles, upstreamSkillHash } from "./rootskill.ts";

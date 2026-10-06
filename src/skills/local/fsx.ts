@@ -5,15 +5,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-
-export async function pathExists(p: string): Promise<boolean> {
-  try {
-    await fs.stat(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { removePath } from "../../shared/node/fsx.ts";
 
 export async function isDirectory(p: string): Promise<boolean> {
   try {
@@ -62,31 +54,6 @@ export async function readFileText(p: string): Promise<ReadTextResult | undefine
   return { buffer, text, validUtf8, mtimeMs: st.mtimeMs };
 }
 
-/** 同目录临时文件 + rename 的原子写；失败清理临时文件。 */
-export async function atomicWriteFile(file: string, data: string | Buffer): Promise<void> {
-  const dir = path.dirname(file);
-  const base = path.basename(file);
-  const suffix = `${process.pid.toString(36)}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
-  const tmp = path.join(dir, `.${base}.${suffix}.tmp`);
-  const handle = await fs.open(tmp, "wx");
-  try {
-    await handle.writeFile(data);
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  try {
-    await fs.rename(tmp, file);
-  } catch (error) {
-    try {
-      await fs.unlink(tmp);
-    } catch {
-      /* 清理失败不掩盖原始错误 */
-    }
-    throw error;
-  }
-}
-
 /** 递归复制（保留目录结构；不跟随符号链接）。 */
 export async function copyPath(src: string, dest: string): Promise<void> {
   const st = await fs.lstat(src);
@@ -102,10 +69,6 @@ export async function copyPath(src: string, dest: string): Promise<void> {
     return;
   }
   await fs.copyFile(src, dest);
-}
-
-export async function removePath(p: string): Promise<void> {
-  await fs.rm(p, { recursive: true, force: true });
 }
 
 /** 整个条目（目录或文件）移动到 dest；跨盘时复制后删除。返回是否走了复制回退。 */

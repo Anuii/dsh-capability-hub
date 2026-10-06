@@ -17,7 +17,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { CACHE_FILE_NAME, CACHE_MAX_AGE_MS, CACHE_VERSION, MCP_DIR_NAME } from "../constants.ts";
-import { atomicWriteFile, readTextFile } from "./fsx.ts";
+import { atomicWriteFile, readTextFile } from "../../../shared/node/fsx.ts";
 import type { EffectiveServer } from "../../contract/config.ts";
 import type { Clock } from "./clock.ts";
 
@@ -218,7 +218,7 @@ export class MetadataCache {
       }
       for (const [name, entry] of Object.entries(entries)) merged[name] = entry;
       const serialized = JSON.stringify({ version: CACHE_VERSION, servers: merged }, null, 2);
-      await atomicWriteFile(this.filePath, serialized);
+      await atomicWriteFile(this.filePath, serialized, { mode: 0o600 });
       this.#text = serialized;
       this.#entries = merged;
       this.#loaded = true;
@@ -243,7 +243,7 @@ export class MetadataCache {
         if (now - entry.updatedAt <= CACHE_MAX_AGE_MS) merged[name] = entry;
       }
       const serialized = JSON.stringify({ version: CACHE_VERSION, servers: merged }, null, 2);
-      await atomicWriteFile(this.filePath, serialized);
+      await atomicWriteFile(this.filePath, serialized, { mode: 0o600 });
       this.#text = serialized;
       this.#entries = merged;
     });

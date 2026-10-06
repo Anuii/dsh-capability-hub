@@ -158,7 +158,7 @@ panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab` 与 `mcp/client
 
 ## 6. 字典与样式
 
-- 字典：每个页面一份 strings.ts，中文是唯一来源（外壳字典保持 zh+en）。
+- 字典：每个页面一份 strings.ts，中文是唯一来源（外壳字典保持 zh+en）；`t` 用 kit 的 `createTranslator(zh)` 生成。
 - 样式写在 TS 里（ADR-0004）：kit 组件旁边是 `<组件>.styles.ts`，页面自己的样式在 `styles.ts`，
   都用 `kit/css.ts` 的 `defineSheet(prefix, names, rules)` 声明、`injectStyleTag(id, css)` 注入：
 

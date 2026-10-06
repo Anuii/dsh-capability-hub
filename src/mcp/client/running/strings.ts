@@ -6,6 +6,8 @@
  * UI-B 起：页面上的常驻说明长句全部删除，说明改放 title 工具提示（runtime.pollHint）或抽屉里。
  */
 
+import { createTranslator } from "../../../kit/translate.ts";
+
 export const zh = {
   /* ---- 通用 ---- */
   "runtime.loadFailed": "读取运行态失败：{message}",
@@ -64,11 +66,5 @@ export const zh = {
 
 export type RuntimeKey = keyof typeof zh;
 
-/** 取一条运行态文案（支持 {name} 模板参数）。 */
-export function t(key: RuntimeKey, values?: Record<string, unknown>): string {
-  let text: string = zh[key];
-  if (values !== undefined) {
-    for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value));
-  }
-  return text;
-}
+/** 取一条文案（支持 {name} 模板参数）。 */
+export const t = createTranslator<RuntimeKey>(zh);

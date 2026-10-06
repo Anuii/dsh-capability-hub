@@ -23,7 +23,7 @@ function health(overrides: {
     customSkillDirs: [],
     bundledSkillDir: null,
     sdk: { status: "loaded" },
-    modules: (overrides.modules ?? [{ name: "demo", status: "ok" }]).map((module) => ({ ...module, routes: [] })),
+    modules: (overrides.modules ?? [{ name: "health", status: "ok" }]).map((module) => ({ ...module, routes: [] })),
     tool: { registered: overrides.registered ?? true, name: "mcp", description: "" },
     host: { pid: 1, nodeVersion: "24", startedAt: "" },
     sessionEvents: [],
@@ -49,7 +49,7 @@ test("有模块降级时列出模块名", () => {
   const info = degradeInfo(
     health({
       modules: [
-        { name: "demo", status: "ok" },
+        { name: "health", status: "ok" },
         { name: "mcp-runtime", status: "degraded" },
       ],
       runtimeSource: "real",

@@ -17,7 +17,6 @@ import type {
 import { t } from "./strings.ts";
 import type { BadgeTone } from "../../kit/index.ts";
 import type { FieldError } from "../../platform/contract/host.ts";
-import { errorText } from "../../shared/error-text.ts";
 
 /* ---------------- 技能根 ---------------- */
 
@@ -343,7 +342,5 @@ export function fieldErrors(error: unknown): FieldError[] {
 
 /** 是否是「原路径已存在」的冲突（恢复时的替换流程要靠它区分）。 */
 export function isConflict(error: unknown): boolean {
-  const code = errorCode(error);
-  if (code === "CONFLICT") return true;
-  return errorText(error).includes("已存在");
+  return errorCode(error) === "CONFLICT";
 }

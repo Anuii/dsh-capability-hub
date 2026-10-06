@@ -10,6 +10,7 @@
  *   契约          src/<功能>/contract（只放类型，宿主与客户端共用）
  *   规则          src/<功能>/rules（纯函数的业务规则，同一功能的宿主与客户端共用；ADR-0008）
  *   共享          src/version.ts、src/shared/（错误码等不知道任何功能的叶子工具）
+ *   宿主共享      src/shared/node/（文件读写等只能在宿主跑的叶子工具）
  *
  * 规则：
  *   1. 四个宿主功能模块互不 import，只能引用自己、契约（仅类型）与共享。
@@ -20,6 +21,7 @@
  *   6. 契约只引用契约，且别人只能 import type 它（构建时擦除，浏览器产物里没有宿主代码）。
  *   7. 规则只给本功能用（宿主模块与客户端都可以）；规则只引用本功能的规则、契约（仅类型）与共享，
  *      且不能 import 任何包（node:、react……），保证在宿主与浏览器里都能跑。
+ *   8. 宿主共享（shared/node/）只给宿主用：界面、kit、规则、契约都不能引用它。
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -42,6 +44,7 @@ type Zone =
   | "contract"
   | "rules"
   | "shared"
+  | "shared:node"
   | "unknown";
 
 const ZONES: Array<[RegExp, Zone]> = [
@@ -57,6 +60,7 @@ const ZONES: Array<[RegExp, Zone]> = [
   [/^[a-z-]+\/contract\//, "contract"],
   [/^[a-z-]+\/rules\//, "rules"],
   [/^version\.ts$/, "shared"],
+  [/^shared\/node\//, "shared:node"],
   [/^shared\//, "shared"],
 ];
 
@@ -115,6 +119,11 @@ function violation(edge: Edge): string | undefined {
   if (a === "unknown") return "文件不在任何区域里";
   if (b === "unknown") return "引用了不在任何区域里的文件";
   if (b === "contract" && !edge.typeOnly) return "契约只能 import type";
+  if (b === "shared:node") {
+    if (isHost(a) || a === "shared:node") return undefined;
+    return "shared/node 只给宿主用（规则 8）";
+  }
+  if (a === "shared:node") return b === "shared" ? undefined : "shared/node 只引用共享（规则 8）";
   if (a === "rules") {
     if (b === "shared") return undefined;
     if ((b === "rules" || b === "contract") && featureOf(edge.from) === featureOf(edge.to)) return undefined;
@@ -183,4 +192,8 @@ test("架构规则本身：每条规则都能拦住它要拦的东西", () => {
   assert.match(check("mcp/rules/x.ts", "skills/rules/y.ts")!, /规则 7/);
   assert.equal(check("mcp/rules/x.ts", "mcp/contract/config.ts", true), undefined);
   assert.match(check("mcp/contract/x.ts", "mcp/rules/y.ts", true)!, /契约只能引用契约/);
+  assert.equal(check("skills/local/x.ts", "shared/node/fsx.ts"), undefined);
+  assert.match(check("skills/client/x.ts", "shared/node/fsx.ts")!, /规则 8/);
+  assert.match(check("mcp/rules/x.ts", "shared/node/fsx.ts")!, /规则 8/);
+  assert.match(check("kit/x.ts", "shared/node/fsx.ts")!, /规则 8/);
 });

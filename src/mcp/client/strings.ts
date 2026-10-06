@@ -8,6 +8,8 @@
  *   - 页面上的常驻说明长句一律删除（UI-DESIGN §1），说明改放 title 工具提示或抽屉里。
  */
 
+import { createTranslator } from "../../kit/translate.ts";
+
 export const zh = {
   /* ---- 通用 ---- */
   "mcp.loadFailed": "读取失败：{message}",
@@ -311,11 +313,5 @@ export const zh = {
 
 export type McpKey = keyof typeof zh;
 
-/** 取一条 MCP 页文案（支持 {name} 模板参数）。 */
-export function t(key: McpKey, values?: Record<string, unknown>): string {
-  let text: string = zh[key];
-  if (values !== undefined) {
-    for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value));
-  }
-  return text;
-}
+/** 取一条文案（支持 {name} 模板参数）。 */
+export const t = createTranslator<McpKey>(zh);

@@ -30,6 +30,7 @@ import { runtimeStatusView } from "./status-view.ts";
 import type { EffectiveMcpConfig } from "../contract/config.ts";
 import type { McpRuntime, RuntimeStatus } from "../contract/runtime.ts";
 import { errorText } from "../../shared/error-text.ts";
+import { conflict, notFound, upstream } from "../../shared/errors.ts";
 
 export { clipToolDescription, probeSessionId } from "./core.ts";
 export type { ProbeReason, SessionRef } from "./core.ts";
@@ -236,14 +237,19 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal
 
     async refresh(serverName: string): Promise<{ toolCount: number }> {
       const server = core.findServer(serverName);
-      if (!server) throw new Error('没有名为 "' + serverName + '" 的 MCP 服务器');
-      if (server.disabled) throw new Error('服务器 "' + serverName + '" 已停用，无法刷新缓存');
-      const entry = await core.probe(server, "manual");
-      return { toolCount: entry.tools.length };
+      if (!server) throw notFound('没有名为 "' + serverName + '" 的 MCP 服务器');
+      if (server.disabled) throw conflict('服务器 "' + serverName + '" 已停用，无法刷新缓存');
+      try {
+        const entry = await core.probe(server, "manual");
+        return { toolCount: entry.tools.length };
+      } catch (err) {
+        // MCP 服务器连不上 / 拉清单失败：它是这次请求的上游
+        throw upstream(errorText(err));
+      }
     },
 
     async disconnect(serverName: string, sessionId?: string): Promise<{ closed: number }> {
-      if (!core.findServer(serverName)) throw new Error('没有名为 "' + serverName + '" 的 MCP 服务器');
+      if (!core.findServer(serverName)) throw notFound('没有名为 "' + serverName + '" 的 MCP 服务器');
       return { closed: await pool.closeServer(serverName, sessionId) };
     },
 

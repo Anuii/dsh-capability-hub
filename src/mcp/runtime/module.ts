@@ -7,8 +7,8 @@
  *
  * 路由（PLAN §3.7「MCP·运行态」）：
  *   GET  mcp/runtime               → { servers, sessions }
- *   POST mcp/runtime/refresh       { name }              → { toolCount }
- *   POST mcp/runtime/disconnect    { name, sessionId? }  → { closed }
+ *   POST mcp/runtime/refresh       { name }              → { toolCount }（未知 404、已停用 409、连不上 502）
+ *   POST mcp/runtime/disconnect    { name, sessionId? }  → { closed }（未知 404）
  *
  * start() 是平台层在注册工具后调用的（T0 负责接线）：它只做后台工作
  * （配置监听、空闲巡检、启动探测），即使它抛错也不该影响插件加载 ——
@@ -16,7 +16,7 @@
  */
 import { createMcpRuntime } from "./runtime.ts";
 import type { McpRuntimeInternal } from "./runtime.ts";
-import { badRequest, notFound } from "../../shared/errors.ts";
+import { badRequest } from "../../shared/errors.ts";
 import type { McpConfigSource } from "../contract/config.ts";
 import type { McpSdk } from "../contract/runtime.ts";
 import type { HubContext, HubModule, RouteRequest } from "../../platform/contract/host.ts";
@@ -54,13 +54,7 @@ export function createMcpRuntimeModule(ctx: HubContext, deps: McpRuntimeModuleDe
     "POST mcp/runtime/refresh": async (req) => {
       const body = readBody(req);
       const name = requireName(body);
-      try {
-        return await runtime.refresh(name);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message.includes("没有名为")) throw notFound(message);
-        throw badRequest(message);
-      }
+      return await runtime.refresh(name);
     },
 
     "POST mcp/runtime/disconnect": async (req) => {
@@ -70,13 +64,7 @@ export function createMcpRuntimeModule(ctx: HubContext, deps: McpRuntimeModuleDe
       if (sessionIdRaw !== undefined && typeof sessionIdRaw !== "string") {
         throw badRequest("sessionId 必须是字符串（省略 = 断开所有会话）");
       }
-      try {
-        return await runtime.disconnect(name, sessionIdRaw as string | undefined);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message.includes("没有名为")) throw notFound(message);
-        throw badRequest(message);
-      }
+      return await runtime.disconnect(name, sessionIdRaw as string | undefined);
     },
   };
 

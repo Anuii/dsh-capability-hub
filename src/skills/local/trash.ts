@@ -6,7 +6,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { TrashReason } from "../contract/local.ts";
-import { atomicWriteFile, copyPath, movePath, pathExists, readFileText, removePath, statOrUndefined } from "./fsx.ts";
+import { copyPath, movePath, readFileText, statOrUndefined } from "./fsx.ts";
+import { atomicWriteFile, pathExists, removePath } from "../../shared/node/fsx.ts";
 
 export interface TrashMeta {
   version: 1;

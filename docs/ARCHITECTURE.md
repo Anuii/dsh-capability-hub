@@ -20,7 +20,7 @@ src/
     client/     MCP 页；running/ 是页面底部的「运行中」区域
     contract/   config.ts、runtime.ts
   kit/        界面组件、样式写法（css.ts）、折叠（fold.ts）、状态仓库（store.ts）
-  shared/     宿主与客户端共用的叶子工具：错误码、错误文字、请求参数
+  shared/     宿主与客户端共用的叶子工具：错误码、错误文字、请求参数；node/ 是只给宿主用的文件读写（原子写只有这一份）
 test/         与 src/ 同构；test/architecture/ 守 import 规则
 ```
 
@@ -33,7 +33,7 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 3. 客户端功能之间互不 import，只用客户端外壳公开的 `api.ts` 与 `tab-props.ts`；kit 只引用 kit；
 4. 契约只放类型，只引用契约，别人只能 `import type` 它（构建时擦除，浏览器产物里没有宿主代码，ADR-0002）；
 5. 规则（`<功能>/rules/`）是纯函数，只给本功能的宿主与界面用；它只引用本功能的规则、契约与 `shared/`，不 import 任何包（ADR-0008）；
-6. `shared/` 与 `version.ts` 谁都能用。
+6. `shared/` 与 `version.ts` 谁都能用；`shared/node/` 只给宿主用（界面、kit、规则、契约都不能引用）。
 
 ## 宿主半
 

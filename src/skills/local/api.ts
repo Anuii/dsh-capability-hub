@@ -9,7 +9,8 @@ import fs from "node:fs/promises";
 import { statSync } from "node:fs";
 import path from "node:path";
 import { badRequest, conflict, internal, notFound, readOnly } from "../../shared/errors.ts";
-import { atomicWriteFile, isDirectory, readFileText, removePath, statOrUndefined, walkEntries } from "./fsx.ts";
+import { isDirectory, readFileText, statOrUndefined, walkEntries } from "./fsx.ts";
+import { atomicWriteFile, removePath } from "../../shared/node/fsx.ts";
 import { createFrontmatter, type Frontmatter } from "./frontmatter/index.ts";
 import type { YamlLib } from "../contract/yaml.ts";
 import {

@@ -7,6 +7,7 @@
 
 import { parseRepoRef } from "./sourceurl.ts";
 import { badRequest, validation } from "../../shared/errors.ts";
+import { optionalInput, optionalInputList, patchInput, recordOrEmpty, requireInput } from "../../shared/request.ts";
 import { assertRepoShape } from "./repos.ts";
 import { browseRepo } from "./browse.ts";
 import { discoverSources } from "./discover.ts";
@@ -35,57 +36,6 @@ export interface RoutesDeps {
   meta: SkillMetaReader;
   redactor: Redactor;
   now?: RemoteOptions["now"];
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return {};
-  return value as Record<string, unknown>;
-}
-
-function requireString(body: Record<string, unknown>, key: string, label: string): string {
-  const raw = body[key];
-  if (typeof raw !== "string" || raw.trim() === "") {
-    throw validation(`参数 ${key}（${label}）不能为空。`, [{ path: key, message: "必须是非空字符串" }]);
-  }
-  return raw.trim();
-}
-
-function optionalString(body: Record<string, unknown>, key: string): string | undefined {
-  const raw = body[key];
-  if (raw === undefined || raw === null) return undefined;
-  if (typeof raw !== "string") {
-    throw validation(`参数 ${key} 必须是字符串。`, [{ path: key, message: "必须是字符串" }]);
-  }
-  const trimmed = raw.trim();
-  return trimmed === "" ? undefined : trimmed;
-}
-
-function optionalStringArray(body: Record<string, unknown>, key: string): string[] | undefined {
-  const raw = body[key];
-  if (raw === undefined || raw === null) return undefined;
-  if (!Array.isArray(raw)) {
-    throw validation(`参数 ${key} 必须是字符串数组。`, [{ path: key, message: "必须是数组" }]);
-  }
-  const out: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string") {
-      throw validation(`参数 ${key} 里只能放字符串。`, [{ path: key, message: "元素必须是字符串" }]);
-    }
-    const trimmed = item.trim();
-    if (trimmed !== "") out.push(trimmed);
-  }
-  return out;
-}
-
-/** 解析 repo 字段：owner/name 或 GitHub URL（含 /tree/<ref>/<path>） */
-function optionalPatchString(body: Record<string, unknown>, key: string): string | undefined {
-  const raw = body[key];
-  if (raw === undefined || raw === null) return undefined;
-  if (typeof raw !== "string") {
-    throw validation(`参数 ${key} 必须是字符串。`, [{ path: key, message: "必须是字符串" }]);
-  }
-  // 与 optionalString 不同：空串有意义（= 清除该字段）
-  return raw.trim();
 }
 
 function resolveRepoInput(raw: string, explicitRef?: string): { repo: string; ref?: string; subPath?: string } {
@@ -120,20 +70,20 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
   };
 
   routes["POST skills/sources/discover"] = async (req) => {
-    const body = asRecord(req.body);
-    const ids = optionalStringArray(body, "ids");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const ids = optionalInputList(body, "ids");
+    const workspace = optionalInput(body, "workspace");
     const candidates = await discoverSources({ skills, sources, repos }, { ids, workspace });
     return { candidates };
   };
 
   routes["POST skills/sources/register"] = async (req) => {
-    const body = asRecord(req.body);
-    const skillId = requireString(body, "skillId", "技能 ID");
-    const repoRaw = requireString(body, "repo", "仓库");
-    const ref = optionalString(body, "ref");
-    const skillPath = optionalString(body, "skillPath");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const skillId = requireInput(body, "skillId", "技能 ID");
+    const repoRaw = requireInput(body, "repo", "仓库");
+    const ref = optionalInput(body, "ref");
+    const skillPath = optionalInput(body, "skillPath");
+    const workspace = optionalInput(body, "workspace");
     const resolved = resolveRepoInput(repoRaw, ref);
     const entry = await registerSource(
       { ctx, skills, sources, now },
@@ -149,36 +99,36 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
   };
 
   routes["POST skills/sources/unregister"] = async (req) => {
-    const body = asRecord(req.body);
-    const skillId = requireString(body, "skillId", "技能 ID");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const skillId = requireInput(body, "skillId", "技能 ID");
+    const workspace = optionalInput(body, "workspace");
     await unregisterSource({ skills, sources }, { skillId, workspace });
     return {};
   };
 
   routes["POST skills/updates/check"] = async (req) => {
-    const body = asRecord(req.body);
-    const ids = optionalStringArray(body, "ids");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const ids = optionalInputList(body, "ids");
+    const workspace = optionalInput(body, "workspace");
     return await checkUpdates({ github, skills, sources, now }, { ids, workspace });
   };
 
   routes["POST skills/updates/apply"] = async (req) => {
-    const body = asRecord(req.body);
-    const ids = optionalStringArray(body, "ids");
+    const body = recordOrEmpty(req.body);
+    const ids = optionalInputList(body, "ids");
     if (ids === undefined || ids.length === 0) throw badRequest("请至少选择一个要更新的技能。");
-    const workspace = optionalString(body, "workspace");
+    const workspace = optionalInput(body, "workspace");
     return await applyUpdates({ github, skills, sources, now }, { ids, workspace });
   };
 
   routes["GET skills/repos"] = async () => ({ repos: await catalog.list() });
 
   routes["POST skills/repos/add"] = async (req) => {
-    const body = asRecord(req.body);
-    const repoRaw = requireString(body, "repo", "仓库");
-    const ref = optionalString(body, "ref");
-    const subPath = optionalString(body, "subPath");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const repoRaw = requireInput(body, "repo", "仓库");
+    const ref = optionalInput(body, "ref");
+    const subPath = optionalInput(body, "subPath");
+    const workspace = optionalInput(body, "workspace");
     const resolved = resolveRepoInput(repoRaw, ref);
     return await catalog.add(
       { repo: resolved.repo, ref: resolved.ref, subPath: subPath ?? resolved.subPath },
@@ -187,11 +137,11 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
   };
 
   routes["POST skills/repos/update"] = async (req) => {
-    const body = asRecord(req.body);
-    const repoRaw = requireString(body, "repo", "仓库");
-    const ref = optionalPatchString(body, "ref");
-    const subPath = optionalPatchString(body, "subPath");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const repoRaw = requireInput(body, "repo", "仓库");
+    const ref = patchInput(body, "ref");
+    const subPath = patchInput(body, "subPath");
+    const workspace = optionalInput(body, "workspace");
     if (ref === undefined && subPath === undefined) throw badRequest("请至少修改分支或子目录中的一项。");
     const resolved = resolveRepoInput(repoRaw);
     const patch: { ref?: string; subPath?: string } = {};
@@ -201,9 +151,9 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
   };
 
   routes["POST skills/repos/remove"] = async (req) => {
-    const body = asRecord(req.body);
-    const repoRaw = requireString(body, "repo", "仓库");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const repoRaw = requireInput(body, "repo", "仓库");
+    const workspace = optionalInput(body, "workspace");
     const resolved = resolveRepoInput(repoRaw);
     return await catalog.remove(resolved.repo, { workspace });
   };
@@ -214,17 +164,17 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
   };
 
   routes["POST skills/discovery/refresh"] = async (req) => {
-    const body = asRecord(req.body);
-    const only = optionalStringArray(body, "repos");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const only = optionalInputList(body, "repos");
+    const workspace = optionalInput(body, "workspace");
     return await catalog.refresh({ repos: only, workspace, signal: req.signal });
   };
 
   routes["POST skills/repo/browse"] = async (req) => {
-    const body = asRecord(req.body);
-    const repoRaw = requireString(body, "repo", "仓库");
-    const ref = optionalString(body, "ref");
-    const workspace = optionalString(body, "workspace");
+    const body = recordOrEmpty(req.body);
+    const repoRaw = requireInput(body, "repo", "仓库");
+    const ref = optionalInput(body, "ref");
+    const workspace = optionalInput(body, "workspace");
     const resolved = resolveRepoInput(repoRaw, ref);
     return await browseRepo(
       { github, skills, meta },
@@ -259,12 +209,12 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
   };
 
   routes["POST skills/install"] = async (req) => {
-    const body = asRecord(req.body);
-    const repoRaw = requireString(body, "repo", "仓库");
-    const ref = optionalString(body, "ref");
-    const targetRaw = requireString(body, "target", "安装目标");
-    const workspace = optionalString(body, "workspace");
-    const skillPaths = optionalStringArray(body, "skillPaths");
+    const body = recordOrEmpty(req.body);
+    const repoRaw = requireInput(body, "repo", "仓库");
+    const ref = optionalInput(body, "ref");
+    const targetRaw = requireInput(body, "target", "安装目标");
+    const workspace = optionalInput(body, "workspace");
+    const skillPaths = optionalInputList(body, "skillPaths");
     if (skillPaths === undefined || skillPaths.length === 0) throw badRequest("请至少选择一个要安装的技能。");
     const resolved = resolveRepoInput(repoRaw, ref);
     const target: InstallTarget = assertInstallTarget(targetRaw);

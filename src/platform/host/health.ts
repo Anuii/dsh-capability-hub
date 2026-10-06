@@ -1,7 +1,6 @@
 /**
- * 阶段 A 的演示模块：把平台层的实测结果暴露在 GET health 上。
- *
- * 这一条路由就是 A2 里 V1/V8/V9 的证据来源，也是后续所有标签页拿环境信息的入口。
+ * 健康检查模块：GET health 把外壳的实测状态（各模块是否降级、SDK 与 yaml 是否加载、mcp 工具是否注册、
+ * 路由与会话桥）一次给出来。界面的降级横幅、版本不一致提示、ⓘ 诊断都读它。
  */
 import type { PlatformContext } from "./types.ts";
 import type { HubModule, RouteHandler } from "../contract/host.ts";
@@ -9,8 +8,8 @@ import type { SdkLoadState } from "./sdk-loader.ts";
 import type { YamlLoadState } from "./yaml-loader.ts";
 import type { ModuleStatus } from "./modules.ts";
 
-/** demo 模块需要的环境（由外壳注入，避免模块之间 import）。 */
-export interface DemoDeps {
+/** 健康检查需要的环境（由外壳注入，避免模块之间 import）。 */
+export interface HealthDeps {
   ctx: PlatformContext;
   sdk: SdkLoadState;
   /** DSH 自带的 yaml 库（技能模块解析 frontmatter 用）。 */
@@ -36,8 +35,7 @@ export interface DemoDeps {
   };
 }
 
-/** 组装 demo 模块。 */
-export function createDemoModule(deps: DemoDeps): HubModule {
+export function createHealthModule(deps: HealthDeps): HubModule {
   const health: RouteHandler = async () => ({
     ok: true,
     plugin: "dsh-capability-hub",

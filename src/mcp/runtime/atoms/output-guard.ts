@@ -10,7 +10,8 @@
  */
 import { join } from "node:path";
 import { SPILL_KEEP_FILES, SPILL_MAX_BYTES } from "../constants.ts";
-import { atomicWriteFile, ensureDir, listDir, removeFile } from "./fsx.ts";
+import { ensureDir, listDir, removeFile } from "./fsx.ts";
+import { atomicWriteFile } from "../../../shared/node/fsx.ts";
 
 export interface OutputGuardSettings {
   enabled: boolean;
@@ -86,9 +87,9 @@ export function createSpillWriter(spillDir: string): SpillWriter {
       if (bytes.length > SPILL_MAX_BYTES) {
         const head = cutAtBytes(text, SPILL_MAX_BYTES);
         const note = "\n\n[能力中心：该结果超过 " + humanBytes(SPILL_MAX_BYTES) + " 上限，spill 文件本身已被截断]\n";
-        await atomicWriteFile(path, head + note);
+        await atomicWriteFile(path, head + note, { mode: 0o600 });
       } else {
-        await atomicWriteFile(path, text);
+        await atomicWriteFile(path, text, { mode: 0o600 });
       }
       written.add(path);
       await prune();

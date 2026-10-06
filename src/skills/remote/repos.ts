@@ -12,7 +12,8 @@
  */
 
 import path from "node:path";
-import { pathExists, readJsonFile, writeJsonFile } from "./fsx.ts";
+import { readJsonFile, writeJsonFile } from "./fsx.ts";
+import { pathExists } from "../../shared/node/fsx.ts";
 import { badRequest, conflict, notFound, validation } from "../../shared/errors.ts";
 import { describeUnsafePath } from "./safepath.ts";
 import type { RepoReposFile } from "./types.ts";

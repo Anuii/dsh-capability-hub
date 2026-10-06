@@ -14,7 +14,8 @@ import path from "node:path";
 import type { Diagnostic, RootId, RootInfo, SkillSummary } from "../contract/local.ts";
 import type { HubContext } from "../../platform/contract/host.ts";
 import type { Frontmatter } from "./frontmatter/index.ts";
-import { isDirectory, pathExists, readFileText, statOrUndefined } from "./fsx.ts";
+import { isDirectory, readFileText, statOrUndefined } from "./fsx.ts";
+import { pathExists } from "../../shared/node/fsx.ts";
 
 export interface RootSpec {
   rootId: RootId;

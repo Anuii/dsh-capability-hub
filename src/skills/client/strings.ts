@@ -8,6 +8,8 @@
  *   - UI-A 起：字典里不留死键（test/skills/client/strings.test.ts 双向检查）。
  */
 
+import { createTranslator } from "../../kit/translate.ts";
+
 export const zh = {
   /* ---- 通用 ---- */
   "skills.loading": "读取中…",
@@ -308,11 +310,5 @@ export const zh = {
 
 export type SkillsKey = keyof typeof zh;
 
-/** 取一条技能页文案（支持 {name} 模板参数）。界面只做中文，直接返回中文字典。 */
-export function t(key: SkillsKey, values?: Record<string, unknown>): string {
-  let text: string = zh[key];
-  if (values !== undefined) {
-    for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value));
-  }
-  return text;
-}
+/** 取一条文案（支持 {name} 模板参数）。 */
+export const t = createTranslator<SkillsKey>(zh);

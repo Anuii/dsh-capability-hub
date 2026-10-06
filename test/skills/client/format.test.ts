@@ -287,7 +287,7 @@ test("错误映射：message / code / 逐字段 details / 冲突判定", () => {
 
   const conflict = new FakeApiError("CONFLICT", "原路径已存在同名的目录/文件");
   assert.equal(isConflict(conflict), true);
-  assert.equal(isConflict(new Error("读取失败：原路径已存在同名的目录/文件")), true, "没有 code 时按文案兜底");
+  assert.equal(isConflict(new Error("读取失败：原路径已存在同名的目录/文件")), false, "只认错误码，不猜文案");
 });
 
 test("技能目录的范围", () => {

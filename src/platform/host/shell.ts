@@ -39,9 +39,9 @@ import { loadYaml, type YamlLoadState } from "./yaml-loader.ts";
 import { createStubRuntime } from "./stub-runtime.ts";
 import { registerMcpTool, type ToolRegistration } from "./tool-registrar.ts";
 import { attachSessionBridge, type SessionBridge } from "./session-bridge.ts";
-import { createDemoModule } from "./demo.ts";
+import { createHealthModule } from "./health.ts";
 import { HUB_VERSION } from "../../version.ts";
-import { createRejectingModule, createThrowingModule } from "./demo-failing.ts";
+import { createRejectingModule, createThrowingModule } from "./failure-demo.ts";
 import type { McpRuntime } from "../../mcp/contract/runtime.ts";
 import { errorText } from "../../shared/error-text.ts";
 
@@ -198,10 +198,10 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
 
   const entries: ModuleEntry[] = [
     {
-      name: "demo",
+      name: "health",
       // demo 的 health 要报 profileDir / packageRoot，用外壳自己的完整上下文。
       load: () =>
-        createDemoModule({
+        createHealthModule({
           ctx,
           sdk: sdkState,
           yaml: yamlState,

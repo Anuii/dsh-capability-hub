@@ -15,6 +15,7 @@ import { emptyRawConfig, toEffectiveConfig } from "./schema.ts";
 import type { RawMcpConfigFile } from "../contract/config.ts";
 import type { EffectiveMcpConfig, McpConfigSource } from "../contract/config.ts";
 import type { HubLogger } from "../../platform/contract/host.ts";
+import { atomicWriteFile } from "../../shared/node/fsx.ts";
 
 export interface McpStore extends McpConfigSource {
   /** 配置文件绝对路径 */
@@ -192,16 +193,8 @@ export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStor
   }
 
   async function writeRaw(next: RawMcpConfigFile): Promise<void> {
-    await fs.mkdir(dir, { recursive: true });
-    const tmp = join(dir, ".config.json.tmp-" + process.pid + "-" + Math.random().toString(36).slice(2, 10));
-    const text = JSON.stringify(next, null, 2) + "\n";
-    await fs.writeFile(tmp, text, "utf8");
-    try {
-      await fs.rename(tmp, filePath);
-    } catch (error) {
-      await fs.rm(tmp, { force: true });
-      throw error;
-    }
+    // 配置里有 env / headers 的明文：只给当前用户读写
+    await atomicWriteFile(filePath, JSON.stringify(next, null, 2) + "\n", { mode: 0o600 });
     mtimeMs = await statMtime();
   }
 

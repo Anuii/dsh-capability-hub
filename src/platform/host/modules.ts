@@ -8,7 +8,7 @@
  *      但我们的目标是连 warning 都不产生非预期条目）。
  *   3. 降级状态要能被 GET health 读到，用户必须看得见。
  *
- * 阶段 A：只有 demo（demo.ts）与「故意失败」演示（demo-failing.ts）。
+ * 外壳自己的模块：健康检查（health.ts）与「故意失败」演示（failure-demo.ts，devOverrides.failureDemo 打开）。
  * 阶段 B：4 个真实模块（skills-local / skills-remote / mcp-config / mcp-runtime）
  *         由本文件的 createFeatureModuleEntries() 按依赖顺序接入（见该函数顶部说明）。
  */

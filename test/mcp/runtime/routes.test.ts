@@ -91,7 +91,7 @@ test("POST mcp/runtime/refresh：正常刷新返回 toolCount", async () => {
   }
 });
 
-test("POST mcp/runtime/refresh：缺 name ⇒ 400，未知服务器 ⇒ 404", async () => {
+test("POST mcp/runtime/refresh：缺 name ⇒ 400，未知服务器 ⇒ 404，已停用 ⇒ 409", async () => {
   const h = await makeModule();
   try {
     const refresh = h.module.routes["POST mcp/runtime/refresh"]!;
@@ -108,6 +108,11 @@ test("POST mcp/runtime/refresh：缺 name ⇒ 400，未知服务器 ⇒ 404", as
       refresh(req(42)),
       (err: { status?: number }) => err.status === 400,
       "非对象请求体要报 400 而不是崩",
+    );
+    await assert.rejects(
+      refresh(req({ name: "beta" })),
+      (err: { status?: number; code?: string }) => err.status === 409 && err.code === "CONFLICT",
+      "已停用的服务器不刷新",
     );
   } finally {
     await h.dispose();
