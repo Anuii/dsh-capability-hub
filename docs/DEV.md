@@ -87,7 +87,10 @@ SDK 只存在于 DSH 的 `app.asar` 内，本机 Node 解析不到，所以必�
     $env:ELECTRON_RUN_AS_NODE='1'
     & "$env:LOCALAPPDATA\Programs\DeepSeek Harness\DeepSeek Harness.exe" 'test/mcp/runtime/integration/run-integration.mjs'
 
-期望末行 `INTEGRATION-RESULT pass=35 fail=0 leftover-processes=0`。
+期望末行 `INTEGRATION-RESULT pass=37 fail=0 leftover-processes=0`。
+
+同一方式还能跑 `test/mcp/runtime/integration/schema-subset-check.mjs`：用 DSH 自带的校验器核对 MCP 工具参数 schema 的转换
+（样本库 + 本机工具缓存，只读），期望末行 `SCHEMA-SUBSET-RESULT pass=N fail=0`。
 
 前提与覆盖：
 
@@ -348,12 +351,12 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 
 ## 8. 启动报告 boot.json
 
-外壳每次启动（以及之后 `mcp` 工具描述每次变化时）会把一份小 JSON 覆盖写到 `<hubHome>/boot.json`（夹具下即
+外壳每次启动（以及之后注册的 MCP 工具清单每次变化时）会把一份小 JSON 覆盖写到 `<hubHome>/boot.json`（夹具下即
 `.dev\home\.dsh\storages\dsh-capability-hub\boot.json`），字段：
 
     profileName / homeDir / dshHome / hubHome / pid / startedAt / writtenAt（最后一次重写的时间）
     routes / registeredPaths / registrationError
-    sdk / modules / toolRegistered / toolError / toolDescription（当前注册给模型的 mcp 工具描述）
+    sdk / modules / tools（registered = 已注册给模型的 MCP 工具名，failed = 被 DSH 拒绝的工具与原因，prompt = 服务器说明是否挂进了系统提示词）
     services（逐项探测 connection、webServer、tools、loader、profileContext ... 是否可见）
     skillSources（技能目录来源：skillProviders / tree / bundledEnv）
 

@@ -2,7 +2,8 @@
 
 A plugin for DeepSeek Harness (DSH) that manages agent skills and MCP servers
 in one place: browse/toggle/install/update skills, edit and validate `mcpServers` configuration,
-and expose all configured MCP servers through a single lazy-loading `mcp` proxy tool.
+and register every tool of the configured MCP servers directly as a DSH tool (`mcp__<server>__<tool>`),
+with server processes started on first use.
 The UI is Chinese-only. Runs locally; interfaces sit behind DSH's own `/api` authentication.
 Licensed under the MIT License.
 
@@ -17,8 +18,8 @@ Licensed under the MIT License.
   「添加技能」是仓库视图：维护仓库列表（可设分支与子目录），汇总发现所有仓库的技能后勾选安装；
 - **MCP 服务器**：粘贴 JSON / 表单 / 预置模板 / 从 Claude Code、Codex 只读导入，
   保存前校验，敏感值打码；
-- **MCP 懒加载运行时**：只向模型注册**一个**工具 `mcp`（`search` / `describe` / `call` /
-  `connect` / `instructions` / `status`），服务器进程按需启动、空闲回收，按会话隔离；
+- **MCP 运行时**：每个服务器的每个工具直接注册成 DSH 工具 `mcp__<服务器>__<工具>`（PTC 模式下就是独立的类型化绑定），
+  参数 schema 自动转成 DSH 接受的格式；服务器说明进系统提示词；服务器进程第一次调用时才启动、空闲回收，按会话隔离；
 - **运行中**：MCP 页底部按会话列出活跃实例（子代理缩进），可断开；服务器详情里看工具缓存、
   最近失败与退避冷却，可刷新缓存、断开该服务器的全部实例。
 

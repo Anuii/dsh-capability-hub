@@ -1,6 +1,6 @@
 # AGENTS.md
 
-DeepSeek Harness（DSH）插件「能力中心」：技能管理、MCP 服务器管理、MCP 懒加载代理工具 `mcp`。界面与文档以中文为主。
+DeepSeek Harness（DSH）插件「能力中心」：技能管理、MCP 服务器管理、把 MCP 工具直接注册给模型（`mcp__<服务器>__<工具>`，进程按需启动）。界面与文档以中文为主。
 
 ## 先读
 - 如果存在 `.local/HANDOFF.md`（本地文件，不在版本库里），先读它：里面是当前进度和使用者本机的状态。
