@@ -1,20 +1,20 @@
-/** 失败退避（D-D7）：冷却期内的 call/connect、force 绕过、取消不算失败。 */
+/** 失败退避（D-D7）：冷却期内的调用、手动刷新不受冷却限制、成功清空、取消不算失败、服务器自己的错误不算失败。 */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { callCtx, makeHarness, makeServer } from "./helpers.ts";
 
 const SERVER = makeServer({ serverName: "a", command: "node", args: ["srv.js"] });
+const PING = "mcp__a__ping";
 
 /**
- * 造一个「先成功后失败」的假服务器：因为 start() 会先做一次启动探测，
- * 若一上来就失败，第一次 connect 已经在冷却里了，测不出「失败 → 冷却」这条路径。
+ * 造一个「先成功后失败」的假服务器：start() 会先做一次启动探测（第 1 次连接），它必须成功，
+ * 工具才会进缓存、才会被注册；之后第 failOnCalls 次（1 起数）连接失败。
  */
 function flaky(key: string, tools: Array<{ name: string }>, failOnCalls: number[] = [2]) {
   let call = 0;
   return {
     key,
     tools,
-    // 只有第 failOnCalls 次（1 起数）连接失败，其余成功。第 1 次通常是 start() 的启动探测。
     get connectFailure() {
       call += 1;
       return failOnCalls.includes(call) ? "启动失败" : undefined;
@@ -22,88 +22,107 @@ function flaky(key: string, tools: Array<{ name: string }>, failOnCalls: number[
   };
 }
 
-test("连接失败后进入冷却，冷却期内的 connect / call 直接返回说明与剩余时间", async () => {
+/** 等一个 Promise 失败并返回错误文字（调用失败一律抛错，DSH 把它记成失败的工具调用）。 */
+async function failure(promise: Promise<unknown>): Promise<string> {
+  try {
+    await promise;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("本该失败的调用成功了");
+}
+
+test("连接失败后进入冷却，冷却期内的调用直接拒绝并给出剩余时间与解决办法", async () => {
   const h = await makeHarness({ servers: [SERVER], behaviors: [flaky("node srv.js", [{ name: "ping" }], [2])] });
   try {
-    const first = await h.runtime.execute({ connect: "a" }, callCtx("main"));
-    assert.match(first, /连接服务器 "a" 失败/);
+    assert.deepEqual(
+      h.runtime.tools().map((spec) => spec.name),
+      [PING],
+    );
+    const first = await failure(h.runtime.call(PING, {}, callCtx("main")));
+    assert.match(first, /调用 "mcp__a__ping" 失败/);
     assert.match(first, /启动失败/);
     assert.match(first, /已进入 \d+ 秒冷却/);
-
-    const second = await h.runtime.execute({ connect: "a" }, callCtx("main"));
+    const connects = h.registry.connectCalls;
+    const second = await failure(h.runtime.call(PING, {}, callCtx("main")));
     assert.match(second, /冷却还剩 \d+ 秒/);
     assert.match(second, /不会自动重试/);
-    assert.match(second, /force: true/);
+    assert.match(second, /能力中心/, "告诉模型可以请用户去界面里刷新");
+    assert.equal(h.registry.connectCalls, connects, "冷却期内不再连接");
   } finally {
     await h.dispose();
   }
 });
 
-test("冷却期过后可以再试", async () => {
+test("冷却期过后会真的再试一次", async () => {
   const h = await makeHarness({ servers: [SERVER], behaviors: [flaky("node srv.js", [{ name: "ping" }], [2, 3])] });
   try {
-    await h.runtime.execute({ connect: "a", force: true }, callCtx("main"));
-    assert.ok((await h.runtime.status()).servers[0].lastFailure, "应当已有失败记录");
+    await failure(h.runtime.call(PING, {}, callCtx("main")));
     h.clock.jump(61_000);
-    const again = await h.runtime.execute({ connect: "a" }, callCtx("main"));
-    assert.match(again, /失败/, "会真的再试一次（仍然失败）");
+    const again = await failure(h.runtime.call(PING, {}, callCtx("main")));
+    assert.match(again, /启动失败/, "会真的再试一次（仍然失败）");
     assert.ok(!again.includes("冷却还剩"), "不再是冷却文案");
   } finally {
     await h.dispose();
   }
 });
 
-test("connect 带 force 可绕过冷却", async () => {
-  let failures = 1;
-  const h = await makeHarness({
-    servers: [SERVER],
-    behaviors: [
-      {
-        key: "node srv.js",
-        tools: [{ name: "ping" }],
-        get connectFailure() {
-          return failures-- > 0 ? "第一次失败" : undefined;
-        },
-      },
-    ],
-  });
+test("界面上的手动刷新不受冷却限制，成功后清空失败、调用恢复", async () => {
+  const h = await makeHarness({ servers: [SERVER], behaviors: [flaky("node srv.js", [{ name: "ping" }], [2])] });
   try {
-    const first = await h.runtime.execute({ connect: "a" }, callCtx("main"));
-    assert.match(first, /冷却/);
-    const forced = await h.runtime.execute({ connect: "a", force: true }, callCtx("main"));
-    assert.match(forced, /已连接服务器 "a"/);
-    assert.ok(!forced.includes("冷却"));
+    await failure(h.runtime.call(PING, {}, callCtx("main")));
+    assert.match(await failure(h.runtime.call(PING, {}, callCtx("main"))), /冷却还剩/);
+    assert.deepEqual(await h.runtime.refresh("a"), { toolCount: 1 });
+    assert.equal((await h.runtime.status()).servers[0]!.lastFailure, undefined);
+    assert.equal(await h.runtime.call(PING, {}, callCtx("main")), "fake:ping");
   } finally {
     await h.dispose();
   }
 });
 
 test("成功即清空失败记录", async () => {
-  // start() 的启动探测成功（第 1 次）⇒ 第一次 connect 失败（第 2 次）⇒ 再连成功（第 3 次）。
   const h = await makeHarness({ servers: [SERVER], behaviors: [flaky("node srv.js", [{ name: "ping" }], [2])] });
   try {
-    await h.runtime.execute({ connect: "a", force: true }, callCtx("main"));
-    assert.ok((await h.runtime.status()).servers[0].lastFailure, "先要有一次失败");
+    await failure(h.runtime.call(PING, {}, callCtx("main")));
+    assert.ok((await h.runtime.status()).servers[0]!.lastFailure, "先要有一次失败");
     h.clock.jump(61_000);
-    await h.runtime.execute({ connect: "a" }, callCtx("main"));
-    const status = await h.runtime.status();
-    assert.equal(status.servers[0].lastFailure, undefined, "成功之后不该还留着失败记录");
+    assert.equal(await h.runtime.call(PING, {}, callCtx("main")), "fake:ping");
+    assert.equal((await h.runtime.status()).servers[0]!.lastFailure, undefined, "成功之后不该还留着失败记录");
   } finally {
     await h.dispose();
   }
 });
 
-test("调用失败后同样进入冷却，冷却期内 call 直接返回", async () => {
+test("调用抛错同样进入冷却", async () => {
   const h = await makeHarness({
     servers: [SERVER],
     behaviors: [{ key: "node srv.js", tools: [{ name: "ping" }], callFailure: "服务器内部错误" }],
   });
   try {
-    const first = await h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
-    assert.match(first, /调用 "a__ping" 失败/);
+    const first = await failure(h.runtime.call(PING, {}, callCtx("main")));
+    assert.match(first, /调用 "mcp__a__ping" 失败/);
     assert.match(first, /服务器内部错误/);
-    const second = await h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
-    assert.match(second, /冷却还剩/);
+    assert.match(await failure(h.runtime.call(PING, {}, callCtx("main"))), /冷却还剩/);
+  } finally {
+    await h.dispose();
+  }
+});
+
+test("服务器自己返回的错误（isError）原文交给模型，不算失败、不进冷却", async () => {
+  const h = await makeHarness({
+    servers: [SERVER],
+    behaviors: [
+      {
+        key: "node srv.js",
+        tools: [{ name: "ping" }],
+        callResults: { ping: { isError: true, content: [{ type: "text", text: "参数 x 不能为空" }] } },
+      },
+    ],
+  });
+  try {
+    assert.match(await failure(h.runtime.call(PING, {}, callCtx("main"))), /参数 x 不能为空/);
+    assert.equal((await h.runtime.status()).servers[0]!.lastFailure, undefined);
+    assert.match(await failure(h.runtime.call(PING, {}, callCtx("main"))), /参数 x 不能为空/, "下一次照常调用");
   } finally {
     await h.dispose();
   }
@@ -115,17 +134,13 @@ test("取消不算失败：不进入冷却", async () => {
     behaviors: [{ key: "node srv.js", tools: [{ name: "ping" }], callDelayMs: 100 }],
   });
   try {
-    await h.runtime.execute({ connect: "a" }, callCtx("main"));
+    await h.runtime.call(PING, {}, callCtx("main"));
     const controller = new AbortController();
-    const calling = h.runtime.execute({ tool: "ping", args: {} }, callCtx("main", { signal: controller.signal }));
+    const calling = h.runtime.call(PING, {}, callCtx("main", { signal: controller.signal }));
     controller.abort();
-    const text = await calling;
-    assert.match(text, /已被取消/);
-    const status = await h.runtime.status();
-    assert.equal(status.servers[0].lastFailure, undefined, "取消不该留下失败记录");
-    // 而且下一次调用应当被正常尝试
-    const again = await h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
-    assert.ok(!again.includes("冷却"), "取消后不该有冷却");
+    assert.match(await failure(calling), /已取消/);
+    assert.equal((await h.runtime.status()).servers[0]!.lastFailure, undefined, "取消不该留下失败记录");
+    assert.equal(await h.runtime.call(PING, {}, callCtx("main")), "fake:ping", "取消后照常调用");
   } finally {
     await h.dispose();
   }
@@ -134,29 +149,41 @@ test("取消不算失败：不进入冷却", async () => {
 test("failureBackoffMs 可配置（0 = 立刻可重试）", async () => {
   const h = await makeHarness({
     servers: [SERVER],
-    behaviors: [{ key: "node srv.js", connectFailure: "失败" }],
+    behaviors: [flaky("node srv.js", [{ name: "ping" }], [2, 3])],
     settings: { failureBackoffMs: 0 },
   });
   try {
-    const first = await h.runtime.execute({ connect: "a" }, callCtx("main"));
-    assert.match(first, /失败/);
+    const first = await failure(h.runtime.call(PING, {}, callCtx("main")));
     assert.ok(!first.includes("冷却"), "退避为 0 时不该出现冷却文案");
-    const status = await h.runtime.status();
-    assert.equal(status.servers[0].lastFailure!.cooldownUntil, undefined, "退避为 0 时不该有 cooldownUntil");
+    assert.equal((await h.runtime.status()).servers[0]!.lastFailure!.cooldownUntil, undefined);
+    assert.match(await failure(h.runtime.call(PING, {}, callCtx("main"))), /启动失败/, "立刻再试");
   } finally {
     await h.dispose();
   }
 });
 
 test("status 暴露最近失败与冷却时间", async () => {
-  const h = await makeHarness({ servers: [SERVER], behaviors: [{ key: "node srv.js", connectFailure: "爆炸" }] });
+  const h = await makeHarness({ servers: [SERVER], behaviors: [flaky("node srv.js", [{ name: "ping" }], [2])] });
   try {
-    await h.runtime.execute({ connect: "a" }, callCtx("main"));
-    const status = await h.runtime.status();
-    assert.ok(status.servers[0].lastFailure);
-    assert.match(status.servers[0].lastFailure!.message, /爆炸/);
-    assert.equal(typeof status.servers[0].lastFailure!.at, "number");
-    assert.equal(typeof status.servers[0].lastFailure!.cooldownUntil, "number");
+    await failure(h.runtime.call(PING, {}, callCtx("main")));
+    const last = (await h.runtime.status()).servers[0]!.lastFailure!;
+    assert.match(last.message, /启动失败/);
+    assert.equal(typeof last.at, "number");
+    assert.equal(typeof last.cooldownUntil, "number");
+  } finally {
+    await h.dispose();
+  }
+});
+
+test("不存在的工具名、已停用服务器的工具：说明原因，不起进程", async () => {
+  const h = await makeHarness({ servers: [SERVER], behaviors: [flaky("node srv.js", [{ name: "ping" }], [])] });
+  try {
+    const connects = h.registry.connectCalls;
+    assert.match(await failure(h.runtime.call("mcp__a__nope", {}, callCtx("main"))), /已不存在/);
+    h.config.setServers([{ ...SERVER, disabled: true }]);
+    assert.deepEqual(h.runtime.tools(), []);
+    assert.match(await failure(h.runtime.call(PING, {}, callCtx("main"))), /已不存在/);
+    assert.equal(h.registry.connectCalls, connects);
   } finally {
     await h.dispose();
   }

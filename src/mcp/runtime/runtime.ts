@@ -1,41 +1,34 @@
 /**
- * mcp-runtime：把「一个恒定的 mcp 工具」实现为一个懒加载的 MCP 网关。
+ * mcp-runtime：把已配置的 MCP 服务器的每个工具直接交给 DSH 注册（D-D1），并在调用时按需起进程。
  *
  * 对应决策：
- * - D-D1 只注册一个工具 mcp，参数 schema 恒定；描述 = 恒定前缀 + 已启用服务器清单（名字 + meta.description 摘要），
- *        不写工具数量。
- * - D-D2 动作 search / describe / call / connect / instructions / status；
- *        search、describe、instructions、status 只读缓存，**绝不起进程**（actions/read.ts）。
+ * - D-D1 每个已启用服务器的每个可见工具注册成 DSH 工具 mcp__<服务器>__<工具>（来自工具缓存，
+ *        参数 schema 转成 DSH 子集）；服务器说明与服务器自带的用法说明进系统提示词。
  * - D-D3 会话隔离：实例键 = 会话 id + 服务器名；子代理会话各持一套；会话结束全部回收。
  * - D-D4 生命周期二维（启动时机 × 回收）：lazy / lazy-keep-alive / eager / keep-alive。
  * - D-D5 idleTimeout 默认 10 分钟、0 = 不回收；关闭时结束整棵进程树。
  * - D-D6 输出护栏默认 50 KiB / 2000 行，保头部，超出落文件并告诉模型路径。
- * - D-D7 失败退避，失败以文本返回；connect 带 force 可绕过；取消不算失败（failures.ts）。
+ * - D-D7 失败退避；取消不算失败（failures.ts）。
  * - D-D8 envFrom 失败拒绝启动，绝不注入空值。
- * - D-C6 新增/改配置的服务器后台自动探测一次；每次成功调用后顺带刷新。
+ * - D-C6 新增/改配置的服务器后台自动探测一次（拉清单 → 工具随之注册）；每次成功调用后顺带刷新。
  *
- * 结构：core.ts（共享状态与探测）→ actions/（各个动作）、status-view.ts（HTTP 视图）；
- * 本文件负责对外接口：工具描述、动作分派、会话事件、配置变化、空闲巡检与缓存监视。
+ * 结构：core.ts（共享状态与探测）→ tool-specs.ts（工具清单与提示词）、actions/call.ts（调用）、
+ * status-view.ts（HTTP 视图）；本文件负责对外接口、工具集合变化通知、会话事件、配置变化与定时任务。
  */
 
-import { DESCRIPTION_PREFIX, describeEnabledServers, IDLE_SWEEP_INTERVAL_MS } from "./constants.ts";
+import { IDLE_SWEEP_INTERVAL_MS } from "./constants.ts";
 import { computeConfigHash, isEntryValid } from "./atoms/metadata-cache.ts";
-
-import { PROXY_TOOL_PARAMETERS } from "./tool-schema.ts";
 import { RuntimeCore, type CoreOptions, type SessionRef } from "./core.ts";
-import { handleDescribe, handleInstructions, handleSearch, renderStatus } from "./actions/read.ts";
-import { handleConnect } from "./actions/connect.ts";
-import { handleCall } from "./actions/call.ts";
+import { buildPromptText, buildToolSpecs } from "./tool-specs.ts";
+import { callTool } from "./actions/call.ts";
 import { runtimeStatusView } from "./status-view.ts";
 import type { EffectiveMcpConfig } from "../contract/config.ts";
-import type { McpRuntime, RuntimeStatus } from "../contract/runtime.ts";
+import type { McpRuntime, McpToolSpec, RuntimeStatus } from "../contract/runtime.ts";
 import { errorText } from "../../shared/error-text.ts";
 import { conflict, notFound, upstream } from "../../shared/errors.ts";
 
 export { clipToolDescription, probeSessionId } from "./core.ts";
 export type { ProbeReason, SessionRef } from "./core.ts";
-
-export const TOOL_NAME = "mcp" as const;
 
 export interface McpRuntimeOptions extends CoreOptions {
   sweepIntervalMs?: number;
@@ -57,41 +50,44 @@ export interface McpRuntimeInternal extends McpRuntime {
   backgroundCount(): number;
 }
 
-/** 工具描述 = 恒定前缀 + 已启用服务器清单（名字 + meta.description 摘要，配置顺序），不写工具数量（D-D1）。 */
-function composeDescription(config: EffectiveMcpConfig): string {
-  const enabled = (config.servers ?? []).filter((server) => !server.disabled);
-  return DESCRIPTION_PREFIX + "\n\n" + describeEnabledServers(enabled);
-}
-
 export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal {
   const core = new RuntimeCore(options);
   const { clock, logger, cache, pool } = core;
   const sweepIntervalMs = options.sweepIntervalMs ?? IDLE_SWEEP_INTERVAL_MS;
   const cacheWatchIntervalMs = options.cacheWatchIntervalMs ?? IDLE_SWEEP_INTERVAL_MS;
-  const descriptionListeners = new Set<() => void>();
+  const toolListeners = new Set<() => void>();
 
-  let description = composeDescription(core.config);
+  let specs: McpToolSpec[] = buildToolSpecs(core);
+  let fingerprint = JSON.stringify(specs);
   let sweepTimer: unknown;
   let cacheWatchTimer: unknown;
   let unsubscribeConfig: (() => void) | undefined;
   let disposed = false;
 
+  // ---------------------------------------------------------------- 工具集合
+
+  /** 重新计算要注册的工具；内容真的变了才通知（注册集合稳定，提示词前缀缓存才不失效）。 */
+  function checkTools(): void {
+    const next = buildToolSpecs(core);
+    const nextFingerprint = JSON.stringify(next);
+    if (nextFingerprint === fingerprint) return;
+    specs = next;
+    fingerprint = nextFingerprint;
+    for (const listener of [...toolListeners]) {
+      try {
+        listener();
+      } catch (err) {
+        logger.warn("mcp-runtime 工具变化监听器抛错：" + errorText(err));
+      }
+    }
+  }
+  core.cacheListeners.add(checkTools);
+
   // ---------------------------------------------------------------- 配置变化
 
   function applyConfigChange(next: EffectiveMcpConfig, prev: EffectiveMcpConfig): void {
     core.config = next;
-    const nextDescription = composeDescription(next);
-    // 只有文本真正变化时才通知（描述字节稳定是 D-D1 的核心要求）。
-    if (nextDescription !== description) {
-      description = nextDescription;
-      for (const listener of [...descriptionListeners]) {
-        try {
-          listener();
-        } catch (err) {
-          logger.warn("mcp-runtime 描述变化监听器抛错：" + errorText(err));
-        }
-      }
-    }
+    checkTools();
     const before = new Map((prev.servers ?? []).map((server) => [server.serverName, server]));
     for (const server of next.servers ?? []) {
       const previous = before.get(server.serverName);
@@ -134,7 +130,7 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal
   function scheduleCacheWatch(): void {
     cacheWatchTimer = clock.setTimer(() => {
       if (disposed) return;
-      void cache.reloadIfChanged().catch(() => undefined);
+      void core.ensureCacheLoaded().catch(() => undefined);
       scheduleCacheWatch();
     }, cacheWatchIntervalMs);
   }
@@ -142,48 +138,32 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal
   // ---------------------------------------------------------------- 对外接口
 
   const runtime: McpRuntimeInternal = {
-    toolName: TOOL_NAME,
+    tools: () => specs,
 
-    toolParameters(): unknown {
-      // 返回深拷贝：调用方（平台层）可能往 schema 里加东西，不能污染模块常量。
-      return JSON.parse(JSON.stringify(PROXY_TOOL_PARAMETERS)) as unknown;
-    },
-
-    toolDescription(): string {
-      return description;
-    },
-
-    onDescriptionChange(cb: () => void): () => void {
-      descriptionListeners.add(cb);
+    onToolsChange(cb: () => void): () => void {
+      toolListeners.add(cb);
       return () => {
-        descriptionListeners.delete(cb);
+        toolListeners.delete(cb);
       };
     },
 
-    async execute(args: unknown, call): Promise<string> {
+    promptText: () => buildPromptText(core, specs),
+
+    async call(name: string, args: unknown, call): Promise<string> {
       const session: SessionRef = {
-        sessionId: call?.sessionId ?? "default",
-        ...(call?.parentSessionId !== undefined ? { parentSessionId: call.parentSessionId } : {}),
+        sessionId: call.sessionId,
+        ...(call.parentSessionId !== undefined ? { parentSessionId: call.parentSessionId } : {}),
       };
-      const signal = call?.signal ?? new AbortController().signal;
-      try {
-        const title = core.sessionMeta.get(session.sessionId)?.title;
-        core.sessionMeta.set(session.sessionId, {
-          ...(session.parentSessionId !== undefined ? { parentSessionId: session.parentSessionId } : {}),
-          ...(title !== undefined ? { title } : {}),
-        });
-        await core.ensureCacheLoaded();
-        const params = (unwrapGatewayEnvelope(args) ?? {}) as Record<string, unknown>;
-        if (params.search !== undefined) return handleSearch(core, params);
-        if (params.describe !== undefined) return handleDescribe(core, params);
-        if (params.instructions !== undefined) return handleInstructions(core, params);
-        if (params.connect !== undefined) return await handleConnect(core, params, session, signal);
-        if (params.tool !== undefined) return await handleCall(core, params, session, signal);
-        return renderStatus(core);
-      } catch (err) {
-        logger.error("mcp 工具执行失败：" + errorText(err));
-        return "mcp 工具执行失败：" + errorText(err);
+      const title = core.sessionMeta.get(session.sessionId)?.title;
+      core.sessionMeta.set(session.sessionId, {
+        ...(session.parentSessionId !== undefined ? { parentSessionId: session.parentSessionId } : {}),
+        ...(title !== undefined ? { title } : {}),
+      });
+      const spec = specs.find((item) => item.name === name);
+      if (spec === undefined) {
+        throw new Error("工具 " + name + " 已不存在：它所在的 MCP 服务器可能已停用、删除，或工具清单刚刚变了。");
       }
+      return callTool(core, spec, args, session, call.signal);
     },
 
     sessionStarted(info): void {
@@ -215,16 +195,17 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal
       if (cacheWatchTimer !== undefined) clock.clearTimer(cacheWatchTimer);
       unsubscribeConfig?.();
       unsubscribeConfig = undefined;
-      descriptionListeners.clear();
+      toolListeners.clear();
+      core.cacheListeners.delete(checkTools);
       await pool.closeAll();
       await Promise.allSettled([...core.background]);
       await core.spill.cleanup();
     },
 
     async start(): Promise<void> {
-      await core.ensureCacheLoaded();
       core.config = core.readConfig();
-      description = composeDescription(core.config);
+      await core.ensureCacheLoaded();
+      checkTools();
       scheduleSweep();
       scheduleCacheWatch();
       for (const server of core.enabledServers()) {
@@ -269,8 +250,8 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal
     },
   };
 
-  // 配置监听在**构造时**就挂上（而不是在 start() 里）：描述与设置解析不能依赖
-  // 「平台层是否调过 start()」。start() 只负责后台工作（空闲巡检、启动探测）。
+  // 配置监听在**构造时**就挂上（而不是在 start() 里）：工具集合与设置解析不能依赖
+  // 「平台层是否调过 start()」。start() 只负责后台工作（读缓存、空闲巡检、启动探测）。
   unsubscribeConfig = options.config.onChange((next, prev) => {
     try {
       applyConfigChange(next, prev);
@@ -280,22 +261,4 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal
   });
 
   return runtime;
-}
-
-/**
- * 网关名信封解包（F3-Q1「必须复刻的坑」）。
- *
- * DSH 可能把工具名为 mcp 的调用参数包成 { tool: "mcp", args: <真实参数> }。
- * 若不解包，{ search: "x" } 会被读成「调用一个叫 mcp 的 MCP 工具」，插件看起来装好了、实际完全不可用。
- * 判据（照抄参考实现）：candidate.tool === 'mcp' 且 args 是对象且参数只有 tool/args 两个键。
- * 该机制在 DSH 0.2.0-rc.2 宿主侧**未被证实**（F3 附 B 第 1 条），但防御成本极低、收益极高。
- */
-export function unwrapGatewayEnvelope(args: unknown): unknown {
-  if (args === null || typeof args !== "object" || Array.isArray(args)) return args;
-  const candidate = args as Record<string, unknown>;
-  if (Object.keys(candidate).length !== 2) return args;
-  if (candidate.tool !== TOOL_NAME) return args;
-  const inner = candidate.args;
-  if (inner === null || typeof inner !== "object" || Array.isArray(inner)) return args;
-  return inner;
 }

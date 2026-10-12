@@ -1,5 +1,5 @@
 /**
- * 失败与冷却（D-D7）：服务器失败后进入冷却期，期间不自动重试；connect 带 force 可以绕过；
+ * 失败与冷却（D-D7）：服务器失败后进入冷却期，期间不自动重试；用户在界面上手动刷新不受冷却限制；
  * 取消不算失败；任何一次成功（探测或调用）清空失败记录。
  */
 
@@ -72,7 +72,7 @@ export class FailureBook {
     return failure !== undefined && this.remaining(serverName) > 0 ? failure.at + this.#backoffMs() : undefined;
   }
 
-  /** 冷却期内直接返回给模型的说明与剩余时间；force 只对 connect 生效。 */
+  /** 冷却期内给模型的说明与剩余时间；force = 手动刷新（不受冷却限制）。 */
   blockedMessage(serverName: string, force: boolean): string | undefined {
     if (force) return undefined;
     const remaining = this.remaining(serverName);
@@ -91,9 +91,7 @@ export class FailureBook {
       "最近一次失败：" +
       (failure?.message ?? "（无详情）") +
       "\n" +
-      '如果配置已经修好，用 mcp({ connect: "' +
-      serverName +
-      '", force: true }) 立即重试。'
+      "如果配置已经修好，可以请用户在「能力中心 → MCP」里刷新这个服务器，之后立即可用。"
     );
   }
 }

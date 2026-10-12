@@ -280,9 +280,17 @@ export function cacheLineText(row: RuntimeRow): string {
   return parts.join(" · ");
 }
 
-/** 缓存里的工具名（宿主还没在运行态返回名字时是空数组）。 */
+/** 抽屉里列的工具名：模型看到的名字（mcp__<服务器>__<工具>）；老宿主没给时退回原名。 */
 export function cachedToolNames(row: RuntimeRow): string[] {
   const tools = row?.cache?.tools;
   if (!Array.isArray(tools)) return [];
-  return tools.map((tool) => (typeof tool?.name === "string" ? tool.name : "")).filter((name) => name !== "");
+  return tools
+    .map((tool) =>
+      typeof tool?.exposedAs === "string" && tool.exposedAs !== ""
+        ? tool.exposedAs
+        : typeof tool?.name === "string"
+          ? tool.name
+          : "",
+    )
+    .filter((name) => name !== "");
 }

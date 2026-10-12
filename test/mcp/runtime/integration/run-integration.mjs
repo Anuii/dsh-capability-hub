@@ -175,6 +175,7 @@ console.log("子进程 node：" + NODE);
 console.log("夹具服务器：" + FIXTURE);
 console.log("");
 
+const dshTools = await import(pathToFileURL(path.join(DSH_NM, "@deepseek-ai", "dsh-tools", "lib", "index.js")).href);
 const { createMcpRuntime } = await import(
   pathToFileURL(path.join(PKG_ROOT, "src", "mcp", "runtime", "runtime.ts")).href
 );
@@ -254,7 +255,12 @@ async function makeHarness(options = {}) {
     runtime,
     clock,
     server,
-    call: (args, sessionId = "main") => runtime.execute(args, { sessionId, signal: new AbortController().signal }),
+    /** 调一个直接注册的工具：成功返回文字，失败返回 "ERROR: <原因>"（运行时失败一律抛错）。 */
+    call: (name, args = {}, sessionId = "main") =>
+      runtime.call(name, args, { sessionId, signal: new AbortController().signal }).then(
+        (text) => text,
+        (error) => "ERROR: " + (error instanceof Error ? error.message : String(error)),
+      ),
     records: () => listPidRecords(home),
     cacheFile: () => path.join(hubHome, "mcp", "cache.json"),
     spillDir: () => path.join(hubHome, "mcp", "spill"),
@@ -283,26 +289,18 @@ async function liveInstance(harness) {
 // ---------------------------------------------------------------- 场景
 
 async function scenario1_realStdio() {
-  const name = "S1 真实 stdio 连接 → listTools（缓存）→ callTool";
+  const name = "S1 真实 stdio：启动探测 → 缓存 → 直接注册的工具清单（DSH 校验器收）→ 调用";
   console.log(name);
   const h = await makeHarness();
   try {
     await withTimeout(h.runtime.start(), 30_000, "start");
     await withTimeout(h.runtime.waitForBackgroundWork(), 60_000, "启动探测");
 
-    const connectText = await withTimeout(h.call({ connect: "fake" }), 60_000, "connect");
-    assertMatch(
-      name,
-      "connect 返回「已连接」与工具数",
-      connectText,
-      /已连接服务器 "fake" 并刷新了它的工具清单：4 个工具/,
-    );
-
     const cache = JSON.parse(fs.readFileSync(h.cacheFile(), "utf8"));
     assertTrue(
       name,
-      "cache.json 里落下了 4 个工具（真实 listTools 的结果）",
-      cache.servers?.fake?.tools?.length === 4,
+      "cache.json 里落下了 5 个工具（真实 listTools 的结果）",
+      cache.servers?.fake?.tools?.length === 5,
       "tools=" + JSON.stringify((cache.servers?.fake?.tools ?? []).map((tool) => tool.name)),
     );
     assertMatch(
@@ -312,14 +310,41 @@ async function scenario1_realStdio() {
       /假服务器的用法说明/,
     );
 
-    const searchText = await withTimeout(h.call({ search: "echo" }), 20_000, "search");
-    assertMatch(name, "search 命中 fake__echo", searchText, /fake__echo/);
+    const specs = h.runtime.tools();
+    assertEqual(
+      name,
+      "工具清单：mcp__<服务器>__<工具>，按名字排序",
+      specs.map((spec) => spec.name).join(","),
+      "mcp__fake__boom,mcp__fake__echo,mcp__fake__huge,mcp__fake__pick,mcp__fake__slow",
+    );
+    const rejected = [];
+    for (const spec of specs) {
+      try {
+        dshTools.assertSupportedJsonSchema(spec.parameters);
+        dshTools.assertObjectJsonSchema(spec.parameters);
+      } catch (error) {
+        rejected.push(spec.name + "：" + (error instanceof Error ? error.message : String(error)));
+      }
+    }
+    assertTrue(
+      name,
+      "每个工具的参数 schema 都被 DSH 自带的校验器接受（含 anyOf / 元组 / $ref 的 pick）",
+      rejected.length === 0,
+      rejected.join(" | "),
+    );
+    const prompt = h.runtime.promptText();
+    assertMatch(name, "提示词段落列出服务器", prompt, /^- fake$/m);
+    assertMatch(name, "提示词段落带服务器自带的用法说明", prompt, /假服务器的用法说明/);
 
-    const describeText = await withTimeout(h.call({ describe: "fake__echo" }), 20_000, "describe");
-    assertMatch(name, "describe 给出参数摘要", describeText, /parameters: text: string/);
-
-    const callText = await withTimeout(h.call({ tool: "echo", args: { text: "hello" } }), 30_000, "callTool");
-    assertEqual(name, "callTool 往返（echo:hello）", callText.trim(), "echo:hello");
+    const callText = await withTimeout(h.call("mcp__fake__echo", { text: "hello" }), 30_000, "callTool");
+    assertEqual(name, "调用往返（echo:hello）", callText.trim(), "echo:hello");
+    const pickText = await withTimeout(h.call("mcp__fake__pick", { region: [1, 2], mode: "fast" }), 30_000, "pick");
+    assertEqual(
+      name,
+      "转换过 schema 的工具照常调用，参数原样到服务器",
+      pickText.trim(),
+      'pick:{"region":[1,2],"mode":"fast"}',
+    );
 
     const { instance, record } = await liveInstance(h);
     assertTrue(
@@ -341,18 +366,18 @@ async function scenario1_realStdio() {
 }
 
 async function scenario2_readonlyNoSpawn() {
-  const name = "S2 search / describe / status / instructions 绝不产生新进程（真实进程计数）";
+  const name = "S2 读工具清单 / 提示词 / status 绝不产生新进程（真实进程计数）";
   console.log(name);
   const h = await makeHarness();
   try {
     await h.runtime.start();
     await h.runtime.waitForBackgroundWork();
-    await h.call({ connect: "fake" });
+    await h.call("mcp__fake__echo", { text: "warm" });
     const before = h.records().length;
-    await h.call({ search: "echo" });
-    await h.call({ describe: "fake__echo" });
-    await h.call({ instructions: "fake" });
-    await h.call({});
+    h.runtime.tools();
+    h.runtime.promptText();
+    await h.runtime.status();
+    h.runtime.tools();
     const after = h.records().length;
     assertEqual(name, "会话内 pid 记录数不变（没有新进程）", after, before);
     assertTrue(name, "确实已有进程被起过（否则这条断言没意义）", before >= 1, "before=" + before);
@@ -369,8 +394,7 @@ async function scenario3_sessionEnded() {
   try {
     await h.runtime.start();
     await h.runtime.waitForBackgroundWork();
-    await h.call({ connect: "fake" });
-    await h.call({ tool: "echo", args: { text: "bye" } });
+    await h.call("mcp__fake__echo", { text: "bye" });
 
     const { instance, record } = await liveInstance(h);
     assertTrue(name, "拿到活的服务器 pid", typeof instance?.pid === "number", "pid=" + instance?.pid);
@@ -433,12 +457,12 @@ async function scenario4_crashBackoff() {
   try {
     await h.runtime.start();
     await h.runtime.waitForBackgroundWork();
-    await h.call({ connect: "fake" });
+    await h.call("mcp__fake__echo", { text: "warm" });
     const { instance, record } = await liveInstance(h);
     const serverPid = instance.pid;
     const crashedGrandchild = record.grandchildPid;
 
-    const crashText = await withTimeout(h.call({ tool: "boom" }), 60_000, "崩溃调用");
+    const crashText = await withTimeout(h.call("mcp__fake__boom"), 60_000, "崩溃调用");
     assertMatch(name, "崩溃的调用返回失败说明", crashText, /失败/);
     assertMatch(name, "失败说明里带冷却", crashText, /冷却/);
     assertTrue(
@@ -449,7 +473,7 @@ async function scenario4_crashBackoff() {
     );
     assertTrue(name, "崩溃后崩溃进程的孙进程也没了", await waitForGone(crashedGrandchild), "pid=" + crashedGrandchild);
 
-    const second = await withTimeout(h.call({ tool: "boom" }), 20_000, "冷却期内再调");
+    const second = await withTimeout(h.call("mcp__fake__boom"), 20_000, "冷却期内再调");
     assertMatch(name, "冷却期内的调用直接返回剩余时间", second, /冷却还剩 \d+ 秒/);
 
     const status = await h.runtime.status();
@@ -471,9 +495,7 @@ async function scenario5_hugeSpill() {
   try {
     await h.runtime.start();
     await h.runtime.waitForBackgroundWork();
-    await h.call({ connect: "fake" });
-
-    const text = await withTimeout(h.call({ tool: "huge", args: { kilobytes: 300 } }), 60_000, "huge 调用");
+    const text = await withTimeout(h.call("mcp__fake__huge", { kilobytes: 300 }), 60_000, "huge 调用");
     assertMatch(name, "结果被截断并告知 spill 路径", text, /完整内容已保存到：/);
     const matched = /完整内容已保存到：(.+?)（/.exec(text);
     const spillPath = matched ? matched[1] : "";
@@ -513,11 +535,11 @@ async function scenario6_inFlightProtection() {
   try {
     await h.runtime.start();
     await h.runtime.waitForBackgroundWork();
-    await h.call({ connect: "fake" });
+    await h.call("mcp__fake__echo", { text: "warm" });
     const { instance } = await liveInstance(h);
     const serverPid = instance.pid;
 
-    const calling = h.call({ tool: "slow", args: { ms: 1800 } });
+    const calling = h.call("mcp__fake__slow", { ms: 1800 });
     await new Promise((resolve) => setTimeout(resolve, 500));
     clock.bump(11 * 60_000); // 空转窗口（10 分钟）已经过去 ⇒ 没有 inFlight 保护就会被回收
     const swept = await h.runtime.sweepOnce();

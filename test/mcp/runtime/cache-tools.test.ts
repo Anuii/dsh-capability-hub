@@ -90,8 +90,9 @@ test("GET mcp/runtime：cache.tools 给出工具名清单（按名称排序、�
     );
     assert.equal(cache.toolCount, cache.tools.length, "toolCount 必须与 tools.length 一致");
     assert.equal(cache.toolCount, 3);
-    // 只有 UI 需要的两个字段，绝不带 inputSchema（那是 describe 的职责，不该进每 5 秒一次的轮询）。
-    assert.deepEqual(Object.keys(cache.tools[0]!).sort(), ["description", "name"]);
+    // 只有 UI 需要的字段（原名、一行描述、模型看到的名字），绝不带 inputSchema（不该进每 5 秒一次的轮询）。
+    assert.deepEqual(Object.keys(cache.tools[0]!).sort(), ["description", "exposedAs", "name"]);
+    assert.equal(cache.tools[0]!.exposedAs, "mcp__alpha__list");
     assert.ok(!JSON.stringify(cache).includes("inputSchema"), "运行态里不能出现 inputSchema");
     assert.ok(!JSON.stringify(cache).includes("properties"), "运行态里不能出现 schema 片段");
   } finally {

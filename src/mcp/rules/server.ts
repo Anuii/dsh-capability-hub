@@ -268,7 +268,7 @@ export function parseServerInput(input: unknown, opts: ParseServerOptions = {}):
     out[field] = map;
   }
 
-  // 7) searchKeywords
+  // 7) searchKeywords：0.6.0 起没有 search 动作，它已不起作用；照旧接受并原样保存，只为不让旧配置报错（表单不再显示）
   if ("searchKeywords" in input && input.searchKeywords !== undefined && input.searchKeywords !== null) {
     const value = input.searchKeywords;
     if (!isPlainObject(value)) {

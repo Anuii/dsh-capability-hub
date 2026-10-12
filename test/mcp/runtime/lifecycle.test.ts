@@ -16,7 +16,7 @@ test("lazy：会话开始不启动，首次调用才启动", async () => {
     h.runtime.sessionStarted({ sessionId: "main" });
     await sleep(20);
     assert.equal(h.registry.connectCalls, before, "lazy 在会话开始时不连接");
-    await h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
+    await h.runtime.call("mcp__a__ping", {}, callCtx("main"));
     assert.ok(h.registry.connectCalls > before, "首次使用才连");
   } finally {
     await h.dispose();
@@ -33,7 +33,7 @@ test("lazy-keep-alive：首次调用才启动，空闲后不回收", async () =>
     h.runtime.sessionStarted({ sessionId: "main" });
     await sleep(20);
     assert.equal(h.registry.connectCalls, before, "lazy-keep-alive 在会话开始时不连接");
-    await h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
+    await h.runtime.call("mcp__a__ping", {}, callCtx("main"));
     assert.ok(h.registry.connectCalls > before);
     assert.equal(await h.runtime.sweepOnce(), 0, "会话内常驻，巡检不该回收");
     // 推很久也不回收（只推时间，不触发定时器，避免把 24 小时的巡检真跑一遍）
@@ -128,7 +128,7 @@ test("idleTimeout=0 表示不回收", async () => {
     behaviors: [BEHAVIOR],
   });
   try {
-    await h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
+    await h.runtime.call("mcp__a__ping", {}, callCtx("main"));
     h.clock.jump(24 * 3600 * 1000);
     assert.equal(await h.runtime.sweepOnce(), 0);
     assert.equal(h.registry.liveProcessCount(), 1);
@@ -143,7 +143,7 @@ test("默认 lazy 的 idleTimeout 继承全局值（10 分钟）", async () => {
     behaviors: [BEHAVIOR],
   });
   try {
-    await h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
+    await h.runtime.call("mcp__a__ping", {}, callCtx("main"));
     h.clock.jump(9 * 60_000);
     assert.equal(await h.runtime.sweepOnce(), 0, "还没到点");
     h.clock.jump(2 * 60_000);
@@ -159,11 +159,11 @@ test("inFlight > 0 期间巡检绝不回收（慢调用保护）", async () => {
     behaviors: [{ key: "node srv.js", tools: [{ name: "ping" }], callDelayMs: 60 }],
   });
   try {
-    await h.runtime.execute({ connect: "a" }, callCtx("main"));
-    const calling = h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
-    // 先等这次调用真的进了 SDK（callDelayMs=60 的慢调用），否则「巡检不回收」测的是
+    await h.runtime.call("mcp__a__ping", {}, callCtx("main"));
+    const calling = h.runtime.call("mcp__a__ping", {}, callCtx("main"));
+    // 先等第二次调用真的进了 SDK（callDelayMs=60 的慢调用），否则「巡检不回收」测的是
     // 「调用还没开始」这段空窗 —— 那时实例确实空闲，回收它并不违反 D-D7。
-    await waitFor(() => h.registry.callCalls.length > 0, 2000, "慢调用进入 SDK");
+    await waitFor(() => h.registry.callCalls.length > 1, 2000, "慢调用进入 SDK");
     h.clock.jump(60 * 60_000);
     assert.equal(await h.runtime.sweepOnce(), 0, "调用进行中不该被回收");
     await calling;
@@ -182,7 +182,7 @@ test("30 秒定时巡检会自动回收（用可注入时钟驱动）", async ()
     behaviors: [BEHAVIOR],
   });
   try {
-    await h.runtime.execute({ tool: "ping", args: {} }, callCtx("main"));
+    await h.runtime.call("mcp__a__ping", {}, callCtx("main"));
     assert.equal(h.registry.liveProcessCount(), 1);
     // idleTimeoutMin=1 ⇒ 巡检（每 30 秒一次）在推进 2 分钟后必然回收。
     await h.clock.advance(2 * 60_000);

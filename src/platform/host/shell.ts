@@ -37,9 +37,10 @@ import {
 import { loadMcpSdk, type SdkLoadState } from "./sdk-loader.ts";
 import { loadYaml, type YamlLoadState } from "./yaml-loader.ts";
 import { createStubRuntime } from "./stub-runtime.ts";
-import { registerMcpTool, type ToolRegistration } from "./tool-registrar.ts";
+import { registerMcpTools, type McpToolsRegistration } from "./tool-registrar.ts";
+import { attachMcpPromptSection, type PromptSectionHandle } from "./prompt-section.ts";
 import { attachSessionBridge, type SessionBridge } from "./session-bridge.ts";
-import { createHealthModule } from "./health.ts";
+import { createHealthModule, type McpToolsState } from "./health.ts";
 import { HUB_VERSION } from "../../version.ts";
 import { createRejectingModule, createThrowingModule } from "./failure-demo.ts";
 import type { McpRuntime } from "../../mcp/contract/runtime.ts";
@@ -65,8 +66,8 @@ export interface ShellSnapshot {
   routes: string[];
   sdk: SdkLoadState;
   modules: ModuleStatus[];
-  toolRegistered: boolean;
-  toolDescription: string;
+  /** MCP 工具的注册状态（与 health 的 tools 同形）。 */
+  tools: McpToolsState;
   sessionEventCount: number;
   /** 已注册的已鉴权路由路径（V3）。 */
   registeredPaths: string[];
@@ -192,8 +193,14 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
 
   // ---- 2. 模块表（4 个真实模块按依赖顺序；demo 放最前，失败演示放最后） ----
   const state: FeatureState = makeFeatureState();
-  /** 工具与运行时的当前状态（demo 的 health 通过闭包实时读取）。 */
-  const toolState: { current?: ToolRegistration; error?: string } = {};
+  /** 工具、提示词段落与运行时的当前状态（health 通过闭包实时读取）。 */
+  const toolState: { current?: McpToolsRegistration; prompt?: PromptSectionHandle; error?: string } = {};
+  const toolsOf = (): McpToolsState => ({
+    registered: toolState.current?.registered() ?? [],
+    failed: toolState.current?.failed() ?? [],
+    prompt: toolState.prompt?.attached() ?? false,
+    ...(toolState.error === undefined ? {} : { error: toolState.error }),
+  });
   const runtimeState: { runtime?: McpRuntime; source: "real" | "stub"; reason?: string } = { source: "stub" };
 
   const entries: ModuleEntry[] = [
@@ -207,12 +214,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
           yaml: yamlState,
           modules: () => registry.statuses(),
           sessionEvents: () => bridge?.events() ?? [],
-          tool: () => ({
-            registered: toolState.current?.registered ?? false,
-            name: runtimeState.runtime?.toolName ?? "mcp",
-            description: toolState.current?.description() ?? runtimeState.runtime?.toolDescription() ?? "",
-            ...(toolState.error === undefined ? {} : { error: toolState.error }),
-          }),
+          tools: toolsOf,
           host: () => ({
             ...(readDshVersion() === undefined ? {} : { dshVersion: readDshVersion() }),
             pluginVersion: HUB_VERSION,
@@ -248,7 +250,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
   }
   await registry.loadAll(entries);
 
-  // ---- 3. 工具注册：优先用真实的 mcp-runtime，不可用才退回桩 ----
+  // ---- 3. MCP 工具：每个工具直接注册（D-D1），服务器说明进系统提示词；mcp-runtime 不可用时退回桩（什么都不注册） ----
   const runtimeModule = registry.get<{ runtime: McpRuntime }>("mcp-runtime");
   if (runtimeModule !== undefined) {
     runtimeState.runtime = runtimeModule.runtime;
@@ -258,24 +260,23 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     runtimeState.reason = degraded?.message ?? "mcp-runtime 未加载（原因未知）";
     runtimeState.runtime = createStubRuntime({ reason: runtimeState.reason });
     runtimeState.source = "stub";
-    logger.warn(`mcp 工具退回桩实现：${runtimeState.reason}`);
+    logger.warn(`MCP 运行时不可用，不注册任何 MCP 工具：${runtimeState.reason}`);
   }
   const runtime = runtimeState.runtime;
 
-  let toolError: string | undefined;
   const toolsFacade = safeGet(hostCtx, "tools") as { register?: (definition: unknown) => () => void } | undefined;
   if (toolsFacade !== undefined && typeof toolsFacade.register === "function") {
     // 手写 definition，不 import @deepseek-ai/dsh-tools（原因见 tool-registrar.ts 顶部）。
-    toolState.current = registerMcpTool({
+    toolState.current = registerMcpTools({
       tools: { register: (definition) => toolsFacade.register!(definition) },
       runtime,
       logger,
     });
   } else {
-    logger.error("ctx.tools 不可用，mcp 工具未注册（已降级，不影响 DSH）");
+    toolState.error = "ctx.tools 不可用";
+    logger.error("ctx.tools 不可用，MCP 工具未注册（已降级，不影响 DSH）");
   }
-  toolError = toolState.current?.registered === true ? undefined : (toolState.current?.error ?? "ctx.tools 不可用");
-  toolState.error = toolError;
+  toolState.prompt = attachMcpPromptSection(hostCtx, runtime, logger);
 
   // ---- 4. 会话桥（agent/created、agent/disposed、session/disposed、subagent/start|end、
   //          workspace/session-stop + 不在册/已归档巡检） ----
@@ -333,7 +334,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     void writeBootReport();
   };
 
-  // ---- 6. 启动报告（落盘到 <hubHome>/boot.json，覆盖写；工具描述变化时也重写）----
+  // ---- 6. 启动报告（落盘到 <hubHome>/boot.json，覆盖写；工具清单变化时也重写）----
   // 为什么需要它：外壳的降级状态本来只暴露在 GET health 上，但「路由都没注册成功」时
   // health 根本不可达。落一份小 JSON 是唯一能自查启动结果的通道（DEV.md 有说明）。
   const wiringSnapshot = (): WiringSnapshot => ({
@@ -348,8 +349,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     routes: Object.keys(routes).sort(),
     sdk: sdkState,
     modules: registry.statuses(),
-    toolRegistered: toolState.current?.registered ?? false,
-    toolDescription: toolState.current?.description() ?? runtime.toolDescription(),
+    tools: toolsOf(),
     sessionEventCount: bridge?.events().length ?? 0,
     registeredPaths: registration?.paths ?? [],
     ...(registrationError === undefined ? {} : { registrationError }),
@@ -381,7 +381,6 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
             writtenAt: new Date().toISOString(),
             services: probeServices(hostCtx),
             skillSources: skillSourceDiagnostics(hostCtx, scanSkillRoots(hostCtx)),
-            toolError: toolError ?? null,
             hasInjectApi: typeof (hostCtx as { inject?: unknown })?.inject === "function",
             ...snapshotOf(),
           },
@@ -413,13 +412,14 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     }
   }
   await writeBootReport();
-  // 工具描述随配置变化（例如新增服务器、改了 meta.description）：启动报告跟着重写，
-  // 免得 boot.json 里的 toolDescription 停在启动那一刻、被误当成当前状态（writtenAt 是重写时间）。
+  // 工具清单随配置与缓存变化（新增服务器、探测拉到清单……）：启动报告跟着重写，
+  // 免得 boot.json 里的工具清单停在启动那一刻、被误当成当前状态（writtenAt 是重写时间）。
   let unsubscribeBootReport: (() => void) | undefined;
   try {
-    unsubscribeBootReport = runtime.onDescriptionChange(() => void writeBootReport());
+    // 先让注册器同步（它订阅得更早），再写报告
+    unsubscribeBootReport = runtime.onToolsChange(() => void writeBootReport());
   } catch (error) {
-    logger.warn(`订阅工具描述变化失败（启动报告不再跟随更新）：${errorText(error)}`);
+    logger.warn(`订阅工具变化失败（启动报告不再跟随更新）：${errorText(error)}`);
   }
 
   return {
@@ -440,6 +440,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
       registration?.dispose();
       bridge?.dispose();
       unsubscribeBootReport?.();
+      toolState.prompt?.dispose();
       toolState.current?.dispose();
       await registry.disposeAll();
       if (runtimeState.source === "stub") await runtime.dispose();

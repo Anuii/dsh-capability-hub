@@ -45,7 +45,6 @@ const ADVANCED_FIELDS: readonly string[] = [
   "idleTimeout",
   "includeTools",
   "excludeTools",
-  "searchKeywords",
   "disabled",
   "debug",
   "meta",
@@ -362,34 +361,6 @@ export function ServerForm(props: ServerFormProps): React.ReactElement {
             t("mcp.field.excludeTools"),
             t("mcp.hint.excludeTools"),
             arrayField("excludeTools", "tool-name"),
-          )}
-          {field(
-            "searchKeywords",
-            t("mcp.field.searchKeywords"),
-            t("mcp.hint.searchKeywords"),
-            <RecordField
-              field="searchKeywords"
-              entries={Object.fromEntries(
-                Object.entries(
-                  isPlainObject(draftValue(draft, "searchKeywords"))
-                    ? (draftValue(draft, "searchKeywords") as Record<string, unknown>)
-                    : {},
-                ).map(([key, value]) => [key, stringListOf(value).join(", ")]),
-              )}
-              valuePlaceholder="关键词, 关键词"
-              syncToken={syncToken}
-              onChange={(entries: Record<string, string>) => {
-                const map: Record<string, string[]> = {};
-                for (const [key, value] of Object.entries(entries)) {
-                  const list = value
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter((item) => item !== "");
-                  if (list.length > 0) map[key] = list;
-                }
-                setFieldValue("searchKeywords", map);
-              }}
-            />,
           )}
           {field(
             "disabled",

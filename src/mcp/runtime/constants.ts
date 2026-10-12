@@ -3,10 +3,6 @@
  * 只放常量，不 import 任何东西。
  */
 
-/** search 默认/最大条数（F3-Q1 SEARCH_DEFAULT_LIMIT / SEARCH_MAX_LIMIT）。 */
-export const SEARCH_DEFAULT_LIMIT = 12;
-export const SEARCH_MAX_LIMIT = 40;
-
 /** 元数据缓存文件版本与最大年龄（F3-Q3 CACHE_VERSION / DEFAULT_CACHE_MAX_AGE_MS）。 */
 export const CACHE_VERSION = 1;
 export const CACHE_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
@@ -53,9 +49,6 @@ export const KILL_WAIT_MS = 5_000;
 /** 一次成功调用之后，距上次元数据刷新超过该时长则顺带刷新（D-C6）。 */
 export const REFRESH_AFTER_MS = 5 * 60_000;
 
-/** 正则搜索的长度上限与是否允许嵌套量词（F3-Q4）。 */
-export const MAX_REGEX_QUERY_LENGTH = 256;
-
 /** 需要从父进程显式带入 MCP 子进程的代理相关变量（F1-Q2：#3 / 风险 2）。 */
 export const PROXY_ENV_KEYS = [
   "HTTP_PROXY",
@@ -69,21 +62,10 @@ export const PROXY_ENV_KEYS = [
   "NODE_EXTRA_CA_CERTS",
 ];
 
-/** 工具描述恒定前缀（D-D1：描述 = 恒定前缀 + 已启用服务器清单，不写工具数量）。 */
-export const DESCRIPTION_PREFIX =
-  "MCP 服务器统一网关。它把本机配置的所有 MCP 服务器合成一个工具：" +
-  "用 { search } 在本地工具缓存里检索工具，用 { describe } 查看某个工具的完整参数，" +
-  "用 { tool, args } 真正调用它，用 { connect } 显式连接某个服务器并刷新它的工具清单，" +
-  "用 { instructions } 查看某个服务器自带的用法说明，不带任何参数则返回运行状态。" +
-  "search 与 describe 只读本地缓存、不启动任何进程；只有真正调用某个工具时才会启动它所属的服务器，并在空闲后自动回收。";
-
-/** 没有任何已启用服务器时的固定文案。 */
-export const DESCRIPTION_NO_SERVERS = "当前没有已启用的 MCP 服务器。";
-
 /**
  * 一段描述的摘要：只取**第一行**，最多 CACHE_TOOL_DESCRIPTION_MAX_CHARS（160）个字符。
  *
- * 用在两处：运行态里每个工具的描述（FIX-9），以及 mcp 工具描述里每个服务器的 meta.description。
+ * 用在两处：运行态里每个工具的描述（FIX-9），以及系统提示词里每个服务器的 meta.description。
  * - 只取第一行：「一句话 + 空行 + 详细说明」的写法只要那句话；
  * - 截断**不追加省略号**：上限就是上限，追加符号会让长度变成 161；
  *   长度按 UTF-16 码元算（与 JavaScript 的 `length` 一致），若切口正好落在代理对中间就把那个字符整字丢掉，
@@ -96,27 +78,6 @@ export function clipToolDescription(text: string): string {
   const clipped = trimmed.slice(0, CACHE_TOOL_DESCRIPTION_MAX_CHARS);
   const last = clipped.charCodeAt(clipped.length - 1);
   return last >= 0xd800 && last <= 0xdbff ? clipped.slice(0, -1) : clipped;
-}
-
-/** 描述里一个服务器需要的字段。 */
-export interface DescribedServer {
-  serverName: string;
-  meta?: { description?: string };
-}
-
-/**
- * 已启用服务器的清单（D-D1）：每行一个服务器，按配置顺序；有 meta.description 时接在名字后面
- * （摘要规则同 clipToolDescription），没有就只写名字。只读 meta.description ——
- * 标签、主页、工具数量都不进描述，改它们不会让描述变一个字节。
- */
-export function describeEnabledServers(servers: readonly DescribedServer[]): string {
-  if (servers.length === 0) return DESCRIPTION_NO_SERVERS;
-  const lines = servers.map((server) => {
-    const raw = server.meta?.description;
-    const summary = typeof raw === "string" ? clipToolDescription(raw) : "";
-    return summary === "" ? "- " + server.serverName : "- " + server.serverName + "：" + summary;
-  });
-  return "已启用的 MCP 服务器（按配置顺序）：\n" + lines.join("\n");
 }
 
 /** 缓存目录相对 hubHome 的位置。 */

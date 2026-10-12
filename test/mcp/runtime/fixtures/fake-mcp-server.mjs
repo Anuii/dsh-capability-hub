@@ -61,6 +61,26 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { kilobytes: { type: "number" } } },
   },
   { name: "boom", description: "总是出错（或让进程崩掉）。", inputSchema: { type: "object", properties: {} } },
+  {
+    // Python / pydantic 服务器常见的写法：Optional（anyOf + null）、元组、$ref —— 原样注册会被 DSH 拒绝
+    name: "pick",
+    description: "按区域取一个点。",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        region: {
+          anyOf: [
+            { type: "array", prefixItems: [{ type: "integer" }, { type: "integer" }], minItems: 2, maxItems: 2 },
+            { type: "null" },
+          ],
+          default: null,
+        },
+        mode: { $ref: "#/$defs/Mode" },
+      },
+      $defs: { Mode: { enum: ["fast", "slow"] } },
+    },
+  },
 ];
 
 const send = (message) => {
@@ -82,6 +102,7 @@ async function handleToolCall(id, params) {
     const kilobytes = Number(args.kilobytes ?? 300);
     return ok(id, text("HUGE-BEGIN\n" + "x".repeat(Math.max(1, Math.round(kilobytes * 1024))) + "\nHUGE-END"));
   }
+  if (name === "pick") return ok(id, text("pick:" + JSON.stringify(args)));
   if (name === "boom") {
     if (MODE === "crash-on-call") {
       // 先让请求真的在飞行中，再「崩溃」——这正是退避要覆盖的场景。

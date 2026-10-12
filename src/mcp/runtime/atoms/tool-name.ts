@@ -8,9 +8,31 @@
  *    丢掉过的工具就永远回不来了。
  */
 
+import { createHash } from "node:crypto";
+
 /** 构造限定名。 */
 export function qualify(serverName: string, toolName: string): string {
   return serverName + "__" + toolName;
+}
+
+/** DeepSeek 的函数名约束：最多 64 个字符，只允许 [A-Za-z0-9_-]。 */
+const MAX_PUBLIC_NAME_LENGTH = 64;
+const INVALID_NAME_CHARS = /[^A-Za-z0-9_-]/g;
+const HASH_LENGTH = 12;
+
+/**
+ * 模型看到的工具名（与 DSH 自带 dsh-mcp-client 的 publicToolName 同一算法）：干净的情况就是
+ * `mcp__<server>__<tool>`；有不合规字符或超长时替换、截断，并接上身份的 12 位 SHA-256，保证不同工具不会撞名。
+ */
+export function publicToolName(serverName: string, toolName: string): string {
+  const joined = "mcp__" + serverName + "__" + toolName;
+  const normalized = joined.replace(INVALID_NAME_CHARS, "_");
+  if (normalized === joined && normalized.length <= MAX_PUBLIC_NAME_LENGTH) return normalized;
+  const hash = createHash("sha256")
+    .update(serverName + "\0" + toolName)
+    .digest("hex")
+    .slice(0, HASH_LENGTH);
+  return normalized.slice(0, MAX_PUBLIC_NAME_LENGTH - HASH_LENGTH - 1) + "_" + hash;
 }
 
 const STAR = "\u0000STAR\u0000";
@@ -35,12 +57,13 @@ export function matchesPattern(pattern: string, candidate: string): boolean {
   return regexp.test(candidate);
 }
 
-/** 一个工具可以被三种拼写寻址。 */
+/** include / exclude 的 pattern 可以对上的几种拼写：原名、`<server>__<原名>`、模型看到的名字。 */
 export function toolCandidates(serverName: string, originalName: string): string[] {
   const qualified = qualify(serverName, originalName);
   const tail = qualified.slice(qualified.indexOf("__") + 2);
   const list = [originalName, qualified];
   if (tail !== originalName) list.push(tail);
+  list.push(publicToolName(serverName, originalName));
   return list;
 }
 
@@ -65,24 +88,4 @@ export function isToolIncluded(
   if (include.length > 0 && !matchesAny(include, server.serverName, originalName)) return false;
   if (exclude.length > 0 && matchesAny(exclude, server.serverName, originalName)) return false;
   return true;
-}
-
-/** 按工具名收集 searchKeywords（key 按原名/限定名/glob 匹配，每个命中的 entry 都贡献，结果去重）。 */
-export function keywordsFor(
-  server: { serverName: string; searchKeywords: Record<string, string[]> },
-  originalName: string,
-): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const [key, values] of Object.entries(server.searchKeywords ?? {})) {
-    if (!Array.isArray(values)) continue;
-    if (!matchesAny([key], server.serverName, originalName)) continue;
-    for (const value of values) {
-      if (typeof value === "string" && value.length > 0 && !seen.has(value)) {
-        seen.add(value);
-        out.push(value);
-      }
-    }
-  }
-  return out;
 }

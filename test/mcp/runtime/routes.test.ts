@@ -1,5 +1,5 @@
 /**
- * E1：工厂签名、三条路由（PLAN §3.6 / §3.7）、以及 mcp 工具的 schema/描述恒定。
+ * E1：工厂签名、三条路由、以及模块给外壳的工具清单与提示词文字。
  *
  * 这里走的是**模块工厂**（createMcpRuntimeModule），而不是 runtime 本身 ——
  * 路由是平台层（T0）真正接线的那一层，契约错在这里就是整块功能不可用。
@@ -9,8 +9,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import { createMcpRuntimeModule } from "../../../src/mcp/runtime/module.ts";
-import { PARAMETER_NAMES } from "../../../src/mcp/runtime/tool-schema.ts";
-import { DESCRIPTION_PREFIX, describeEnabledServers } from "../../../src/mcp/runtime/constants.ts";
 import { FakeConfigSource, makeContext, makeServer, makeTempHome } from "./helpers.ts";
 import { FakeMcpRegistry, createFakeSdk } from "./fakes/fake-sdk.ts";
 import type { RouteRequest } from "../../../src/platform/contract/host.ts";
@@ -47,7 +45,8 @@ async function makeModule(servers = SERVERS) {
 test("工厂返回 runtime、start/dispose 与三条路由（键名即契约）", async () => {
   const h = await makeModule();
   try {
-    assert.equal(typeof h.module.runtime.execute, "function");
+    assert.equal(typeof h.module.runtime.call, "function");
+    assert.equal(typeof h.module.runtime.tools, "function");
     assert.equal(typeof h.module.start, "function");
     assert.equal(typeof h.module.dispose, "function");
     assert.deepEqual(Object.keys(h.module.routes).sort(), [
@@ -122,7 +121,7 @@ test("POST mcp/runtime/refresh：缺 name ⇒ 400，未知服务器 ⇒ 404，�
 test("POST mcp/runtime/disconnect：按会话断开、未知服务器 404、sessionId 类型错 400", async () => {
   const h = await makeModule();
   try {
-    await h.module.runtime.execute({ connect: "alpha" }, { sessionId: "main", signal: new AbortController().signal });
+    await h.module.runtime.call("mcp__alpha__ping", {}, { sessionId: "main", signal: new AbortController().signal });
     const disconnect = h.module.routes["POST mcp/runtime/disconnect"]!;
     const all = (await disconnect(req({ name: "alpha" }))) as { closed: number };
     assert.equal(all.closed, 1, "不带 sessionId = 断开所有会话的该服务器");
@@ -138,72 +137,27 @@ test("POST mcp/runtime/disconnect：按会话断开、未知服务器 404、sess
   }
 });
 
-interface ToolSchema {
-  type?: string;
-  properties?: Record<string, { type?: string; enum?: unknown; description?: string }>;
-  additionalProperties?: unknown;
-}
-
-test("toolParameters 恒定：恒定的原始 JSON Schema（顶层 object），只有固定参数名、无枚举、无服务器名，且返回深拷贝", async () => {
+test("模块给外壳的工具清单：只来自已启用服务器；刷新缓存内容不变时不通知", async () => {
   const h = await makeModule();
   try {
-    const first = h.module.runtime.toolParameters() as ToolSchema;
-    // PLAN §3.6 变更：交给 ctx.tools.register 的就是这份原始 JSON Schema。
-    assert.equal(first.type, "object", "顶层必须是 type: object");
-    assert.equal(first.additionalProperties, false, "不接受未声明的参数");
-    const props = first.properties ?? {};
-    assert.deepEqual(Object.keys(props).sort(), [...PARAMETER_NAMES].sort());
-    for (const [name, spec] of Object.entries(props)) {
-      assert.equal(spec.enum, undefined, name + " 不得有枚举");
-      assert.ok(!JSON.stringify(spec).includes("alpha"), "参数 schema 里绝不能出现服务器名（D-D1：KV-cache 前缀稳定）");
-    }
-    // 类型照写：string/boolean/integer；任意值（args）只写 description、不带 type。
-    assert.equal(props.search?.type, "string");
-    assert.equal(props.regex?.type, "boolean");
-    assert.equal(props.limit?.type, "integer");
-    assert.equal(props.args?.type, undefined, "args 表示任意值：不带 type（不约束）");
-    assert.ok(
-      typeof props.args?.description === "string" && props.args.description.length > 0,
-      "args 必须有 description",
+    const specs = h.module.runtime.tools();
+    assert.deepEqual(
+      specs.map((spec) => spec.name),
+      ["mcp__alpha__ping"],
+      "停用的 beta 不注册",
     );
-    // 深拷贝：调用方改了返回值，下一次拿到的必须还是原样。
-    props.search!.type = "number";
-    const second = h.module.runtime.toolParameters() as ToolSchema;
-    assert.equal(second.properties?.search?.type, "string");
-  } finally {
-    await h.dispose();
-  }
-});
-
-test("toolParameters 逐字节恒定：增删服务器与刷新缓存都不改动 schema", async () => {
-  const h = await makeModule();
-  try {
-    const before = JSON.stringify(h.module.runtime.toolParameters());
-    await h.module.runtime.refresh("alpha");
-    assert.equal(JSON.stringify(h.module.runtime.toolParameters()), before, "刷新工具缓存后 schema 必须逐字节不变");
-    assert.ok(!before.includes("alpha"), "schema 里绝不能出现服务器名");
-  } finally {
-    await h.dispose();
-  }
-});
-
-test("toolDescription 只随已启用服务器清单变化，绝不写工具数量", async () => {
-  const h = await makeModule();
-  try {
-    // 逐字节等于「恒定前缀 + 已启用服务器清单」：这是 D-D1 要的形式，也顺带证明描述里没有任何数字统计。
-    const expected = DESCRIPTION_PREFIX + "\n\n" + describeEnabledServers([{ serverName: "alpha" }]);
-    assert.equal(h.module.runtime.toolDescription(), expected);
-    assert.ok(!/beta/.test(h.module.runtime.toolDescription()), "停用的服务器不进描述");
-
-    const before = h.module.runtime.toolDescription();
+    assert.deepEqual(specs[0]!.parameters, { type: "object" });
     let changes = 0;
-    const off = h.module.runtime.onDescriptionChange(() => {
+    const off = h.module.runtime.onToolsChange(() => {
       changes += 1;
     });
     await h.module.runtime.refresh("alpha");
-    assert.equal(h.module.runtime.toolDescription(), before, "刷新工具缓存不该改动描述一个字节");
-    assert.equal(changes, 0, "描述没变就不该触发 onDescriptionChange");
+    assert.equal(changes, 0, "工具清单没变就不该通知（注册集合稳定）");
     off();
+    const prompt = h.module.runtime.promptText();
+    assert.match(prompt, /- alpha/);
+    assert.match(prompt, /ALPHA 说明/, "服务器自带的用法说明进提示词");
+    assert.ok(!prompt.includes("beta"));
   } finally {
     await h.dispose();
   }
@@ -219,7 +173,8 @@ test("模块 dispose 会关掉会话实例（不留进程）", async () => {
   });
   try {
     await module.start();
-    await module.runtime.execute({ connect: "alpha" }, { sessionId: "main", signal: new AbortController().signal });
+    await module.runtime.waitForBackgroundWork();
+    await module.runtime.call("mcp__alpha__ping", {}, { sessionId: "main", signal: new AbortController().signal });
     assert.equal(registry.liveProcessCount(), 1);
     await module.dispose?.();
     assert.equal(registry.liveProcessCount(), 0, "dispose 必须回收全部实例");

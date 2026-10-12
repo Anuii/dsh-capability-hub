@@ -1,8 +1,8 @@
 /**
  * mcp-runtime 的共享内核：配置快照、工具元数据缓存、连接池、失败记录与后台探测。
  *
- * 各个动作（actions/*.ts）与运行态视图（status-view.ts）都只通过它读写状态；
- * 对外的 mcp 工具与 HTTP 视图由 runtime.ts 组装。
+ * 工具清单（tool-specs.ts）、调用（actions/call.ts）与运行态视图（status-view.ts）都只通过它读写状态；
+ * 对外接口由 runtime.ts 组装。
  *
  * 并发模型（很重要，别改回去）：会话 id 是**参数**，不是实例上的可变字段。
  * 曾经把「当前会话」放在模块级变量里，两个会话交替发起异步调用时会互相串台 ——
@@ -18,10 +18,10 @@ import {
 import { assertSdk } from "./atoms/sdk-transport.ts";
 import { createProcessSupervisor } from "./atoms/supervisor.ts";
 import { realClock } from "./atoms/clock.ts";
-import { MetadataCache, computeConfigHash, isEntryValid } from "./atoms/metadata-cache.ts";
+import { MetadataCache, computeConfigHash } from "./atoms/metadata-cache.ts";
 import { ConnectionPool } from "./atoms/connection.ts";
 import { createSpillWriter, type SpillWriter } from "./atoms/output-guard.ts";
-import { isToolIncluded, keywordsFor, qualify } from "./atoms/tool-name.ts";
+import { isToolIncluded } from "./atoms/tool-name.ts";
 
 import { FailureBook, isCancellation } from "./failures.ts";
 import type { EffectiveMcpConfig, EffectiveServer, McpConfigSource } from "../contract/config.ts";
@@ -30,7 +30,6 @@ import type { HubContext, HubLogger } from "../../platform/contract/host.ts";
 import type { CacheEntry, CachedTool } from "./atoms/metadata-cache.ts";
 import type { Clock } from "./atoms/clock.ts";
 import type { ProcessSupervisor } from "./atoms/supervisor.ts";
-import type { RankDocument } from "./atoms/search-ranking.ts";
 import { errorText } from "../../shared/error-text.ts";
 
 export type ProbeReason = "initial" | "config-change" | "lazy" | "manual" | "refresh-after-call" | "startup";
@@ -48,13 +47,6 @@ export function probeSessionId(serverName: string): string {
 
 /** 运行态里一个工具的描述（FIX-9）：规则见 constants.ts。 */
 export { clipToolDescription } from "./constants.ts";
-
-/** 检索用的一个工具：排序文档 + 所在服务器 + 缓存里的工具。 */
-export interface DocEntry {
-  doc: RankDocument;
-  server: EffectiveServer;
-  tool: CachedTool;
-}
 
 export interface RuntimeSettings {
   idleTimeoutMin: number;
@@ -87,6 +79,8 @@ export class RuntimeCore {
   readonly background = new Set<Promise<unknown>>();
   /** 当前生效的配置 */
   config: EffectiveMcpConfig;
+  /** 缓存内容可能变了（写入、从磁盘重读）时通知：运行时据此判断要不要重新注册工具 */
+  readonly cacheListeners = new Set<() => void>();
   readonly #source: McpConfigSource;
 
   constructor(options: CoreOptions) {
@@ -179,11 +173,20 @@ export class RuntimeCore {
    * 而两个 DSH 进程的写读间隔往往就在这一瞬间（详见 metadata-cache.reloadIfChanged）。
    */
   async ensureCacheLoaded(): Promise<void> {
-    if (!this.cache.loaded) {
-      await this.cache.load();
-      return;
+    if (!this.cache.loaded) await this.cache.load();
+    else await this.cache.reloadIfChanged();
+    this.cacheChanged();
+  }
+
+  /** 通知缓存可能变了（监听方自己比较内容，重复通知无害）。 */
+  cacheChanged(): void {
+    for (const listener of [...this.cacheListeners]) {
+      try {
+        listener();
+      } catch (err) {
+        this.logger.warn("MCP 工具缓存监听器抛错：" + errorText(err));
+      }
     }
-    await this.cache.reloadIfChanged();
   }
 
   /** 缓存里该服务器的工具，按 includeTools / excludeTools 过滤（只在读侧过滤，永不写回缓存，F3-Q3）。 */
@@ -191,35 +194,6 @@ export class RuntimeCore {
     const entry = this.cache.get(server.serverName);
     if (!entry) return [];
     return entry.tools.filter((tool) => isToolIncluded(server, tool.name));
-  }
-
-  documentsOf(server: EffectiveServer, includeDisabled = false): DocEntry[] {
-    if (server.disabled && !includeDisabled) return [];
-    return this.visibleTools(server).map((tool) => ({
-      doc: {
-        qualifiedName: qualify(server.serverName, tool.name),
-        originalName: tool.name,
-        server: server.serverName,
-        description: tool.description ?? "",
-        keywords: keywordsFor(server, tool.name),
-      },
-      server,
-      tool,
-    }));
-  }
-
-  /** 所有已启用服务器的可见工具。 */
-  allDocuments(): DocEntry[] {
-    const out: DocEntry[] = [];
-    for (const server of this.servers()) out.push(...this.documentsOf(server));
-    return out;
-  }
-
-  /** 已停用服务器的工具（用来提示「这个工具属于已停用的服务器」）。 */
-  disabledDocuments(): DocEntry[] {
-    return this.servers()
-      .filter((server) => server.disabled)
-      .flatMap((server) => this.documentsOf(server, true));
   }
 
   /**
@@ -267,6 +241,7 @@ export class RuntimeCore {
       const entry: CacheEntry = { configHash: computeConfigHash(server), tools, updatedAt: this.clock.now() };
       if (typeof instructions === "string" && instructions.length > 0) entry.instructions = instructions;
       await this.cache.write({ [server.serverName]: entry });
+      this.cacheChanged();
       // 成功即清空失败记录（D-D7）：不管这次探测用的是调用方会话还是探测会话，服务器现在好好的。
       this.failures.clear(server.serverName);
       this.logger.debug(
@@ -280,16 +255,6 @@ export class RuntimeCore {
     } finally {
       if (!actor) await this.pool.release(instance).catch(() => undefined);
     }
-  }
-
-  /** 缓存有效就直接用；否则（不在冷却中时）用调用方的会话探测一次。 */
-  async ensureMetadata(server: EffectiveServer, actor: SessionRef): Promise<CacheEntry> {
-    await this.ensureCacheLoaded();
-    const entry = this.cache.get(server.serverName);
-    if (isEntryValid(entry, server, this.clock.now())) return entry as CacheEntry;
-    const blocked = this.failures.blockedMessage(server.serverName, false);
-    if (blocked) throw new Error(blocked);
-    return this.probe(server, "lazy", actor);
   }
 
   // ---------------------------------------------------------------- 生命周期

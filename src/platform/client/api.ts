@@ -112,7 +112,8 @@ export interface HealthPayload {
   bundledSkillDir: string | null;
   sdk: { status: string; version?: string; mainResolved?: string; message?: string };
   modules: Array<{ name: string; status: string; routes: string[]; message?: string; loadMs?: number }>;
-  tool: { registered: boolean; name: string; description: string };
+  /** MCP 工具的注册状态（0.6.0 起；更早的宿主是单个 mcp 网关工具，没有这个字段）。 */
+  tools?: { registered: string[]; failed: { name: string; error: string }[]; prompt: boolean; error?: string };
   /** pluginVersion：宿主半的插件版本（0.3.1 起；更早的宿主没有这个字段）。 */
   host: { dshVersion?: string; pluginVersion?: string; pid: number; nodeVersion: string; startedAt: string };
   sessionEvents: Array<{ kind: string; sessionId: string; parentSessionId?: string; at: string }>;

@@ -24,7 +24,12 @@ function health(overrides: {
     bundledSkillDir: null,
     sdk: { status: "loaded" },
     modules: (overrides.modules ?? [{ name: "health", status: "ok" }]).map((module) => ({ ...module, routes: [] })),
-    tool: { registered: overrides.registered ?? true, name: "mcp", description: "" },
+    tools: {
+      registered: ["mcp__demo__echo"],
+      failed: [],
+      prompt: true,
+      ...(overrides.registered === false ? { error: "ctx.tools 不可用" } : {}),
+    },
     host: { pid: 1, nodeVersion: "24", startedAt: "" },
     sessionEvents: [],
     ...(overrides.runtimeSource === undefined
@@ -42,6 +47,9 @@ test("health 还没到时不显示横幅", () => {
 
 test("一切正常时不显示横幅（首屏常驻元素只有页头 / 标签 / 工具栏 / 列表）", () => {
   assert.equal(degradeInfo(health({})), undefined);
+  const empty = health({});
+  empty.tools = { registered: [], failed: [], prompt: true };
+  assert.equal(degradeInfo(empty), undefined, "还没配置服务器（一个工具都没有）不算降级");
   assert.equal(degradeInfo(health({ runtimeSource: "real" })), undefined);
 });
 
@@ -59,13 +67,13 @@ test("有模块降级时列出模块名", () => {
   assert.deepEqual(degradeNames(info!, "mcp 工具"), ["mcp-runtime"]);
 });
 
-test("mcp 工具退回桩实现也算降级", () => {
+test("MCP 运行时退回桩实现也算降级", () => {
   const info = degradeInfo(health({ runtimeSource: "stub" }));
   assert.deepEqual(info, { degraded: [], stubTool: true });
   assert.deepEqual(degradeNames(info!, "mcp 工具"), ["mcp 工具"]);
 });
 
-test("mcp 工具没注册也算降级", () => {
+test("DSH 的工具注册表不可用（MCP 工具一个都注册不了）也算降级", () => {
   const info = degradeInfo(health({ registered: false }));
   assert.equal(info?.stubTool, true);
 });

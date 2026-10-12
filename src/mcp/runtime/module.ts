@@ -77,6 +77,5 @@ export function createMcpRuntimeModule(ctx: HubContext, deps: McpRuntimeModuleDe
 }
 
 export { createMcpRuntime } from "./runtime.ts";
-export { TOOL_NAME, unwrapGatewayEnvelope, probeSessionId } from "./runtime.ts";
+export { probeSessionId } from "./runtime.ts";
 export type { McpRuntimeInternal, McpRuntimeOptions, ProbeReason, SessionRef } from "./runtime.ts";
-export { PROXY_TOOL_PARAMETERS, PARAMETER_NAMES } from "./tool-schema.ts";

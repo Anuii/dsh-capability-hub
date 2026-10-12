@@ -1,12 +1,13 @@
 /**
- * 把 McpRuntime 注册成 DSH 的全局工具 mcp（F1-Q4）。
+ * 把运行时给出的每个 MCP 工具直接注册成 DSH 工具（D-D1），并随工具集合变化增量更新。
  *
  * 事实要点：
- *   - 在 profile 根 ctx 上 ctx.tools.register(def) 即「全局注册」（所有 agent 可见），
- *     这正是「只注册 1 个 schema 恒定的代理工具」该做的事。
- *   - register() 返回 scope-aware 的 disposer，必须挂进 ctx.effect 由 fiber 释放。
- *   - 工具描述是「活」的：原地改 definition.description 后，下次组装 system prompt
- *     立刻生效，不需要重新 register（schemaOf 每次重算，不做快照）。
+ *   - 在 profile 根 ctx 上 ctx.tools.register(def) 即「全局注册」（所有 agent 可见）；PTC 模式下每个工具
+ *     都会成为一个独立的类型化 SDK 绑定（tools.mcp__<服务器>__<工具>(...)）。
+ *   - register() 返回 disposer；注册时 DSH 会校验 parameters 是否在它支持的 JSON Schema 子集里
+ *     （运行时已经转换过，见 mcp/runtime/atoms/schema-subset.ts）。某个工具仍被拒时只跳过它、记下原因，
+ *     其余工具照常注册（DSH 官方 MCP 客户端是整台服务器一起放弃）。
+ *   - 工具集合变化时只动变了的那几个：没变的不注销不重注册，提示词前缀缓存才不失效。
  *   - execute 的 exec 里没有 session id，要取 exec.agent.session.id；
  *     父会话在 **session.header** 的 parentSession（origin === "subagent"）。
  *     注意别读错成 session.requestHeader()：那是 LLM 请求的 epoch header，
@@ -16,14 +17,12 @@
  *   1. 实测（A6 诊断）：从本插件动态 import @deepseek-ai/dsh-tools 会直接抛
  *      "The requested module '@deepseek-ai/dsh-llm' does not provide an export named 'CallId'"
  *      —— 插件侧的 @deepseek-ai/* 解析与 DSH 内部不是同一条路径，依赖它很脆。
- *   2. defineTool 的 parameters 是 dsh-tools 自有 DSL，无法表达任意 JSON Schema；
- *      而能力中心要代理的是任意 MCP 服务器的 inputSchema（F1-Q4.1）。
- *   3. DSH 自带的 dsh-mcp-client 就是手写 definition（把 MCP inputSchema 原样赋给
- *      parameters，再交给 ctx.tools.register），本文件照抄这条姿势。
- *   代价：parameters 必须是「受支持的 JSON Schema 子集」，register 会校验 output.schema。
+ *   2. defineTool 的 parameters 是 dsh-tools 自有 DSL，表达不了任意 JSON Schema；MCP 工具的参数是 JSON Schema。
+ *   3. DSH 自带的 dsh-mcp-client 也是手写 definition（parameters 直接给 JSON Schema）。
  */
-import type { McpRuntime } from "../../mcp/contract/runtime.ts";
+import type { McpRuntime, McpToolSpec } from "../../mcp/contract/runtime.ts";
 import type { HubLogger } from "../contract/host.ts";
+import { errorText } from "../../shared/error-text.ts";
 
 /** 从 exec.agent 取会话身份；取不到时回退并记录。 */
 export interface SessionIdentity {
@@ -99,18 +98,6 @@ export function sessionIdentityOf(exec: unknown): SessionIdentity {
   return { sessionId: "anonymous", source: "fallback" };
 }
 
-/** 只注册一次的工具注册结果。 */
-export interface ToolRegistration {
-  /** 当前生效的描述（读的时候实时取）。 */
-  description(): string;
-  /** 解绑描述监听并注销工具。 */
-  dispose(): void;
-  /** 是否真的注册成功（false = 已降级）。 */
-  registered: boolean;
-  /** 失败原因（成功时 undefined）。 */
-  error?: string;
-}
-
 /** DSH 侧的最小面（避免静态依赖 @deepseek-ai/dsh-tools 的类型）。 */
 export interface ToolsFacade {
   register(definition: unknown): () => void;
@@ -128,29 +115,35 @@ export interface ToolDefinitionLike {
   execute(args: unknown, exec: unknown): Promise<unknown>;
 }
 
+/** 当前的注册结果（health 与启动报告读它）。 */
+export interface McpToolsRegistration {
+  /** 已注册的工具名（按注册顺序）。 */
+  registered(): string[];
+  /** 被 DSH 拒绝注册的工具与原因。 */
+  failed(): { name: string; error: string }[];
+  dispose(): void;
+}
+
 /**
- * 注册全局工具 mcp。任何失败都只记降级、不抛。
- * @param tools ctx.tools
- * @param runtime 运行时（阶段 A 是桩）
- * @param logger 日志面
- * @param onSession 观测钩子：每次 execute 都会带着会话身份回调（用于 V5 证据）
+ * 注册运行时给出的全部 MCP 工具，并订阅变化。任何失败都只记录、不抛。
+ * @param onSession 观测钩子：每次 execute 都会带着会话身份回调
  */
-export function registerMcpTool(options: {
+export function registerMcpTools(options: {
   tools: ToolsFacade;
   runtime: McpRuntime;
   logger: HubLogger;
   onSession?: (identity: SessionIdentity) => void;
-}): ToolRegistration {
+}): McpToolsRegistration {
   const { tools, runtime, logger, onSession } = options;
+  const live = new Map<string, { key: string; dispose: () => void }>();
+  const failures = new Map<string, string>();
+  let fallbackWarned = false;
   let disposed = false;
-  let unsubscribe: (() => void) | undefined;
-  let unregister: (() => void) | undefined;
-  const identityFallbackWarned = { value: false };
 
-  const definition: ToolDefinitionLike = {
-    name: runtime.toolName,
-    description: runtime.toolDescription(),
-    parameters: runtime.toolParameters(),
+  const definitionOf = (spec: McpToolSpec): ToolDefinitionLike => ({
+    name: spec.name,
+    description: spec.description,
+    parameters: spec.parameters,
     output: {
       schema: { type: "string" },
       render: (_args: unknown, value: unknown) => [
@@ -159,9 +152,9 @@ export function registerMcpTool(options: {
     },
     async execute(args: unknown, exec: unknown): Promise<string> {
       const identity = sessionIdentityOf(exec);
-      if (identity.source === "fallback" && !identityFallbackWarned.value) {
-        identityFallbackWarned.value = true;
-        logger.warn("mcp 工具调用没有 agent 上下文，会话 id 回退为 anonymous（已记录一次）");
+      if (identity.source === "fallback" && !fallbackWarned) {
+        fallbackWarned = true;
+        logger.warn("MCP 工具调用没有 agent 上下文，会话 id 回退为 anonymous（已记录一次）");
       }
       try {
         onSession?.(identity);
@@ -169,50 +162,72 @@ export function registerMcpTool(options: {
         /* 观测钩子不得影响工具执行 */
       }
       const signal = (exec as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal;
-      try {
-        return await runtime.execute(args, {
-          sessionId: identity.sessionId,
-          ...(identity.parentSessionId === undefined ? {} : { parentSessionId: identity.parentSessionId }),
-          signal,
-        });
-      } catch (error) {
-        // McpRuntime 契约要求永不 reject；这里再兜一层，保证工具本身也不炸。
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error("mcp 工具执行抛出未预期错误：", message);
-        return "能力中心：MCP 调用失败（" + message + "）";
-      }
+      // 失败直接抛：DSH 把它记成失败的工具调用（PTC 模式下是 ToolCallError），不会中止这一轮
+      return runtime.call(spec.name, args, {
+        sessionId: identity.sessionId,
+        ...(identity.parentSessionId === undefined ? {} : { parentSessionId: identity.parentSessionId }),
+        signal,
+      });
     },
+  });
+
+  const sync = (): void => {
+    if (disposed) return;
+    let specs: McpToolSpec[];
+    try {
+      specs = runtime.tools();
+    } catch (error) {
+      logger.warn("读取 MCP 工具清单失败（保持现有注册）：" + errorText(error));
+      return;
+    }
+    const wanted = new Map(specs.map((spec) => [spec.name, spec]));
+    const keyOf = (spec: McpToolSpec): string => JSON.stringify([spec.description, spec.parameters]);
+    for (const [name, entry] of live) {
+      const spec = wanted.get(name);
+      if (spec !== undefined && keyOf(spec) === entry.key) continue;
+      try {
+        entry.dispose();
+      } catch (error) {
+        logger.warn("注销 MCP 工具 " + name + " 失败：" + errorText(error));
+      }
+      live.delete(name);
+    }
+    for (const name of [...failures.keys()]) if (!wanted.has(name)) failures.delete(name);
+    for (const spec of specs) {
+      if (live.has(spec.name)) continue;
+      try {
+        live.set(spec.name, { key: keyOf(spec), dispose: tools.register(definitionOf(spec)) });
+        failures.delete(spec.name);
+      } catch (error) {
+        const message = errorText(error);
+        if (failures.get(spec.name) !== message)
+          logger.warn("MCP 工具 " + spec.name + " 注册失败（已跳过）：" + message);
+        failures.set(spec.name, message);
+      }
+    }
   };
 
+  sync();
+  let unsubscribe: (() => void) | undefined;
   try {
-    unregister = tools.register(definition);
-    unsubscribe = runtime.onDescriptionChange(() => {
-      if (disposed) return;
-      try {
-        definition.description = runtime.toolDescription();
-      } catch (error) {
-        logger.warn("更新 mcp 工具描述失败：", error instanceof Error ? error.message : error);
-      }
-    });
-    return {
-      description: () => runtime.toolDescription(),
-      dispose(): void {
-        disposed = true;
-        unsubscribe?.();
-        unregister?.();
-      },
-      registered: true,
-    };
+    unsubscribe = runtime.onToolsChange(sync);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error("注册 mcp 全局工具失败（已降级，不影响 DSH）：" + message);
-    return {
-      description: () => runtime.toolDescription(),
-      dispose(): void {
-        disposed = true;
-      },
-      registered: false,
-      error: message,
-    };
+    logger.warn("订阅 MCP 工具变化失败（工具清单不再跟随更新）：" + errorText(error));
   }
+  return {
+    registered: () => [...live.keys()],
+    failed: () => [...failures].map(([name, error]) => ({ name, error })),
+    dispose(): void {
+      disposed = true;
+      unsubscribe?.();
+      for (const [name, entry] of live) {
+        try {
+          entry.dispose();
+        } catch (error) {
+          logger.warn("注销 MCP 工具 " + name + " 失败：" + errorText(error));
+        }
+      }
+      live.clear();
+    },
+  };
 }

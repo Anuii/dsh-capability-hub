@@ -41,6 +41,7 @@ export interface RawMcpServer {
   idleTimeout?: number;
   includeTools?: string[];
   excludeTools?: string[];
+  /** 0.6.0 起不起作用（search 动作已删除）；为兼容旧配置照旧接受、原样保存 */
   searchKeywords?: Record<string, string[]>;
   disabled?: boolean;
   debug?: boolean;

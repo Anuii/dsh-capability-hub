@@ -12,9 +12,9 @@
     5  POST mcp/servers/upsert   加一个指向夹具 fake-mcp-server.mjs 的 stdio 服务器
     6  GET  mcp/runtime          轮询到自动探测把 toolCount 写进缓存（> 0）
     7  POST mcp/runtime/refresh  手动刷新一次
-    8  GET  health               4 个真实模块 ok、工具描述里有服务器名
+    8  GET  health               4 个真实模块 ok；测试服务器的每个工具都以 mcp__<服务器>__<工具> 注册进 DSH（含 anyOf schema 的 pick）
     9  GET  skills/github-auth   只看 mode（绝不打印令牌）
-   10  POST mcp/servers/delete   收尾：删掉测试服务器，恢复原状
+   10  POST mcp/servers/delete   收尾：删掉测试服务器，恢复原状；它的工具随之从 DSH 注销
 
   所有请求都带 cookie（browser-auth）；脚本**不会**打印任何令牌。
   服务器配置写在夹具 home 下（.dev/home/.dsh/storages/dsh-capability-hub/mcp/config.json），
@@ -188,9 +188,14 @@ foreach ($name in @('mcp-config', 'skills-local', 'skills-remote', 'mcp-runtime'
   $entry = @($health.data.modules) | Where-Object { $_.name -eq $name } | Select-Object -First 1
   Check ($null -ne $entry -and $entry.status -eq 'ok') "模块 $name ok"
 }
-Check ($health.data.tool.registered -eq $true) "mcp 工具已注册"
-Check ($health.data.tool.description -like "*$ServerName*") "工具描述里出现服务器名 $ServerName"
-Say ("  工具描述（截断）：" + ($health.data.tool.description.Substring(0, [Math]::Min(140, $health.data.tool.description.Length)) -replace "\r?\n", ' / '))
+$registered = @($health.data.tools.registered)
+$mine = @($registered | Where-Object { $_ -like "mcp__$($ServerName)__*" })
+Check ($null -eq $health.data.tools.error) "DSH 工具注册表可用"
+Check ($mine.Count -eq $toolCount) "测试服务器的 $toolCount 个工具都已注册进 DSH（实际 $($mine.Count) 个：$($mine -join ', ')）"
+Check ($mine -contains "mcp__$($ServerName)__pick") "带 anyOf / 元组 / `$ref 的 pick 也被 DSH 接受"
+Check (@($health.data.tools.failed).Count -eq 0) ("没有被 DSH 拒绝的工具" + $(if (@($health.data.tools.failed).Count -gt 0) { "：" + ($health.data.tools.failed | ConvertTo-Json -Compress) } else { "" }))
+Check ($health.data.tools.prompt -eq $true) "服务器说明已挂进系统提示词"
+Say ("  已注册的 MCP 工具（共 " + $registered.Count + " 个）：" + ($registered -join ', '))
 Say ("  wiring: " + ($health.data.wiring | ConvertTo-Json -Compress))
 Say ("  已注册路由数：" + (@($health.data.registration.registered).Count))
 
@@ -206,6 +211,13 @@ $delete = Envelope (Invoke-Hub POST 'mcp/servers/delete' @{ name = $ServerName }
 Check ($delete.ok -eq $true) "删除成功"
 $config2 = Envelope (Invoke-Hub GET 'mcp/config')
 Check (@($config2.data.servers).Count -eq $serverCountBefore) "已无本次新增的测试服务器（数量回到运行前基线 $serverCountBefore）"
+$gone = $false
+for ($i = 0; $i -lt 20 -and -not $gone; $i++) {
+  $health2 = Envelope (Invoke-Hub GET 'health')
+  $gone = @(@($health2.data.tools.registered) | Where-Object { $_ -like "mcp__$($ServerName)__*" }).Count -eq 0
+  if (-not $gone) { Start-Sleep -Milliseconds 500 }
+}
+Check $gone "删除后它的工具已从 DSH 注销"
 
 Say ""
 if ($script:Failures -eq 0) { Say "SMOKE-STAGE-B-RESULT pass=$($script:Step) fail=0" }

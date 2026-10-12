@@ -130,9 +130,16 @@ function DiagnosticsBody(props: {
         : "失败：" + (health.sdk.message ?? ""),
     ]);
     rows.push([tt("env.modules"), health.modules.map((m) => m.name + "=" + m.status).join("，")]);
+    const mcpTools = health.tools;
     rows.push([
       tt("env.tool"),
-      health.tool.name + "（" + (health.tool.registered ? tt("status.ok") : tt("status.degraded")) + "）",
+      mcpTools === undefined
+        ? "—"
+        : mcpTools.error !== undefined
+          ? tt("status.degraded") + "：" + mcpTools.error
+          : tt("env.toolsCount", { count: mcpTools.registered.length }) +
+            (mcpTools.failed.length > 0 ? tt("env.toolsFailed", { count: mcpTools.failed.length }) : "") +
+            (mcpTools.prompt ? "" : tt("env.promptMissing")),
     ]);
   }
   rows.push([tt("env.workspace"), props.workspace ?? tt("env.workspaceNone")]);

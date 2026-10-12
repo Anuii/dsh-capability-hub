@@ -34,7 +34,7 @@ export const zh = {
   /* ---- 服务器分组 ---- */
 
   /* ---- 会话分组 ---- */
-  "runtime.sessions.empty": "模型调用 mcp 工具后，这里会显示会话与实例",
+  "runtime.sessions.empty": "模型调用 MCP 工具后，这里会显示会话与实例",
   "runtime.sessions.filteredEmpty": "当前会话没有活跃实例。",
   "runtime.session.child": "子代理",
   "runtime.instance.pid": "PID {pid}",
@@ -57,7 +57,7 @@ export const zh = {
 
   /* ---- 断开确认 ---- */
   "runtime.dialog.title": "断开 MCP 实例",
-  "runtime.dialog.body": "{target}会立即结束；模型下次调用 mcp 工具时会重新连接。",
+  "runtime.dialog.body": "{target}会立即结束；模型下次调用它的工具时会重新连接。",
   "runtime.dialog.targetServer": "「{name}」在当前全部会话里的实例",
   "runtime.dialog.targetInstance": "会话 {sessionId} 里的「{name}」实例",
   "runtime.dialog.confirm": "确认断开",

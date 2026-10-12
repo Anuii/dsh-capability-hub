@@ -1,9 +1,10 @@
 /**
- * MCP 懒加载运行时（mcp-runtime）的契约（ADR-0002）：只有类型。
+ * MCP 运行时（mcp-runtime）的契约（ADR-0002）：只有类型。
  *
  * 用在两条 seam 上：
  *   - HTTP：GET mcp/runtime、POST mcp/runtime/refresh · disconnect 的响应形状，客户端直接用；
- *   - 进程内：外壳把 McpSdk 注入运行时模块，并通过 McpRuntime 注册 mcp 工具、转发会话事件。
+ *   - 进程内：外壳把 McpSdk 注入运行时模块，再把运行时给出的每个 MCP 工具直接注册成 DSH 工具（D-D1），
+ *     把服务器说明放进系统提示词，并转发会话事件。
  */
 
 /**
@@ -35,17 +36,31 @@ export interface McpSessionInfo {
   title?: string;
 }
 
-/** 运行时模块的进程内接口（外壳用它注册 mcp 工具）。 */
+/** 一个直接注册给模型的 MCP 工具（D-D1）。 */
+export interface McpToolSpec {
+  /** 模型看到的名字：mcp__<服务器>__<工具>（有不合规字符或超过 64 字时规范化并加哈希，与 DSH 官方 MCP 客户端同一算法） */
+  name: string;
+  server: string;
+  /** MCP 服务器上的原名（调用时用它） */
+  tool: string;
+  description: string;
+  /** 转换成 DSH 子集之后的 inputSchema（根是 type: "object"） */
+  parameters: unknown;
+}
+
+/** 运行时模块的进程内接口。 */
 export interface McpRuntime {
-  readonly toolName: "mcp";
-  /** 工具参数的原始 JSON Schema（恒定，不随配置变化；顶层 type: "object"）。 */
-  toolParameters(): unknown;
-  /** 恒定前缀 + 已启用服务器名（配置顺序），不写工具数量。 */
-  toolDescription(): string;
-  /** 描述变化回调；返回解绑函数。 */
-  onDescriptionChange(cb: () => void): () => void;
-  /** 永不 reject；失败以文本返回。 */
-  execute(args: unknown, call: McpCallContext): Promise<string>;
+  /**
+   * 现在应当注册的工具：已启用服务器的、按 includeTools / excludeTools 过滤后的、来自工具缓存的工具。
+   * 顺序稳定（服务器按配置顺序，工具按名字），内容不变时逐字节相同。
+   */
+  tools(): McpToolSpec[];
+  /** 工具集合或某个定义变了时回调（内容相同不通知）；返回解绑函数。 */
+  onToolsChange(cb: () => void): () => void;
+  /** 系统提示词里「MCP 服务器」一段的文字（服务器说明 + 服务器自带的用法说明）；没有可用服务器时为空串。 */
+  promptText(): string;
+  /** 调用一个已注册的工具；失败时抛错，message 是给模型看的说明或服务器原文。 */
+  call(name: string, args: unknown, call: McpCallContext): Promise<string>;
   /** 不得阻塞。 */
   sessionStarted(info: McpSessionInfo): void;
   sessionEnded(sessionId: string): Promise<void>;
@@ -77,7 +92,8 @@ export interface RuntimeCacheView {
   updatedAt: number;
   /** 缓存过期或与当前配置不匹配 */
   stale: boolean;
-  tools: { name: string; description?: string }[];
+  /** exposedAs = 模型看到的工具名（mcp__<服务器>__<工具>） */
+  tools: { name: string; description?: string; exposedAs?: string }[];
 }
 
 /** 最近一次失败；cooldownUntil 只在冷却未结束时出现。 */

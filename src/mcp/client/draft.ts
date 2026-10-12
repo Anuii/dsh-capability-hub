@@ -233,14 +233,6 @@ function draftOnlyErrors(draft: ServerDraft): FieldError[] {
       }
     });
   }
-  if (isPlainObject(values.searchKeywords)) {
-    for (const [tool, list] of Object.entries(values.searchKeywords)) {
-      if (tool.trim() === "") errors.push({ path: "server.searchKeywords", message: "工具名不能为空。" });
-      if (Array.isArray(list) && list.some((item) => typeof item === "string" && item.trim() === "")) {
-        errors.push({ path: "server.searchKeywords." + tool, message: "关键词不能为空。" });
-      }
-    }
-  }
   const tags = draftMeta(draft).tags;
   if (Array.isArray(tags) && tags.some((item) => typeof item === "string" && item.trim() === "")) {
     errors.push({ path: "server.meta.tags", message: "标签不能为空。" });

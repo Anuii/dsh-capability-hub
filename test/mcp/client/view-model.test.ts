@@ -160,7 +160,7 @@ test("rowSubtitleText：命令 / 地址 + 「· N 个工具」（没有缓存时
 });
 
 test("cacheLineText / cachedToolNames：抽屉「工具」小节", () => {
-  assert.equal(cacheLineText(undefined), "还没有工具缓存（保存或刷新后会自动探测一次）");
+  assert.equal(cacheLineText(undefined), "还没有工具缓存：保存或刷新后会自动探测一次，探测到的工具随即注册给模型");
   const row = {
     name: "demo",
     disabled: false,
@@ -168,7 +168,18 @@ test("cacheLineText / cachedToolNames：抽屉「工具」小节", () => {
   };
   assert.equal(cacheLineText(row).includes("缓存 2 个工具"), true);
   assert.equal(cacheLineText(row).includes("缓存已过期"), true);
-  assert.deepEqual(cachedToolNames(row), ["echo", "slow"]);
+  assert.deepEqual(cachedToolNames(row), ["echo", "slow"], "老宿主没给 exposedAs 时退回原名");
+  const exposed = {
+    ...row,
+    cache: {
+      ...row.cache,
+      tools: [
+        { name: "echo", exposedAs: "mcp__demo__echo" },
+        { name: "slow", exposedAs: "mcp__demo__slow" },
+      ],
+    },
+  };
+  assert.deepEqual(cachedToolNames(exposed), ["mcp__demo__echo", "mcp__demo__slow"], "列模型看到的名字");
   assert.deepEqual(cachedToolNames(undefined), []);
   assert.deepEqual(
     cachedToolNames({

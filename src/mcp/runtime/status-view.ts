@@ -2,6 +2,7 @@
 
 import { isEntryStale, isEntryValid } from "./atoms/metadata-cache.ts";
 import { clipToolDescription, type RuntimeCore } from "./core.ts";
+import { publicToolName } from "./atoms/tool-name.ts";
 import type { EffectiveServer } from "../contract/config.ts";
 import type { RuntimeInstanceView, RuntimeServerView, RuntimeSessionView, RuntimeStatus } from "../contract/runtime.ts";
 import type { CachedTool } from "./atoms/metadata-cache.ts";
@@ -9,13 +10,17 @@ import type { McpInstance } from "./atoms/connection.ts";
 
 /**
  * 给 UI 的工具清单（FIX-9）：过滤后的名字 + 一行描述，按**名称码元序**（与 locale 无关，跨机器稳定）。
- * **不带 inputSchema** —— 面板每 5 秒轮询一次，把 schema 塞进去纯属浪费；要看完整参数用 mcp({ describe })。
+ * **不带 inputSchema** —— 面板每 5 秒轮询一次，把 schema 塞进去纯属浪费。exposedAs 是模型看到的工具名。
  * 空描述用「不写这个键」表示，而不是空字符串。
  */
-export function cacheToolsOf(core: RuntimeCore, server: EffectiveServer): { name: string; description?: string }[] {
-  const view = (tool: CachedTool): { name: string; description?: string } => {
+export function cacheToolsOf(
+  core: RuntimeCore,
+  server: EffectiveServer,
+): { name: string; description?: string; exposedAs: string }[] {
+  const view = (tool: CachedTool): { name: string; description?: string; exposedAs: string } => {
     const description = clipToolDescription(tool.description);
-    return description.length > 0 ? { name: tool.name, description } : { name: tool.name };
+    const exposedAs = publicToolName(server.serverName, tool.name);
+    return description.length > 0 ? { name: tool.name, description, exposedAs } : { name: tool.name, exposedAs };
   };
   return core
     .visibleTools(server)

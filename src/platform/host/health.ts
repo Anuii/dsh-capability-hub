@@ -18,8 +18,8 @@ export interface HealthDeps {
   modules(): ModuleStatus[];
   /** 会话桥事件快照（V5）。 */
   sessionEvents(): unknown[];
-  /** mcp 工具注册状态（V4）。 */
-  tool(): { registered: boolean; name: string; description: string; error?: string };
+  /** MCP 工具的注册状态：已注册的工具名、被 DSH 拒绝的工具、服务器说明是否挂进了提示词；error = ctx.tools 不可用。 */
+  tools(): McpToolsState;
   /** 宿主标题（DSH 版本等）。 */
   host(): { dshVersion?: string; pid: number; nodeVersion: string; startedAt: string };
   /** 已鉴权路由的注册结果（V3）。 */
@@ -33,6 +33,14 @@ export interface HealthDeps {
     runtimeStartError?: string;
     notes: string[];
   };
+}
+
+/** health 里的 tools 字段。 */
+export interface McpToolsState {
+  registered: string[];
+  failed: { name: string; error: string }[];
+  prompt: boolean;
+  error?: string;
 }
 
 export function createHealthModule(deps: HealthDeps): HubModule {
@@ -66,7 +74,7 @@ export function createHealthModule(deps: HealthDeps): HubModule {
       ...(entry.message === undefined ? {} : { message: entry.message }),
       ...(entry.loadMs === undefined ? {} : { loadMs: entry.loadMs }),
     })),
-    tool: deps.tool(),
+    tools: deps.tools(),
     registration: deps.registration(),
     wiring: deps.wiring(),
     host: deps.host(),

@@ -1,18 +1,17 @@
-/** 限定名 / glob / include-exclude / searchKeywords（F3-Q4 的读侧过滤规则）。 */
+/** 限定名 / glob / include-exclude（F3-Q4 的读侧过滤规则）。 */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   globToRegExp,
   isToolIncluded,
-  keywordsFor,
   matchesPattern,
   qualify,
   toolCandidates,
 } from "../../../src/mcp/runtime/atoms/tool-name.ts";
 
-test("限定名与三种寻址拼写", () => {
+test("限定名与 include / exclude 能对上的拼写：原名、<服务器>__<原名>、模型看到的名字", () => {
   assert.equal(qualify("srv", "read_file"), "srv__read_file");
-  assert.deepEqual(toolCandidates("srv", "read_file"), ["read_file", "srv__read_file"]);
+  assert.deepEqual(toolCandidates("srv", "read_file"), ["read_file", "srv__read_file", "mcp__srv__read_file"]);
 });
 
 test("glob：* 匹配任意长，其余字面量，大小写不敏感", () => {
@@ -58,12 +57,6 @@ test("exclude 用限定名也能命中", () => {
   assert.equal(isToolIncluded({ serverName: "srv", excludeTools: ["srv__ping"] }, "ping"), false);
 });
 
-test("searchKeywords 按原名 / 限定名 / glob 命中并去重", () => {
-  const server = {
-    serverName: "srv",
-    searchKeywords: { ping: ["连通性"], "read_*": ["文件"], srv__ping: ["连通性"], other: ["x"] },
-  };
-  assert.deepEqual(keywordsFor(server, "ping"), ["连通性"]);
-  assert.deepEqual(keywordsFor(server, "read_file"), ["文件"]);
-  assert.deepEqual(keywordsFor(server, "nope"), []);
+test("exclude 用模型看到的名字也能命中", () => {
+  assert.equal(isToolIncluded({ serverName: "srv", excludeTools: ["mcp__srv__ping"] }, "ping"), false);
 });
