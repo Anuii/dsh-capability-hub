@@ -295,12 +295,12 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles` 把各组件
 | `filters` | `{ items: { id, label, count?, quiet? }[], value, onChange(id), label? }`；`count` 显示成后面的小数字；`quiet` 把该分段调淡（选中时不调淡），用于「需关注 0」「有错误 0」。**分段 testid**：给了工具栏 `testId` 时是 `<testId>-filter-<id>`，否则是 `kit-filter-<id>`（两个标签同时挂载，不带前缀会撞车） |
 | `primary` | `{ label, onClick, testId? }` 或 `{ label, menu: MenuItem[], testId? }`；**只有它是强调色按钮** |
 | `more` | `MenuItem[]`，渲染成右侧「⋯」 |
-| `afterFilters` | 紧跟分段之后的额外筛选（例如技能页的「目录」下拉，用原生 `<select className={kit.select}>`） |
+| `afterFilters` | 紧跟分段之后的额外筛选（例如「添加技能」汇总发现里的仓库下拉，用原生 `<select className={kit.select}>`） |
 | `start` / `end` | 两端塞自定义内容（例如仓库视图的「上次扫描 · 刷新」） |
 
 **`MenuItem`**（`Toolbar.primary.menu` / `Toolbar.more` / `MoreMenu.items` 通用）：
 `{ id?, label, hint?, onClick?, danger?, disabled?, separatorBefore?, info?, testId? }`。
-`info: true` 渲染成不可点的只读信息行（例如「GitHub：已连接 · 剩余配额 42」）。
+`info: true` 渲染成不可点的只读信息行（例如「没有当前会话工作区，不显示项目级技能」）。
 
 **`ListSurface({ children, testId? })`**
 列表容器，只负责纵向排列若干 `ListGroup`（间距 24）。
