@@ -3,37 +3,26 @@
  *
  * UI-C 之后这一段只回答两件事，别的都删掉了：
  *   有来源 → 三行 KeyValue（来源 / 记录位置 / 更新时间）；检查更新与取消登记在下面那段里；
- *   无来源 → 一句「无来源」+ 两个文字按钮（推测来源 / 手动登记）；
+ *   无来源 → 一句「无来源」+ 「手动登记」文字按钮；
  *   平铺 .md 技能 → 直接说明不支持，不发任何请求。
  *
  * 行里**不再**显示任何来源标记（UI-DESIGN §4：一行只说「这是什么、开没开」）。
- * 推测 / 登记 / 取消登记的流程在 source-flow.ts（可单测），这里只渲染。
+ * 登记 / 取消登记的流程在 source-flow.ts（可单测），这里只渲染。
  */
 
 import * as React from "react";
-import { Button, Checkbox, Input } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge, KeyValue, useStoreState } from "../../../kit/index.ts";
+import { Button, Input } from "@deepseek-ai/dsh-client-ui-primitives";
+import { KeyValue, useStoreState } from "../../../kit/index.ts";
 import { ensureSources, sourceFlowApi } from "./cache.ts";
 import { createSourceFlow } from "./source-flow.ts";
 
 import { remoteStore } from "./store.ts";
 import { SkillUpdateSection } from "./update.tsx";
-import {
-  candidateKey,
-  confidenceBadgeTone,
-  confidenceLabel,
-  findSourceFor,
-  flatUnsupportedText,
-  isFlatSkill,
-  sourceRepoRef,
-  sourceTitle,
-  storeLabel,
-} from "./model.ts";
+import { findSourceFor, flatUnsupportedText, isFlatSkill, sourceRepoRef, sourceTitle, storeLabel } from "./model.ts";
 import { formatDateTime } from "../format.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
-import type { DiscoverCandidate } from "../../contract/remote.ts";
 
 export interface SkillSourceSectionProps {
   skill: SkillSummary;
@@ -61,7 +50,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
       }),
     [skillId, dirName, workspace],
   );
-  const { step, candidates, selected, busy, error, errors, done, manual } = useStoreState(flow.state);
+  const { step, busy, error, errors, done, manual } = useStoreState(flow.state);
 
   React.useEffect(() => {
     void ensureSources(workspace);
@@ -128,20 +117,8 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
   }
 
   const actions: React.ReactNode[] = [];
-  // 「推测来源 / 手动登记」只在**无来源**时出现；有来源时想换来源先取消登记（下面那段里）。
+  // 「手动登记」只在**无来源**时出现；有来源时想换来源先取消登记（下面那段里）。
   if (state.sourcesLoaded && state.sourcesError === undefined && step === "view" && entry === undefined) {
-    actions.push(
-      <Button
-        key="discover"
-        size="sm"
-        variant="ghost"
-        disabled={busy}
-        data-testid="skills-remote-source-discover"
-        onClick={() => void flow.discover()}
-      >
-        {t("skills.remote.source.discover")}
-      </Button>,
-    );
     actions.push(
       <Button
         key="manual"
@@ -152,68 +129,6 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
         onClick={() => flow.openManual(entry)}
       >
         {t("skills.remote.source.manual")}
-      </Button>,
-    );
-  }
-
-  if (step === "discover") {
-    const list = candidates ?? [];
-    body.push(
-      <div key="discover" className={styles.inlineRow} data-testid="skills-remote-candidates">
-        {busy && candidates === undefined ? (
-          <p className={styles.loading}>{t("skills.remote.source.discovering")}</p>
-        ) : list.length === 0 ? (
-          <p className={styles.note} data-testid="skills-remote-no-candidate">
-            {t("skills.remote.source.noCandidate")}
-          </p>
-        ) : (
-          <div className={styles.candidate} data-testid="skills-remote-candidate-list">
-            {list.map((candidate) => (
-              <div
-                key={candidateKey(candidate)}
-                className={styles.resultRow}
-                data-testid={"skills-remote-candidate-" + candidate.skillId}
-              >
-                <Checkbox
-                  checked={selected.has(candidateKey(candidate))}
-                  label={candidate.skillId}
-                  className={styles.candidateLabel}
-                  onChange={(next: boolean) => flow.toggleCandidate(candidate, next)}
-                />
-                <Badge tone={confidenceBadgeTone(candidate.confidence)}>{confidenceLabel(candidate.confidence)}</Badge>
-                <span className={styles.candidateMain}>
-                  <span className={styles.note}>{`${sourceRepoRef(candidate)} · ${candidate.skillPath}`}</span>
-                  <span className={styles.code}>{candidate.reason}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>,
-    );
-    actions.length = 0;
-    actions.push(
-      <Button
-        key="cancel"
-        size="sm"
-        variant="outline"
-        disabled={busy}
-        data-testid="skills-remote-register-cancel"
-        onClick={() => flow.back()}
-      >
-        {t("skills.cancel")}
-      </Button>,
-    );
-    actions.push(
-      <Button
-        key="ok"
-        size="sm"
-        variant="primary"
-        disabled={busy || selected.size === 0}
-        data-testid="skills-remote-register-confirm"
-        onClick={() => void flow.registerSelected()}
-      >
-        {t("skills.remote.source.register")}
       </Button>,
     );
   }
@@ -339,7 +254,7 @@ export function SkillSourceSection(props: SkillSourceSectionProps): React.ReactE
   }
 
   // 有来源、且停在「查看」这一步时才把「更新」那段接在下面：
-  // 调步骤（推测 / 手动 / 取消登记）时它会让位给表单，避免两排按钮打架。
+  // 调步骤（手动 / 取消登记）时它会让位给表单，避免两排按钮打架。
   if (step === "view") {
     body.push(
       <SkillUpdateSection

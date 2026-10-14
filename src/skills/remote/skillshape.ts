@@ -10,7 +10,7 @@
  * npx skills 的来源模型以目录为单位，强行支持会引入转换风险。
  *
  * 本文件只做「一个形态判断」，所有调用点复用同一个函数与同一句文案，避免各处各写一份
- * 判断（discover / register / check / apply 四处都依赖它）。
+ * 判断（register / check / apply 三处都依赖它）。
  */
 
 import fs from "node:fs/promises";

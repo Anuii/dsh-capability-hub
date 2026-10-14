@@ -185,38 +185,6 @@ test("FIX-2 登记：同一批里目录型技能照常登记（拒绝只针对�
   assert.equal(err.message, FLAT_MESSAGE);
 });
 
-/* ---------- 要求 3：discover 显式跳过 ---------- */
-
-test("FIX-2 来源推测：平铺技能不给出候选（显式跳过，不靠 walkFiles 恰好返回空）", async () => {
-  const userAgents = makeTempDir();
-  const link = "见 https://raw.githubusercontent.com/lilyco-42/lyco-skill/main/docs/logo.png\n";
-  // 平铺技能的文件内容里**故意**放一条 github 链接，并且把 name 取成「skills」——
-  // 预置仓库 anthropics/skills 的仓库名正是 skills，于是「按名字匹配」这一支本来会产出
-  // medium 候选。这样本用例的通过**只能**来自显式跳过，而不是 walkFiles 恰好返回空。
-  const flat = await seedFlatSkill(userAgents, "notes.md", `---\nname: skills\ndescription: 平铺\n---\n\n${link}`);
-  const dir = path.join(userAgents, "lyco");
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, "SKILL.md"), "---\nname: lyco\ndescription: d\n---\n");
-  await fs.writeFile(path.join(dir, "install.ps1"), link);
-  const env = await buildModule({
-    skills: [
-      { rootId: "user-agents", dirName: "notes.md", path: flat, name: "skills" },
-      { rootId: "user-agents", dirName: "lyco", path: dir, name: "lyco" },
-    ],
-    rootPaths: { "user-agents": userAgents },
-  });
-
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as { skillId: string; repo: string }[];
-  assert.equal(candidates.filter((c) => c.skillId === FLAT_ID).length, 0, "平铺技能不得出现候选");
-  assert.ok(
-    candidates.some((c) => c.skillId === "user-agents:lyco" && c.repo === "lilyco-42/lyco-skill"),
-    "目录型技能照常扫到链接",
-  );
-  // 只给候选，不登记
-  assert.equal(((await call(env.module as never, "GET skills/sources", { query: {} })).entries as unknown[]).length, 0);
-});
-
 /* ---------- 要求 4：check 为 no-source，且不下载 ---------- */
 
 test("FIX-2 检查更新：平铺技能 → no-source + 统一说明；即使有登记来源也不下载", async () => {

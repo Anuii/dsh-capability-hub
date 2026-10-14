@@ -92,18 +92,6 @@ export interface DiscoveryView {
   skills: DiscoveredSkill[];
 }
 
-export type Confidence = "high" | "medium" | "low";
-
-/** 为无来源技能推测的候选来源（POST skills/sources/discover）。 */
-export interface DiscoverCandidate {
-  skillId: string;
-  repo: string;
-  ref?: string;
-  skillPath: string;
-  confidence: Confidence;
-  reason: string;
-}
-
 export type UpdateStatus = "up-to-date" | "update-available" | "no-source" | "error";
 
 export interface UpdateCheckItem {

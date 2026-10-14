@@ -5,7 +5,7 @@
  * 换工作区或写操作后调 force=true 重新拉。
  */
 
-import { discoverSources, fetchGithubAuth, listSources, registerSource, unregisterSource } from "./data.ts";
+import { fetchGithubAuth, listSources, registerSource, unregisterSource } from "./data.ts";
 import { remoteStore } from "./store.ts";
 import type { SourceFlowAdapter } from "./source-flow.ts";
 import { errorText } from "../../../shared/error-text.ts";
@@ -57,7 +57,6 @@ export async function loadAuth(): Promise<void> {
 
 /** 「来源」一段的正式 adapter（source-flow.ts）：HTTP + 共享来源表。 */
 export const sourceFlowApi: SourceFlowAdapter = {
-  discover: (skillId, workspace) => discoverSources([skillId], workspace),
   register: (input, workspace) => registerSource(input, workspace),
   unregister: (skillId, workspace) => unregisterSource(skillId, workspace),
   sourceSaved: (entry) => remoteStore.upsertSource(entry),

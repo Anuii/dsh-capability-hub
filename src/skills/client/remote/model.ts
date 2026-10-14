@@ -1,5 +1,5 @@
 /**
- * 「远程部分」的**纯逻辑**：来源展示、更新状态、安装目标、候选分组、结果汇总。
+ * 「远程部分」的**纯逻辑**：来源展示、更新状态、安装目标、结果汇总。
  *
  * 这里刻意不碰 DOM、不碰 React、不发请求：全部可以用 node:test 直接测
  * （见 test/skills/client/remote-model.test.ts）。文案一律走 ../strings.ts 的 t()，
@@ -11,8 +11,6 @@ import { t } from "../strings.ts";
 import type { RootInfo, SkillSummary } from "../../contract/local.ts";
 import type {
   AuthMode,
-  Confidence,
-  DiscoverCandidate,
   InstallItemResult,
   InstallTarget,
   SourceEntry,
@@ -160,56 +158,6 @@ export function applySummaryText(summary: ApplySummary): string {
   return t("skills.remote.bar.updateSummary", { ok: summary.ok, failed: summary.failed });
 }
 
-/* ---------------- 候选来源 ---------------- */
-
-export function confidenceLabel(confidence: Confidence): string {
-  switch (confidence) {
-    case "high":
-      return t("skills.remote.source.confidence.high");
-    case "medium":
-      return t("skills.remote.source.confidence.medium");
-    case "low":
-      return t("skills.remote.source.confidence.low");
-  }
-}
-
-/** kit Badge 只认 neutral / accent / warn / danger —— 置信度标记用中性的两档。 */
-export function confidenceBadgeTone(confidence: Confidence): "neutral" | "warn" {
-  return confidence === "medium" ? "warn" : "neutral";
-}
-
-/** 候选的唯一键（勾选集合用它，前端不去猜后端 id）。 */
-export function candidateKey(candidate: DiscoverCandidate): string {
-  return `${candidate.skillId}|${candidate.repo.toLowerCase()}|${candidate.ref ?? ""}|${candidate.skillPath}`;
-}
-
-/**
- * 候选里的 skillPath 只有在「仓库内相对路径」时才能直接用。
- * 宿主对「技能目录里出现链接」这类候选返回的是**本机绝对路径**（缺陷，见回报 D-2），
- * 直接登记会把本机路径写进来源记录、之后更新必然找不到上游 —— 这里统一退回「<目录名>/SKILL.md」。
- */
-export function candidateSkillPath(candidate: { skillPath: string }, dirName: string): string {
-  const value = typeof candidate.skillPath === "string" ? candidate.skillPath.trim() : "";
-  const looksLocal = value === "" || /^[A-Za-z]:[\\/]/.test(value) || value.startsWith("/") || value.startsWith("\\");
-  return looksLocal ? `${dirName}/SKILL.md` : value;
-}
-
-export interface CandidateGroup {
-  skillId: string;
-  candidates: DiscoverCandidate[];
-}
-
-/** 候选按技能分组（组内保持宿主给的置信度顺序）。 */
-export function groupCandidates(candidates: readonly DiscoverCandidate[]): CandidateGroup[] {
-  const groups = new Map<string, DiscoverCandidate[]>();
-  for (const candidate of candidates) {
-    const list = groups.get(candidate.skillId);
-    if (list === undefined) groups.set(candidate.skillId, [candidate]);
-    else list.push(candidate);
-  }
-  return [...groups.entries()].map(([skillId, list]) => ({ skillId, candidates: list }));
-}
-
 /* ---------------- 安装目标 ---------------- */
 
 export interface InstallTargetOption {
@@ -284,23 +232,6 @@ export function findSourceFor(
     if (parent !== undefined && parent.toLowerCase() === skill.dirName.toLowerCase()) return entry;
   }
   return undefined;
-}
-
-/** 已经登记过来源的技能 id 集合（用容错匹配，和界面显示保持一致）。 */
-export function sourceIdsOf(
-  skills: readonly SkillSummary[],
-  sources: Readonly<Record<string, SourceEntry>>,
-): Set<string> {
-  const ids = new Set<string>();
-  for (const skill of skills) {
-    if (findSourceFor(skill, sources) !== undefined) ids.add(skill.id);
-  }
-  return ids;
-}
-
-/** 需要（且可以）推测来源的技能：可写 + 非平铺 + 当前没有来源记录。 */
-export function skillsNeedingSource(skills: readonly SkillSummary[], sourceIds: ReadonlySet<string>): SkillSummary[] {
-  return skills.filter((skill) => skill.writable && !isFlatSkill(skill) && !sourceIds.has(skill.id));
 }
 
 /** 有更新、可以「全部更新」的技能 id（顺序与列表一致）。 */

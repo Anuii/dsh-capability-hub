@@ -84,7 +84,7 @@ export async function checkUpdates(
       results.push({
         skillId: skill.id,
         status: "no-source",
-        message: "该技能没有来源记录，无法检查更新。可以先做「来源推测」或手动登记来源。",
+        message: "该技能没有来源记录，无法检查更新。请先手动登记来源。",
       });
       continue;
     }

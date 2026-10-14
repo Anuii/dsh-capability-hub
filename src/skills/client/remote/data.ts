@@ -11,7 +11,6 @@ import { listSkills, workspaceQuery } from "../data.ts";
 import type { RepoViewAdapter } from "./repo-view-store.ts";
 import type {
   BrowseResult,
-  DiscoverCandidate,
   DiscoveryView,
   DiscoveryRepoView,
   GithubAuth,
@@ -35,20 +34,6 @@ function withWorkspace(body: Record<string, unknown>, workspace: string | undefi
 export async function listSources(workspace: string | undefined): Promise<SourceEntry[]> {
   const data = await api.get<{ entries?: SourceEntry[] }>("skills/sources", workspaceQuery(workspace));
   return Array.isArray(data?.entries) ? data.entries : [];
-}
-
-/** POST skills/sources/discover { ids?, workspace? } → { candidates } */
-export async function discoverSources(
-  ids: readonly string[] | undefined,
-  workspace: string | undefined,
-): Promise<DiscoverCandidate[]> {
-  const body: Record<string, unknown> = {};
-  if (ids !== undefined && ids.length > 0) body.ids = [...ids];
-  const data = await api.post<{ candidates?: DiscoverCandidate[] }>(
-    "skills/sources/discover",
-    withWorkspace(body, workspace),
-  );
-  return Array.isArray(data?.candidates) ? data.candidates : [];
 }
 
 export interface RegisterInput {

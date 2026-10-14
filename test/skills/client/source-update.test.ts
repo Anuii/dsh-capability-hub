@@ -27,9 +27,8 @@ test("无来源时只有一句「无来源」，且不再有解释性长句", ()
   assert.equal(/还没有来源记录/.test(source), false);
 });
 
-test("无来源时才出现「推测来源」「手动登记」两个文字按钮", () => {
+test("无来源时才出现「手动登记」文字按钮", () => {
   assert.ok(source.includes('step === "view" && entry === undefined'));
-  assert.ok(source.includes('"skills-remote-source-discover"'));
   assert.ok(source.includes('"skills-remote-source-manual"'));
 });
 

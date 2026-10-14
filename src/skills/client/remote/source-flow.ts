@@ -1,8 +1,7 @@
 /**
- * 详情抽屉「来源」一段的流程（ADR-0005）：推测来源 → 勾选 → 登记；手动登记；取消登记。
+ * 详情抽屉「来源」一段的流程（ADR-0005）：手动登记；取消登记。
  *
  * 一个技能一份（抽屉打开时建）。规则都在这里，组件只渲染：
- *   - 推测：拿到候选后默认全选；登记只用勾选里的第一个（一个技能只有一个来源）；
  *   - 手动：表单预填已有来源；仓库为空不发请求；技能路径默认「<目录名>/SKILL.md」——
  *     仓库根级的 SKILL.md 会被宿主派生成别的 skillId，界面上也说不清是哪个技能；
  *   - 登记 / 取消登记成功后更新共享的来源表、回到查看并给一句结果，然后通知外面刷新列表；
@@ -12,17 +11,16 @@
  */
 
 import { createStore, type Store } from "../../../kit/store.ts";
-import { candidateKey, candidateSkillPath, sourceRepoRef } from "./model.ts";
+import { sourceRepoRef } from "./model.ts";
 
 import { t } from "../strings.ts";
 import { errorText } from "../../../shared/error-text.ts";
 import type { FieldError } from "../../../platform/contract/host.ts";
 import type { SkillSummary } from "../../contract/local.ts";
-import type { DiscoverCandidate, SourceEntry } from "../../contract/remote.ts";
+import type { SourceEntry } from "../../contract/remote.ts";
 import { fieldErrorsOf } from "../../../platform/client/api.ts";
 
 export interface SourceFlowAdapter {
-  discover(skillId: string, workspace: string | undefined): Promise<DiscoverCandidate[]>;
   register(
     input: { skillId: string; repo: string; ref?: string; skillPath?: string },
     workspace: string | undefined,
@@ -33,7 +31,7 @@ export interface SourceFlowAdapter {
   sourceRemoved(skillId: string, workspace: string | undefined): void;
 }
 
-export type SourceStep = "view" | "discover" | "manual" | "unregister";
+export type SourceStep = "view" | "manual" | "unregister";
 
 export interface ManualSource {
   repo: string;
@@ -43,9 +41,6 @@ export interface ManualSource {
 
 export interface SourceFlowState {
   step: SourceStep;
-  /** 推测得到的候选；推测中为 undefined */
-  candidates?: readonly DiscoverCandidate[];
-  selected: ReadonlySet<string>;
   busy: boolean;
   error?: string;
   errors: readonly FieldError[];
@@ -56,11 +51,8 @@ export interface SourceFlowState {
 
 export interface SourceFlow {
   readonly state: Store<SourceFlowState>;
-  /** 回到查看（丢掉候选与错误） */
+  /** 回到查看（丢掉错误） */
   back(): void;
-  discover(): Promise<void>;
-  toggleCandidate(candidate: DiscoverCandidate, on: boolean): void;
-  registerSelected(): Promise<void>;
   /** 打开手动登记；existing = 当前来源（用来预填） */
   openManual(existing: SourceEntry | undefined): void;
   setManual(field: keyof ManualSource, value: string): void;
@@ -82,7 +74,6 @@ export function createSourceFlow(adapter: SourceFlowAdapter, options: SourceFlow
   const { skill, workspace } = options;
   const state = createStore<SourceFlowState>({
     step: "view",
-    selected: new Set(),
     busy: false,
     errors: [],
     manual: EMPTY_MANUAL,
@@ -99,7 +90,6 @@ export function createSourceFlow(adapter: SourceFlowAdapter, options: SourceFlow
       state.patch({
         busy: false,
         step: "view",
-        candidates: undefined,
         done: t("skills.remote.source.registered", { repo: sourceRepoRef(stored) }),
       });
       options.onChanged?.();
@@ -111,36 +101,7 @@ export function createSourceFlow(adapter: SourceFlowAdapter, options: SourceFlow
   return {
     state,
     back() {
-      state.patch({ ...clean, step: "view", candidates: undefined, selected: new Set() });
-    },
-    async discover() {
-      state.patch({ ...clean, step: "discover", done: undefined, busy: true, candidates: undefined });
-      try {
-        const list = await adapter.discover(skill.id, workspace);
-        state.patch({ candidates: list, selected: new Set(list.map(candidateKey)), busy: false });
-      } catch (failure) {
-        state.patch({ candidates: [] });
-        failed(failure);
-      }
-    },
-    toggleCandidate(candidate, on) {
-      const selected = new Set(state.get().selected);
-      if (on) selected.add(candidateKey(candidate));
-      else selected.delete(candidateKey(candidate));
-      state.patch({ selected });
-    },
-    async registerSelected() {
-      const { candidates, selected } = state.get();
-      const first = (candidates ?? []).find((item) => selected.has(candidateKey(item)));
-      if (first === undefined) {
-        state.patch({ error: t("skills.remote.source.pickOne") });
-        return;
-      }
-      await register({
-        repo: first.repo,
-        ...(first.ref === undefined ? {} : { ref: first.ref }),
-        skillPath: candidateSkillPath(first, skill.dirName),
-      });
+      state.patch({ ...clean, step: "view" });
     },
     openManual(existing) {
       state.patch({

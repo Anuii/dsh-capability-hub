@@ -1,6 +1,6 @@
 /**
  * 技能页「来源」一段的操作走查（无头 Edge）：找一个还没有来源的技能 → 手动登记（空仓库被拦下）→
- * 登记成功 → 取消登记。不联网（不点「推测来源」）。
+ * 登记成功 → 取消登记。不联网。
  *
  * 用法（包根，测试 profile 在跑）：node scripts\ui-walk-skills.mjs
  * 期望末行：UI-WALK-SKILLS-RESULT pass=N fail=0

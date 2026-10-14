@@ -248,60 +248,6 @@ test("注销：删除条目；不存在时报 NOT_FOUND", async () => {
   );
 });
 
-test("来源推测：仓库同名匹配 + 目录内链接扫描，置信度与中文 reason", async () => {
-  const userAgents = makeTempDir();
-  const named = await seedLocalSkill(userAgents, "anthropics", {
-    "SKILL.md": "---\nname: anthropics\ndescription: d\n---\n",
-  });
-  const linked = await seedLocalSkill(userAgents, "lyco", {
-    "SKILL.md": "---\nname: lyco\ndescription: d\n---\n",
-    "install.ps1":
-      '$Repo = "lilyco-42/lyco-skill"\n# see https://raw.githubusercontent.com/lilyco-42/lyco-skill/main/docs/logo.png\n',
-  });
-  const env = await buildModule({
-    skills: [
-      { rootId: "user-agents", dirName: "anthropics", path: named, name: "anthropics" },
-      { rootId: "user-agents", dirName: "lyco", path: linked, name: "lyco" },
-    ],
-    rootPaths: { "user-agents": userAgents },
-  });
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as {
-    skillId: string;
-    repo: string;
-    confidence: string;
-    reason: string;
-    skillPath: string;
-  }[];
-  const lyco = candidates.find((c) => c.skillId === "user-agents:lyco")!;
-  assert.equal(lyco.repo, "lilyco-42/lyco-skill");
-  // FIX-6（D-2）：本用例的技能目录是普通临时目录（不在任何 git 工作区里），
-  // 因此「技能在仓库内的位置」算不出来 → 置信度降为 low，skillPath 退回「<目录名>/SKILL.md」。
-  // 能确定位置时（本机就是该仓库的克隆）仍是 high，见 fix6-sources.test.ts。
-  assert.equal(lyco.confidence, "low");
-  assert.equal(lyco.skillPath, "lyco/SKILL.md");
-  assert.match(lyco.reason, /技能目录内的文件里出现了/);
-  assert.match(lyco.reason, /install\.ps1/);
-  // 预置仓库里没有名字叫 anthropics 的仓库（anthropics/skills 的 repo 名是 skills），所以不该误报
-  assert.ok(!candidates.some((c) => c.skillId === "user-agents:anthropics"), "不应把 owner 名误当仓库名");
-
-  // 只返回候选，不登记
-  assert.equal((await call(env.module as never, "GET skills/sources", { query: {} })).entries instanceof Array, true);
-  assert.equal(((await call(env.module as never, "GET skills/sources", { query: {} })).entries as unknown[]).length, 0);
-});
-
-test("来源推测：磁盘上的预置仓库同名目录会被标为中置信候选", async () => {
-  const userAgents = makeTempDir();
-  const dir = await seedLocalSkill(userAgents, "skills", { "SKILL.md": "---\nname: skills\ndescription: d\n---\n" });
-  const env = await buildModule({
-    skills: [{ rootId: "user-agents", dirName: "skills", path: dir, name: "skills" }],
-    rootPaths: { "user-agents": userAgents },
-  });
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as { repo: string; confidence: string; reason: string }[];
-  assert.ok(candidates.some((c) => c.repo === "anthropics/skills" && c.confidence === "medium"));
-});
-
 test("检查更新：无来源 → no-source；上游一致 → up-to-date；不一致 → update-available", async () => {
   const userAgents = makeTempDir();
   const grillingDir = await seedLocalSkill(userAgents, "grilling", {
@@ -656,7 +602,6 @@ test("路由参数校验：错误码与中文提示", async () => {
     ["POST skills/updates/apply", { body: {} }, /至少选择一个/],
     ["POST skills/install", { body: { repo: "a/b", target: "user-agents" } }, /至少选择一个/],
     ["GET skills/search", { query: { q: "a" } }, /至少需要 2 个字符/],
-    ["POST skills/sources/discover", { body: { ids: "not-array" } }, /数组/],
   ];
   for (const [key, req, pattern] of cases) {
     await assert.rejects(call(env.module as never, key, req as never), pattern, key);
@@ -873,7 +818,6 @@ test('所有路由都是 async 函数，且键符合 "<METHOD> <path>" 格式', 
   }
   const expected = [
     "GET skills/sources",
-    "POST skills/sources/discover",
     "POST skills/sources/register",
     "POST skills/sources/unregister",
     "POST skills/updates/check",

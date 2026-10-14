@@ -238,19 +238,11 @@ export const zh = {
   "skills.remote.source.storeHub": "插件记录 sources.json",
   "skills.remote.source.updatedAt": "更新时间",
   "skills.remote.source.orphan": "lock 里有这条记录，但本机已经找不到对应的技能目录。",
-  "skills.remote.source.discover": "推测来源",
-  "skills.remote.source.discovering": "正在推测…",
-  "skills.remote.source.noCandidate": "没有找到候选来源，可以手动登记。",
-  "skills.remote.source.register": "登记选中项",
   "skills.remote.source.registered": "已登记来源：{repo}。",
-  "skills.remote.source.pickOne": "请先选择一条候选来源。",
   "skills.remote.source.manual": "手动登记",
   "skills.remote.source.unregister": "取消登记",
   "skills.remote.source.unregisterBody": "来源记录会被删除（技能目录本身不动），之后不再能检查更新。",
   "skills.remote.source.unregisterDone": "已取消来源登记。",
-  "skills.remote.source.confidence.high": "高置信",
-  "skills.remote.source.confidence.medium": "中置信",
-  "skills.remote.source.confidence.low": "低置信",
 
   /* ---- 远程 · 来源表单 ---- */
   "skills.remote.form.repo": "仓库（owner/name 或 GitHub 链接）",
@@ -274,7 +266,7 @@ export const zh = {
   "skills.remote.update.status.unknown": "未检查",
   "skills.remote.update.upToDateHint": "已经是最新版本。",
   "skills.remote.update.availableHint": "上游有新版本，点「更新」会用上游版本覆盖（旧版本进回收站）。",
-  "skills.remote.update.noSourceHint": "没有来源记录，无法检查更新。可以先推测或登记来源。",
+  "skills.remote.update.noSourceHint": "没有来源记录，无法检查更新。可以先登记来源。",
   "skills.remote.update.trashNote": "旧版本已移入回收站（可恢复），启停状态保持不变。",
   "skills.remote.update.openTrash": "打开回收站",
 
@@ -283,7 +275,6 @@ export const zh = {
   "skills.remote.menu.checking": "正在检查…",
   "skills.remote.menu.updateAll": "全部更新（{count}）",
   "skills.remote.menu.applying": "正在更新…",
-  "skills.remote.menu.discover": "为无来源技能推测来源",
   "skills.remote.menu.trash": "回收站",
   "skills.remote.menu.trashCount": "回收站（{count}）",
   "skills.remote.menu.auth": "GitHub：{mode} · 剩余配额 {remaining}",
@@ -296,11 +287,6 @@ export const zh = {
   "skills.remote.auth.gh": "gh CLI 已登录",
   "skills.remote.auth.anonymous": "匿名（未登录）",
   "skills.remote.auth.unknown": "未知",
-  "skills.remote.batch.title": "为无来源技能推测来源",
-  "skills.remote.batch.hint": "勾选要登记的候选来源，确认后写入来源记录（不会改动技能内容）。",
-  "skills.remote.batch.none": "没有找到候选来源。可以到单个技能的详情里手动登记。",
-  "skills.remote.batch.confirm": "登记选中项（{count}）",
-  "skills.remote.batch.registerDone": "登记完成：成功 {ok} 项，失败 {failed} 项。",
 
   /* ---- 操作反馈 ---- */
   "skills.toast.toggleOn": "已启用「{name}」",

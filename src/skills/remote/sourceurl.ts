@@ -120,10 +120,9 @@ export function skillMdPathOf(dirPath: string): string {
 /**
  * 归一化「仓库内 SKILL.md 路径」：必须是**相对**路径（正斜杠分隔）。
  *
- * FIX-6（D-2）：候选（discover）与已登记条目（lockstore）的 skillPath 都不允许是
- * 本机绝对路径或含盘符 —— 绝对路径（`/x`、`\\x`、`C:/x`）、反斜杠、"." / ".."
- * 段、Windows 保留名等一律返回 undefined，由调用方决定是丢弃候选、还是退回
- * `<目录名>/SKILL.md` 并说明原因（判据与 FIX-5 的 safepath.ts 同一套）。
+ * FIX-6（D-2）：已登记条目（lockstore）的 skillPath 不允许是本机绝对路径或含盘符
+ * —— 绝对路径（`/x`、`\\x`、`C:/x`）、反斜杠、"." / ".." 段、Windows 保留名等
+ * 一律返回 undefined，由调用方退回 `<目录名>/SKILL.md`（判据与 FIX-5 的 safepath.ts 同一套）。
  */
 export function repoRelativeSkillPath(raw: string | undefined): string | undefined {
   const value = (raw ?? "").trim();

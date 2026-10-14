@@ -1,22 +1,17 @@
 /**
- * 远程部分纯逻辑单测：来源展示、更新状态、安装目标、候选分组、结果汇总。
+ * 远程部分纯逻辑单测：来源展示、更新状态、安装目标、结果汇总。
  */
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   authModeLabel,
   applySummaryText,
-  candidateKey,
   checkSummaryText,
-  confidenceBadgeTone,
-  confidenceLabel,
   flatUnsupportedText,
-  groupCandidates,
   installResultText,
   installSummaryText,
   installTargetOptions,
   isFlatSkill,
-  skillsNeedingSource,
   sourceRepoRef,
   sourceTitle,
   storeLabel,
@@ -30,7 +25,7 @@ import {
 } from "../../../src/skills/client/remote/model.ts";
 import { t } from "../../../src/skills/client/strings.ts";
 import { makeSkill, root } from "./fixtures.ts";
-import type { DiscoverCandidate, SourceEntry } from "../../../src/skills/contract/remote.ts";
+import type { SourceEntry } from "../../../src/skills/contract/remote.ts";
 
 const entry: SourceEntry = {
   skillId: "user-agents:grilling",
@@ -93,45 +88,6 @@ test("检查/更新结果汇总", () => {
   assert.equal(applySummaryText(applied), t("skills.remote.bar.updateSummary", { ok: 1, failed: 1 }));
 });
 
-test("候选来源：唯一键、分组与置信度文案", () => {
-  const candidates: DiscoverCandidate[] = [
-    {
-      skillId: "user-agents:a",
-      repo: "x/y",
-      ref: "main",
-      skillPath: "a/SKILL.md",
-      confidence: "high",
-      reason: "目录里有链接",
-    },
-    {
-      skillId: "user-agents:a",
-      repo: "x/y",
-      ref: "dev",
-      skillPath: "a/SKILL.md",
-      confidence: "medium",
-      reason: "仓库同名",
-    },
-    {
-      skillId: "user-agents:b",
-      repo: "x/y",
-      ref: "main",
-      skillPath: "b/SKILL.md",
-      confidence: "low",
-      reason: "弱信号",
-    },
-  ];
-  assert.equal(candidateKey(candidates[0]!), "user-agents:a|x/y|main|a/SKILL.md");
-  assert.notEqual(candidateKey(candidates[0]!), candidateKey(candidates[1]!));
-  const groups = groupCandidates(candidates);
-  assert.equal(groups.length, 2);
-  assert.equal(groups[0]!.skillId, "user-agents:a");
-  assert.equal(groups[0]!.candidates.length, 2);
-  assert.equal(confidenceLabel("high"), t("skills.remote.source.confidence.high"));
-  assert.equal(confidenceBadgeTone("high"), "neutral");
-  assert.equal(confidenceBadgeTone("medium"), "warn");
-  assert.equal(confidenceBadgeTone("low"), "neutral");
-});
-
 test("安装目标：有工作区才有项目级，路径来自 roots", () => {
   const roots = [
     root("project-dsh", { path: "C:\\proj\\.dsh\\skills" }),
@@ -166,18 +122,7 @@ test("安装结果文案", () => {
   assert.equal(installSummaryText(1, 0), t("skills.install.done", { ok: 1, failed: 0 }));
 });
 
-test("哪些技能需要推测来源：可写 + 非平铺 + 尚无记录", () => {
-  const skills = [
-    makeSkill({ id: "user-agents:a" }),
-    makeSkill({ id: "user-agents:b", writable: false }),
-    makeSkill({ id: "user-agents:flat.md" }),
-    makeSkill({ id: "user-agents:c" }),
-  ];
-  const needing = skillsNeedingSource(skills, new Set<string>(["user-agents:c"]));
-  assert.deepEqual(
-    needing.map((skill) => skill.id),
-    ["user-agents:a"],
-  );
+test("平铺技能：识别与统一说明文案", () => {
   assert.equal(isFlatSkill({ dirName: "flat.md" }), true);
   assert.ok(flatUnsupportedText().includes("平铺 .md"));
 });

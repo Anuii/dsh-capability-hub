@@ -175,7 +175,7 @@ export interface RegisterOptions {
   ref?: string;
   skillPath?: string;
   workspace?: string;
-  /** 覆盖记录的哈希（discover → register 时不传，走本地目录哈希） */
+  /** 覆盖记录的哈希（register 时不传，走本地目录哈希） */
   skillFolderHash?: string;
 }
 

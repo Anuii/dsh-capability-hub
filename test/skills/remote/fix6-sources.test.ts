@@ -2,9 +2,8 @@
  * FIX-6 测试：skills-remote 的 4 个来源相关缺陷（T4a-2 走查发现）。
  *
  *   D-1 根级 skillPath 的 skillId 派生（lock 键 = 本地目录名）+ 反查一致性
- *   D-2 候选 / 已登记条目的 skillPath 永远是「仓库内相对路径」
+ *   D-2 已登记条目的 skillPath 永远是「仓库内相对路径」
  *   D-3 每个 GitHub 响应（成功或失败）都记录配额；github-auth 主动查 /rate_limit
- *   D-4 GitHub 保留路径不会被当成候选仓库
  *
  * 全部落盘都在 os.tmpdir() 下的临时目录里，绝不碰真实用户目录（PLAN §4）。
  */
@@ -34,32 +33,6 @@ import { repoArchive, skillFixture } from "./tarfixture.ts";
 
 const ROOT_SKILL_MD = "---\nname: rooty\ndescription: d\n---\n\n正文。\n";
 const TOKEN = "ghp_" + "q".repeat(36);
-
-/** D-4：GitHub 的保留一级路径 —— 都不该被当成候选仓库 */
-const RESERVED_OWNERS = [
-  "sponsors",
-  "orgs",
-  "apps",
-  "marketplace",
-  "settings",
-  "features",
-  "topics",
-  "collections",
-  "explore",
-  "login",
-  "about",
-  "pricing",
-  "enterprise",
-  "issues",
-  "pulls",
-  "notifications",
-  "search",
-  "users",
-  "site",
-  "security",
-  "customer-stories",
-  "readme",
-];
 
 type FakeRoutes = Parameters<typeof makeFakeFetch>[0];
 type FakeSkills = NonNullable<Parameters<typeof makeFakeApi>[0]>["skills"];
@@ -148,29 +121,6 @@ function lockEntry(partial: Partial<SkillLockEntry> = {}): SkillLockEntry {
     ...partial,
   };
   return entry;
-}
-
-/** 造一个「本机克隆」：<root>/clone/.git/config（origin 可指定）+ <root>/clone/<subPath>/ */
-async function seedFakeClone(
-  root: string,
-  originUrl: string,
-  subPath: string,
-  link: string,
-  name = "lyco",
-): Promise<string> {
-  const clone = path.join(root, "clone");
-  const dir = path.join(clone, ...subPath.split("/"));
-  await writeTree(dir, {
-    "SKILL.md": "---\nname: " + name + "\ndescription: d\n---\n",
-    "notes.md": "参考文档：" + link + "\n",
-  });
-  await writeTree(clone, {
-    ".git/config":
-      '[core]\n\trepositoryformatversion = 0\n[remote "origin"]\n\turl = ' +
-      originUrl +
-      "\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n",
-  });
-  return dir;
 }
 
 /* =========================== D-1 =========================== */
@@ -352,133 +302,6 @@ test("FIX-6 D-2 防护：lock 里历史遗留的绝对路径 skillPath 读出时
 
 /* =========================== D-2 =========================== */
 
-test("FIX-6 D-2：技能目录是本机克隆时，候选 skillPath 用仓库内相对路径（不再是本机绝对路径）", async () => {
-  const tmp = makeTempDir();
-  const dir = await seedFakeClone(
-    tmp,
-    "https://github.com/lilyco-42/lyco-skill.git",
-    "skills/lyco",
-    "https://github.com/lilyco-42/lyco-skill",
-  );
-  const env = await buildModule({
-    skills: [{ rootId: "user-agents", dirName: "lyco", path: dir, name: "lyco" }],
-    rootPaths: { "user-agents": tmp },
-  });
-
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as { repo: string; skillPath: string; confidence: string; reason: string }[];
-  const hit = candidates.find((c) => c.repo === "lilyco-42/lyco-skill");
-  assert.ok(hit, "应找到链接候选");
-  assert.equal(hit.skillPath, "skills/lyco/SKILL.md");
-  assert.equal(hit.confidence, "high");
-  assertRepoRelative(hit.skillPath, "克隆里的候选 skillPath");
-  // 旧实现这里会是本机绝对路径（C:/Users/you/.../clone/skills/lyco/SKILL.md）
-  assert.equal(hit.skillPath.includes(tmp.replace(/\\/g, "/")), false);
-});
-
-test("FIX-6 D-2：本机不在 git 工作区时降为 low 并写明原因，skillPath 仍是相对路径", async () => {
-  const userAgents = makeTempDir();
-  const dir = path.join(userAgents, "lyco");
-  await writeTree(dir, {
-    "SKILL.md": "---\nname: lyco\ndescription: d\n---\n",
-    "notes.md": "参考 https://github.com/lilyco-42/lyco-skill\n",
-  });
-  const env = await buildModule({
-    skills: [{ rootId: "user-agents", dirName: "lyco", path: dir, name: "lyco" }],
-    rootPaths: { "user-agents": userAgents },
-  });
-
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as { repo: string; skillPath: string; confidence: string; reason: string }[];
-  const hit = candidates.find((c) => c.repo === "lilyco-42/lyco-skill");
-  assert.ok(hit);
-  assert.equal(hit.confidence, "low", "算不出仓库内位置 → 降为 low");
-  assert.equal(hit.skillPath, "lyco/SKILL.md");
-  assert.match(hit.reason, /无法确定它在仓库内的位置/);
-  assert.match(hit.reason, /技能目录内的文件里出现了/, "原有理由仍然保留");
-  assertRepoRelative(hit.skillPath, "非克隆场景的候选 skillPath");
-
-  // 登记这个候选后，来源记录里也必须是相对路径
-  const registered = await call(env.module as never, "POST skills/sources/register", {
-    body: { skillId: "user-agents:lyco", repo: "lilyco-42/lyco-skill", skillPath: hit.skillPath },
-  });
-  const entry = registered.entry as { skillPath: string; skillId: string };
-  assert.equal(entry.skillId, "user-agents:lyco");
-  assertRepoRelative(entry.skillPath, "登记后的 skillPath");
-  assert.equal((await readLockJson(env.home)).skills["lyco"]?.skillPath, "lyco/SKILL.md");
-});
-
-test("FIX-6 D-2：本机 .git 的 origin 是别的仓库时，不拿它的目录布局（降为 low）", async () => {
-  const tmp = makeTempDir();
-  const dir = await seedFakeClone(
-    tmp,
-    "https://github.com/someone/else.git",
-    "skills/lyco",
-    "https://github.com/lilyco-42/lyco-skill",
-  );
-  const env = await buildModule({
-    skills: [{ rootId: "user-agents", dirName: "lyco", path: dir, name: "lyco" }],
-    rootPaths: { "user-agents": tmp },
-  });
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as { repo: string; skillPath: string; confidence: string }[];
-  const hit = candidates.find((c) => c.repo === "lilyco-42/lyco-skill");
-  assert.ok(hit);
-  assert.equal(hit.confidence, "low");
-  assert.equal(hit.skillPath, "lyco/SKILL.md");
-  assertRepoRelative(hit.skillPath, "origin 不匹配时的候选 skillPath");
-});
-
-test("FIX-6 D-2：按仓库名匹配的候选（medium）同样使用仓库内相对路径", async () => {
-  const tmp = makeTempDir();
-  const dir = await seedFakeClone(
-    tmp,
-    "git@github.com:anthropics/skills.git",
-    "skills/pdf",
-    "https://example.com/x",
-    "skills",
-  );
-  const env = await buildModule({
-    skills: [{ rootId: "user-agents", dirName: "skills", path: dir, name: "skills" }],
-    rootPaths: { "user-agents": tmp },
-  });
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as { repo: string; skillPath: string; confidence: string }[];
-  const medium = candidates.find((c) => c.repo === "anthropics/skills" && c.confidence === "medium");
-  assert.ok(medium, "预置仓库 anthropics/skills 的仓库名是 skills，应给出 medium 候选");
-  assert.equal(medium.skillPath, "skills/pdf/SKILL.md");
-  assertRepoRelative(medium.skillPath, "名字匹配候选的 skillPath");
-});
-
-test("FIX-6 D-2 防护：一批技能的候选路径全都不含本机路径（汇总断言）", async () => {
-  const tmp = makeTempDir();
-  const clone = await seedFakeClone(
-    tmp,
-    "https://github.com/lilyco-42/lyco-skill.git",
-    "skills/lyco",
-    "https://github.com/lilyco-42/lyco-skill",
-  );
-  const plain = path.join(tmp, "plain");
-  await writeTree(plain, {
-    "SKILL.md": "---\nname: plain\ndescription: d\n---\n",
-    "notes.md":
-      "见 https://github.com/mattpocock/skills 与 https://raw.githubusercontent.com/anthropics/skills/main/x.md\n",
-  });
-  const env = await buildModule({
-    skills: [
-      { rootId: "user-agents", dirName: "lyco", path: clone, name: "lyco" },
-      { rootId: "user-agents", dirName: "plain", path: plain, name: "plain" },
-    ],
-    rootPaths: { "user-agents": tmp },
-  });
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as { repo: string; skillPath: string }[];
-  assert.ok(candidates.length >= 3, "应有多个候选，实际 " + candidates.length);
-  for (const candidate of candidates) {
-    assertRepoRelative(candidate.skillPath, candidate.repo + " 的候选 skillPath");
-  }
-});
-
 test("FIX-6 D-2 防护：登记时给出本机绝对路径 → BAD_REQUEST(400)，且不写任何来源", async () => {
   const userAgents = makeTempDir();
   const dir = path.join(userAgents, "lyco");
@@ -643,37 +466,4 @@ test("FIX-6 D-3：/rate_limit 探测带上令牌，但令牌绝不出现在响�
   assert.equal(JSON.stringify(env.sink).includes(TOKEN), false, "日志里不得出现令牌");
   const probe = env.fake.calls.find((c) => c.url.includes("/rate_limit"));
   assert.equal(probe?.headers["authorization"], "Bearer " + TOKEN, "探测请求应带上令牌（证明凭据链生效）");
-});
-
-/* =========================== D-4 =========================== */
-
-test("FIX-6 D-4：GitHub 保留路径（sponsors / orgs / topics …）不会被当成候选仓库", async () => {
-  const userAgents = makeTempDir();
-  const dir = path.join(userAgents, "lyco");
-  const reservedLines = RESERVED_OWNERS.map((owner) => "- https://github.com/" + owner + "/probe-target");
-  await writeTree(dir, {
-    "SKILL.md": "---\nname: lyco\ndescription: d\n---\n",
-    "notes.md":
-      [
-        ...reservedLines,
-        "- 真正的来源：https://github.com/lilyco-42/lyco-skill",
-        "- 另一个：https://raw.githubusercontent.com/lilyco-42/lyco-skill/main/logo.png",
-      ].join("\n") + "\n",
-  });
-  const env = await buildModule({
-    skills: [{ rootId: "user-agents", dirName: "lyco", path: dir, name: "lyco" }],
-    rootPaths: { "user-agents": userAgents },
-  });
-
-  const result = await call(env.module as never, "POST skills/sources/discover", { body: {} });
-  const candidates = result.candidates as { repo: string }[];
-  const repos = candidates.map((c) => c.repo.toLowerCase());
-  for (const owner of RESERVED_OWNERS) {
-    assert.equal(
-      repos.some((r) => r.startsWith(owner + "/")),
-      false,
-      "保留路径 " + owner + " 被当成了候选仓库：" + JSON.stringify(repos),
-    );
-  }
-  assert.ok(repos.includes("lilyco-42/lyco-skill"), "正常仓库链接仍应给出候选");
 });

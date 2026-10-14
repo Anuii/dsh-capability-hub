@@ -88,7 +88,7 @@ export interface RepoStore {
   /** 改分支 / 子目录；返回新记录与「是否真的变了」 */
   update(repo: string, patch: RepoPatch): Promise<{ record: RepoRecord; changed: boolean }>;
   remove(repo: string): Promise<void>;
-  /** 预置仓库清单（用于 discover 的候选池；不写盘） */
+  /** 预置仓库清单（首次落盘与仓库视图用；不写盘） */
   presets(): PresetRepo[];
 }
 

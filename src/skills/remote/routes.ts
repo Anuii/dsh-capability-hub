@@ -10,7 +10,6 @@ import { badRequest, validation } from "../../shared/errors.ts";
 import { optionalInput, optionalInputList, patchInput, recordOrEmpty, requireInput } from "../../shared/request.ts";
 import { assertRepoShape } from "./repos.ts";
 import { browseRepo } from "./browse.ts";
-import { discoverSources } from "./discover.ts";
 import type { RepoCatalog } from "./repo-catalog.ts";
 import type { SkillMetaReader } from "./skill-meta.ts";
 import { installSkills, registerSource, unregisterSource, assertInstallTarget } from "./install.ts";
@@ -67,14 +66,6 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
         orphan: !ids.has(entry.skillId),
       })),
     };
-  };
-
-  routes["POST skills/sources/discover"] = async (req) => {
-    const body = recordOrEmpty(req.body);
-    const ids = optionalInputList(body, "ids");
-    const workspace = optionalInput(body, "workspace");
-    const candidates = await discoverSources({ skills, sources, repos }, { ids, workspace });
-    return { candidates };
   };
 
   routes["POST skills/sources/register"] = async (req) => {

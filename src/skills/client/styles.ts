@@ -50,9 +50,6 @@ const skillsSheet = defineSheet(
     "browseList",
     "browseRow",
     "browseMain",
-    "candidate",
-    "candidateMain",
-    "candidateLabel",
     "resultList",
     "resultRow",
     "modalBody",
@@ -104,10 +101,6 @@ const skillsSheet = defineSheet(
     ".chsk_browseRow{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-top:1px solid var(--dsw-alias-border-l1)}",
     ".chsk_browseRow:first-child{border-top:none}",
     ".chsk_browseMain{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}",
-    ".chsk_candidate{display:flex;flex-direction:column;gap:4px;padding:8px 12px;border-top:1px solid var(--dsw-alias-border-l1)}",
-    ".chsk_candidateMain{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}",
-    // 候选行的勾选框标签：不许它吃掉整行宽度（标签可能是很长的候选键）
-    ".chsk_candidateLabel{flex:none;max-width:240px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}",
     ".chsk_resultList{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}",
     ".chsk_resultRow{display:flex;align-items:center;gap:8px;font-size:12.5px;line-height:20px;color:var(--dsw-alias-label-secondary);padding:2px 0}",
     // 宿主 Modal 的内容区（对话框用）
