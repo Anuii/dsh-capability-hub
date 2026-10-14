@@ -21,6 +21,7 @@ import type { DiscoveryCacheEntry, DiscoveryCacheFile, SkillsLocalPort } from ".
 import type { DiscoveredSkill, DiscoveryRepoView, DiscoveryView, RepoRecord } from "../contract/remote.ts";
 import type { HubContext } from "../../platform/contract/host.ts";
 import { errorText } from "../../shared/error-text.ts";
+import { mapLimited } from "./limited.ts";
 
 const DISCOVERY_VERSION = 1;
 /** 同时扫描的仓库数上限（每个仓库要下载一次 tarball） */
@@ -167,20 +168,6 @@ export async function scanOne(
     if (signal?.aborted) throw error;
     return { ...base, error: deps.redactor.scrub(errorText(error)) };
   }
-}
-
-/** 并发上限内依次跑完 */
-async function mapLimited<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let next = 0;
-  async function worker(): Promise<void> {
-    while (next < items.length) {
-      const index = next++;
-      out[index] = await run(items[index]!);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
-  return out;
 }
 
 /**

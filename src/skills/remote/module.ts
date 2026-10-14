@@ -14,6 +14,8 @@ import { createSourceStore, type SourceStore } from "./lockstore.ts";
 import { createRepoStore, type RepoStore } from "./repos.ts";
 import { createDiscoveryStore } from "./repo-discovery.ts";
 import { createRepoCatalog } from "./repo-catalog.ts";
+import { createFingerprintStore } from "./fingerprints.ts";
+import { readMirror } from "./settings.ts";
 import { createSkillMetaReader } from "./skill-meta.ts";
 import type { YamlLib } from "../contract/yaml.ts";
 import { createSkillsRemoteRoutes } from "./routes.ts";
@@ -43,6 +45,8 @@ export function createSkillsRemoteModule(
   const githubOptions: GitHubClientOptions = {
     logger,
     onSecret: (secret) => redactor.add(secret),
+    // D-B18：镜像存 <hubHome>/skills/settings.json；设置页保存后即时生效（每次请求现读）
+    mirrorProvider: () => readMirror(scopedCtx),
   };
   if (options.fetchImpl) githubOptions.fetchImpl = options.fetchImpl;
   if (options.envTokenProvider) githubOptions.envTokenProvider = options.envTokenProvider;
@@ -53,6 +57,7 @@ export function createSkillsRemoteModule(
   const sources: SourceStore = createSourceStore(scopedCtx);
   const repos: RepoStore = createRepoStore(scopedCtx);
   const meta = createSkillMetaReader(deps.yaml);
+  const fingerprints = createFingerprintStore(scopedCtx);
 
   const routes = createSkillsRemoteRoutes({
     ctx: scopedCtx,
@@ -60,6 +65,7 @@ export function createSkillsRemoteModule(
     github,
     sources,
     repos,
+    fingerprints,
     catalog: createRepoCatalog({
       github,
       skills: deps.skills,

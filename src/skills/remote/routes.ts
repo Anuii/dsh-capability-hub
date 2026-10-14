@@ -8,6 +8,7 @@
 import { parseRepoRef } from "./sourceurl.ts";
 import { badRequest, validation } from "../../shared/errors.ts";
 import { optionalInput, optionalInputList, patchInput, recordOrEmpty, requireInput } from "../../shared/request.ts";
+import { assertMirrorInput, normalizeMirror, readSettings, writeSettings } from "./settings.ts";
 import { assertRepoShape } from "./repos.ts";
 import { browseRepo } from "./browse.ts";
 import type { RepoCatalog } from "./repo-catalog.ts";
@@ -19,9 +20,10 @@ import type { GitHubClient } from "./github.ts";
 import type { Redactor } from "./redact.ts";
 import type { RepoStore } from "./repos.ts";
 import type { SourceStore } from "./lockstore.ts";
+import type { FingerprintStore } from "./fingerprints.ts";
 import type { RemoteOptions, SkillsLocalPort } from "./types.ts";
 import type { HubContext, RouteHandler } from "../../platform/contract/host.ts";
-import type { InstallTarget } from "../contract/remote.ts";
+import type { InstallTarget, MirrorTestResult, SkillsRemoteSettings } from "../contract/remote.ts";
 
 export interface RoutesDeps {
   ctx: HubContext;
@@ -34,6 +36,8 @@ export interface RoutesDeps {
   /** 读 SKILL.md 的 name / description（DSH 同一个 yaml 库） */
   meta: SkillMetaReader;
   redactor: Redactor;
+  /** 目录指纹存档（D-B18） */
+  fingerprints?: FingerprintStore;
   now?: RemoteOptions["now"];
 }
 
@@ -48,7 +52,7 @@ function resolveRepoInput(raw: string, explicitRef?: string): { repo: string; re
 }
 
 export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, RouteHandler> {
-  const { ctx, skills, github, sources, repos, catalog, meta } = deps;
+  const { ctx, skills, github, sources, repos, catalog, meta, fingerprints } = deps;
   const now = deps.now;
 
   const routes: Record<string, RouteHandler> = {};
@@ -101,7 +105,7 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
     const body = recordOrEmpty(req.body);
     const ids = optionalInputList(body, "ids");
     const workspace = optionalInput(body, "workspace");
-    return await checkUpdates({ github, skills, sources, now }, { ids, workspace });
+    return await checkUpdates({ github, skills, sources, fingerprints, logger: ctx.logger, now }, { ids, workspace });
   };
 
   routes["POST skills/updates/apply"] = async (req) => {
@@ -109,7 +113,41 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
     const ids = optionalInputList(body, "ids");
     if (ids === undefined || ids.length === 0) throw badRequest("请至少选择一个要更新的技能。");
     const workspace = optionalInput(body, "workspace");
-    return await applyUpdates({ github, skills, sources, now }, { ids, workspace });
+    return await applyUpdates({ github, skills, sources, fingerprints, logger: ctx.logger, now }, { ids, workspace });
+  };
+
+  /* ---------- GitHub 镜像设置（D-B18） ---------- */
+
+  routes["GET skills/settings"] = async (): Promise<SkillsRemoteSettings> => await readSettings(ctx);
+
+  routes["POST skills/settings"] = async (req): Promise<SkillsRemoteSettings> => {
+    const body = recordOrEmpty(req.body);
+    // 空串 = 清除镜像；非空必须是 https:// 开头且能被 URL 解析（非法 → VALIDATION 中文报错）
+    const raw = body["githubMirror"];
+    if (raw !== undefined && raw !== null && typeof raw !== "string") {
+      throw validation("参数 githubMirror 必须是字符串。", [{ path: "githubMirror", message: "必须是字符串" }]);
+    }
+    const mirror = assertMirrorInput(typeof raw === "string" ? raw : "");
+    const saved = await writeSettings(ctx, mirror);
+    // 即时生效：不必重建客户端
+    github.setMirror(mirror);
+    return saved;
+  };
+
+  routes["POST skills/settings/test-mirror"] = async (req): Promise<MirrorTestResult> => {
+    const body = recordOrEmpty(req.body);
+    const raw = body["githubMirror"];
+    if (raw !== undefined && raw !== null && typeof raw !== "string") {
+      throw validation("参数 githubMirror 必须是字符串。", [{ path: "githubMirror", message: "必须是字符串" }]);
+    }
+    // 不保存设置；地址不合法或为空时给 ok:false + 中文原因 —— **不抛错**（自检是「试一下」，
+    // 不是「保存」，用户点一下就该看到红字而不是一个错误弹窗）。
+    const normalized = normalizeMirror(typeof raw === "string" ? raw : "");
+    if ("error" in normalized) return { ok: false, message: normalized.error };
+    if (normalized.mirror === undefined) {
+      return { ok: false, message: "镜像地址是空的，请先填写（例如 https://ghfast.top/）。" };
+    }
+    return await github.testMirror(normalized.mirror);
   };
 
   routes["GET skills/repos"] = async () => ({ repos: await catalog.list() });
@@ -210,7 +248,7 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
     const resolved = resolveRepoInput(repoRaw, ref);
     const target: InstallTarget = assertInstallTarget(targetRaw);
     const results = await installSkills(
-      { ctx, github, skills, sources, meta, now },
+      { ctx, github, skills, sources, meta, fingerprints, now },
       { repo: resolved.repo, ref: resolved.ref, skillPaths, target, workspace },
     );
     return { results };

@@ -23,6 +23,7 @@ import { filesUnderDirectory, readTarEntries } from "../../../src/skills/remote/
 import { writeDirectoryFiles } from "../../../src/skills/remote/fsx.ts";
 import { describeUnsafePath, isSafeRelativePath, isSafeSegmentName } from "../../../src/skills/remote/safepath.ts";
 import { buildTar, buildTarWithPax, octal, skillFixture, type FixtureEntry } from "./tarfixture.ts";
+import { routesFromArchive } from "./treefixture.ts";
 import {
   jsonResponse,
   makeCtx,
@@ -128,9 +129,15 @@ function call(
   >;
 }
 
-/** 标准的假 GitHub 路由：默认分支 + tar.gz 内容。 */
+/**
+ * 标准的假 GitHub 路由：目录树 + raw（D-B18 的新下载路径）+ 默认分支 + tar.gz 内容。
+ *
+ * 顺序要紧：trees 必须排在「/repos/ 通配」之前，否则会被它吃掉。tar.gz 仍留着 ——
+ * 根级技能与「树被截断」的回退路径要走它。
+ */
 function tarRoutes(gz: Buffer): Parameters<typeof makeFakeFetch>[0] {
   return [
+    ...routesFromArchive(gz),
     { match: (u: string) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
     { match: (u: string) => u.includes("/tar.gz/"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
   ];

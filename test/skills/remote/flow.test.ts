@@ -21,6 +21,7 @@ import {
   writeTree,
 } from "./helpers.ts";
 import { skillFixture } from "./tarfixture.ts";
+import { archiveRoutes } from "./treefixture.ts";
 
 const SKILL_MD_V1 = "---\nname: foo\ndescription: v1\n---\n\n# foo\n\nv1\n";
 const YAML_V1 = "name: foo\n";
@@ -87,10 +88,17 @@ async function seedLocalSkill(root: string, dirName: string, files: Record<strin
 
 test("安装：写盘、写来源，lock 的 skillFolderHash = 上游目录哈希", async () => {
   const userAgents = makeTempDir();
+  // D-B18：安装改走 trees + raw —— 这里给同一份条目集补上目录树与 raw 路由（行为变化的唯一改动点）
+  const archiveEntries = [
+    ...skillFixture("productivity", "grilling", { description: "拷问" }),
+    ...skillFixture("engineering", "tdd", { description: "测试驱动" }),
+  ];
   const env = await buildModule({
     skills: [{ rootId: "user-agents", dirName: "placeholder", path: path.join(userAgents, "placeholder") }],
     rootPaths: { "user-agents": userAgents },
     routes: [
+      // 注意顺序：trees 路由必须排在「/repos/ 通配」之前，否则会被它吃掉
+      ...archiveRoutes(archiveEntries),
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
       {
         match: (u) => u.includes("/tar.gz/main"),
@@ -145,6 +153,7 @@ test("安装：目标已存在时该项失败并说明，不覆盖", async () =>
     skills: [{ rootId: "user-agents", dirName: "grilling", path: existing }],
     rootPaths: { "user-agents": userAgents },
     routes: [
+      ...archiveRoutes(skillFixture("x", "grilling")),
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
       {
         match: (u) => u.includes("/tar.gz/"),
@@ -188,6 +197,7 @@ test("安装到 user-dsh 写 sources.json 而非 lock", async () => {
   const env = await buildModule({
     rootPaths: { "user-dsh": userDsh },
     routes: [
+      ...archiveRoutes(skillFixture("x", "tool", { description: "工具" })),
       {
         match: (u) => u.includes("/tar.gz/"),
         response: () =>
@@ -269,6 +279,7 @@ test("检查更新：无来源 → no-source；上游一致 → up-to-date；不
     ],
     rootPaths: { "user-agents": userAgents },
     routes: [
+      ...archiveRoutes(skillFixture("productivity", "grilling", { description: "v1" })),
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
       {
         match: (u) => u.includes("/tar.gz/"),
@@ -300,7 +311,8 @@ test("检查更新：无来源 → no-source；上游一致 → up-to-date；不
   assert.equal(byId.get("user-agents:grilling"), "up-to-date");
   assert.equal(byId.get("user-agents:no-source-skill"), "no-source");
   assert.equal(same.auth, "anonymous");
-  assert.equal(env.fake.calls.filter((c) => c.url.includes("codeload")).length, 1, "同一仓库只下载一次");
+  // D-B18：同一仓库只发一次 trees 请求（旧断言是「只下载一次归档」）
+  assert.equal(env.fake.calls.filter((c) => c.url.includes("/git/trees/")).length, 1, "同一仓库只查询一次目录树");
 
   // 改掉记录值 → 变成 update-available
   const lock = JSON.parse(await fs.readFile(lockFilePath(env.ctx), "utf8"));
@@ -394,6 +406,9 @@ test("applyUpdate：按契约五步顺序执行，并写回新哈希（installed
     ],
     rootPaths: { "user-agents": userAgents },
     routes: [
+      ...archiveRoutes(
+        skillFixture("productivity", "grilling", { description: "v2", extraFiles: { "extra.txt": "new file" } }),
+      ),
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
       {
         match: (u) => u.includes("/tar.gz/"),
@@ -459,6 +474,7 @@ test("applyUpdate：原本启用则不改启停状态", async () => {
     skills: [{ rootId: "user-agents", dirName: "foo", path: dir, name: "foo" }],
     rootPaths: { "user-agents": userAgents },
     routes: [
+      ...archiveRoutes(skillFixture("x", "foo", { description: "v2" })),
       {
         match: (u) => u.includes("/tar.gz/"),
         response: () => new Response(new Uint8Array(upstreamGz), { status: 200 }),
@@ -497,6 +513,7 @@ test("applyUpdate 回滚：moveToTrash 失败 → 目录原样、lock 未改、o
     rootPaths: { "user-agents": userAgents },
     failMoveToTrashOnce: true,
     routes: [
+      ...archiveRoutes(skillFixture("x", "foo", { description: "v2" })),
       {
         match: (u) => u.includes("/tar.gz/"),
         response: () => new Response(new Uint8Array(upstreamGz), { status: 200 }),
@@ -539,6 +556,7 @@ test("applyUpdate 回滚：恢复启停状态失败 → 目录从回收站拿回
     rootPaths: { "user-agents": userAgents },
     failSetEnabledOnce: true,
     routes: [
+      ...archiveRoutes(skillFixture("x", "foo", { description: "v2" })),
       {
         match: (u) => u.includes("/tar.gz/"),
         response: () => new Response(new Uint8Array(upstreamGz), { status: 200 }),

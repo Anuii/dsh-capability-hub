@@ -44,6 +44,14 @@ _Avoid_: 启用（单说「启用」时只指模型调用）、可见性
 直接放在技能目录下的单个 `<名称>.md` 文件形式的技能；可以启停、删除，但不支持来源登记与更新。
 _Avoid_: 单文件技能
 
+**目录指纹**：
+插件在 `<hubHome>/skills/fingerprints.json` 里为「一个来源仓库的一个技能目录」记下的一条凭证：核对当时的 `skillFolderHash`（内容基准）与该目录的 git tree sha。检查更新时先比 tree sha —— 一样就直接判「最新」，一个文件都不下载；内容基准对不上（`npx skills` 在外面更新过）则指纹自动失效，重新下载该目录核对。
+_Avoid_: 哈希、缓存、校验和
+
+**GitHub 镜像**：
+一个前缀式的 GitHub 加速地址（如 `https://ghfast.top/`），实际请求 = 镜像前缀 + 原始完整 URL。只作用于**下载类**地址（`raw.githubusercontent.com`、`codeload.github.com`），`api.github.com` 与 skills.sh 永不走镜像；走镜像的请求不带令牌。存在 `<hubHome>/skills/settings.json`，在技能页「⋯ → GitHub 镜像」里设置。
+_Avoid_: 代理、加速器、反代
+
 ## MCP
 
 **MCP 服务器**：

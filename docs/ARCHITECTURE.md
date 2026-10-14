@@ -10,7 +10,7 @@ src/
     contract/   外壳 ↔ 宿主模块：HubContext、HubModule、RouteTable、HubError、FieldError
   skills/     技能
     local/      宿主·本地技能：扫描技能目录、frontmatter 判断与「只改一行」启停（frontmatter/）、回收站
-    remote/     宿主·远程技能：来源记录（lock）、仓库列表与发现（repo-catalog.ts）、浏览、安装、检查更新
+    remote/     宿主·远程技能：来源记录（lock）、仓库列表与发现（repo-catalog.ts）、浏览、安装、检查更新（按目录指纹，见 fingerprints.ts / skilltree.ts）
     client/     技能页（列表、详情、回收站）与「添加技能」仓库视图（remote/）
     contract/   local.ts、remote.ts（HTTP 形状与进程内接口）、yaml.ts（注入的 yaml 库）
   mcp/        MCP
@@ -53,17 +53,19 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 
 ## 想改某样东西，先看哪里
 
-| 要改的 | 位置 |
-|---|---|
-| DSH 从哪些目录加载技能（只读技能目录） | `platform/host/skill-roots.ts`（读组合树在 `composition.ts`，诊断在 `diagnostics.ts`） |
-| 技能能不能加载、启停怎么改写 SKILL.md | `skills/local/frontmatter/`（规则在 rules.ts，改写在 toggle.ts） |
-| 技能列表一行显示什么 | `skills/client/row.ts`；分组在 `tree.ts`；折叠规则在 `kit/fold.ts` |
-| 仓库列表、发现、补扫规则 | 宿主 `skills/remote/repo-catalog.ts`；界面流程 `skills/client/remote/repo-view-store.ts` |
-| MCP 服务器能填哪些字段、怎么校验、哪些字段已废弃 | `mcp/rules/server.ts`（宿主与界面的 JSON 编辑共用）；旧配置里的废弃字段读到即丢在 `mcp/config/schema.ts` |
-| MCP 服务器挂在哪、什么时候挂、怎么判断连上没有 | `mcp/runtime/runtime.ts`；agent 事件在 `platform/host/agent-hook.ts` |
-| MCP 页的状态点、红点 | `mcp/client/runtime-store.ts`（唯一的运行状态读取处）；状态文字在 `view-model.ts` |
-| MCP 页的启停、排序、删除、重新连接、保存后的提示 | `mcp/client/servers-store.ts`；JSON 编辑在 `json.tsx` 与 `json-model.ts`，粘贴添加在 `intake/` |
-| 技能「来源」的手动登记 | `skills/client/remote/source-flow.ts` |
-| 新接口 | 宿主模块的 routes + `contract/` 里的形状 + 客户端 `data.ts` |
+| 要改的                                           | 位置                                                                                                                                |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| DSH 从哪些目录加载技能（只读技能目录）           | `platform/host/skill-roots.ts`（读组合树在 `composition.ts`，诊断在 `diagnostics.ts`）                                              |
+| 技能能不能加载、启停怎么改写 SKILL.md            | `skills/local/frontmatter/`（规则在 rules.ts，改写在 toggle.ts）                                                                    |
+| 技能列表一行显示什么                             | `skills/client/row.ts`；分组在 `tree.ts`；折叠规则在 `kit/fold.ts`                                                                  |
+| 仓库列表、发现、补扫规则                         | 宿主 `skills/remote/repo-catalog.ts`；界面流程 `skills/client/remote/repo-view-store.ts`                                            |
+| MCP 服务器能填哪些字段、怎么校验、哪些字段已废弃 | `mcp/rules/server.ts`（宿主与界面的 JSON 编辑共用）；旧配置里的废弃字段读到即丢在 `mcp/config/schema.ts`                            |
+| MCP 服务器挂在哪、什么时候挂、怎么判断连上没有   | `mcp/runtime/runtime.ts`；agent 事件在 `platform/host/agent-hook.ts`                                                                |
+| MCP 页的状态点、红点                             | `mcp/client/runtime-store.ts`（唯一的运行状态读取处）；状态文字在 `view-model.ts`                                                   |
+| MCP 页的启停、排序、删除、重新连接、保存后的提示 | `mcp/client/servers-store.ts`；JSON 编辑在 `json.tsx` 与 `json-model.ts`，粘贴添加在 `intake/`                                      |
+| 技能「来源」的手动登记                           | `skills/client/remote/source-flow.ts`                                                                                               |
+| 检查更新怎么判断「有没有更新」                   | `skills/remote/updates.ts`（比目录指纹）+ `skills/remote/skilltree.ts`（trees + raw，回退 tar.gz）+ `skills/remote/fingerprints.ts` |
+| GitHub 镜像（前缀式，只用于下载）                | `skills/remote/settings.ts`（校验与落盘）+ `skills/remote/github.ts`（applyMirror / downloadRequest）                               |
+| 新接口                                           | 宿主模块的 routes + `contract/` 里的形状 + 客户端 `data.ts`                                                                         |
 
 决策：产品决策在 [DECISIONS.md](DECISIONS.md)，架构决策在 [adr/](adr/)。

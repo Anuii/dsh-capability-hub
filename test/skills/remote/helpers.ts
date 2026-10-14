@@ -292,10 +292,16 @@ export interface FakeFetchRoute {
 export interface FakeFetch {
   fetch: typeof fetch;
   calls: { url: string; headers: Record<string, string> }[];
+  /** 当前在途的请求数（进入 fake 时 +1、响应返回后 -1）；用来断言并发上限 */
+  inFlight(): number;
+  /** 本次最大在途数（峰值） */
+  maxInFlight(): number;
 }
 
 export function makeFakeFetch(routes: FakeFetchRoute[]): FakeFetch {
   const calls: { url: string; headers: Record<string, string> }[] = [];
+  let active = 0;
+  let peak = 0;
   const fake = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const headers: Record<string, string> = {};
@@ -304,12 +310,18 @@ export function makeFakeFetch(routes: FakeFetchRoute[]): FakeFetch {
       for (const [k, v] of Object.entries(rawHeaders as Record<string, string>)) headers[k.toLowerCase()] = String(v);
     }
     calls.push({ url, headers });
-    for (const route of routes) {
-      if (route.match(url, init)) return await route.response(url, init);
+    active++;
+    if (active > peak) peak = active;
+    try {
+      for (const route of routes) {
+        if (route.match(url, init)) return await route.response(url, init);
+      }
+      return new Response("not found", { status: 404 });
+    } finally {
+      active--;
     }
-    return new Response("not found", { status: 404 });
   };
-  return { fetch: fake as unknown as typeof fetch, calls };
+  return { fetch: fake as unknown as typeof fetch, calls, inFlight: () => active, maxInFlight: () => peak };
 }
 
 export function gzipResponse(body: Buffer, init: { status?: number; headers?: Record<string, string> } = {}): Response {

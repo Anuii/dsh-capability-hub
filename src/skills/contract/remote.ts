@@ -146,3 +146,22 @@ export interface GithubAuth {
   mode: AuthMode;
   rateLimitRemaining?: number;
 }
+
+/**
+ * 技能远程设置（GET / POST skills/settings 的 data，D-B18）。
+ * 存在 <hubHome>/skills/settings.json；与 .skill-lock.json 无关。
+ */
+export interface SkillsRemoteSettings {
+  version: number;
+  /** GitHub 镜像（前缀式，结尾带 "/"）：实际请求 = 前缀 + 原始完整 URL */
+  githubMirror?: string;
+}
+
+/** POST skills/settings/test-mirror 的 data：经该镜像取一个小文件的结果（失败不抛错）。 */
+export interface MirrorTestResult {
+  ok: boolean;
+  /** 耗时（毫秒；失败时也有） */
+  ms?: number;
+  /** 失败的中文原因 */
+  message?: string;
+}

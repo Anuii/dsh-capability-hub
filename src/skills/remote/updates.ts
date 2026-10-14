@@ -1,9 +1,16 @@
 /**
- * 检查更新与应用更新（D-B9 / D-B10，与 CC Switch 的语义一致）。
+ * 检查更新与应用更新（D-B9 / D-B10 / D-B18，与 CC Switch 的语义一致）。
  *
- * 检查：仅在请求时执行；按 repo+ref 分组，每个仓库只下载一次；
- *       比较「上游目录哈希」与「条目记录值」，返回
+ * 检查：仅在请求时执行；按 repo+ref 分组、**各组并行**（并发上限 4），每个仓库只发一次
+ *       trees API；比较「上游目录哈希」与「条目记录值」，返回
  *       up-to-date / update-available / no-source / error。
+ *
+ * D-B18 的省流量规则（顺序即优先级）：
+ *   1. 目录指纹命中（fingerprints.json 里的 treeSha 与上游当前目录 sha 相同，且
+ *      contentHash 仍等于 lock/sources 里的 skillFolderHash）→ 直接返回**上次的结论**
+ *      （up-to-date 或 update-available），**不下载任何文件**；
+ *   2. 否则只下载**该技能目录下**的文件（raw），拼成 TarEntry[] 后套用既有哈希口径；
+ *   3. 树被截断或技能在仓库根 → 回退下载整份 tar.gz（旧路径）。
  *
  * 应用（PLAN §3.4 顺序，任一步失败都要把目录恢复原状）：
  *   1. 记录原启停状态（modelInvocationDisabled）
@@ -16,25 +23,36 @@
 
 import path from "node:path";
 import { mkdir, rename } from "node:fs/promises";
-import { locateSkillDirectory } from "./tar.ts";
 import { describeUnsafePath } from "./safepath.ts";
-import { hashesEqual, recordedHash, type FolderHash } from "./hash.ts";
-import { upstreamSkillFiles, upstreamSkillHash } from "./rootskill.ts";
+import { hashesEqual, recordedHash } from "./hash.ts";
+import { upstreamSkillHash } from "./rootskill.ts";
 import { writeDirectoryFiles } from "./fsx.ts";
 import { pathExists, removePath } from "../../shared/node/fsx.ts";
 import { locateSkill, type LocatedSkill } from "./install.ts";
-import { skillMdPathOf } from "./sourceurl.ts";
+import { skillDirOf, skillMdPathOf } from "./sourceurl.ts";
 import { FLAT_SKILL_UNSUPPORTED_MESSAGE, isFlatSkill } from "./skillshape.ts";
-import type { GitHubClient, TarballResult } from "./github.ts";
+import { planRepoContents, type RepoContentsPlan, type SkillContent } from "./skilltree.ts";
+import { createLimiter, mapLimited } from "./limited.ts";
+import { OPERATION_CONCURRENCY } from "./github.ts";
+import type { GitHubClient } from "./github.ts";
 import type { AuthMode } from "../contract/remote.ts";
 import type { SkillsLocalPort } from "./types.ts";
 import type { UpdateApplyItem, UpdateApplyResult, UpdateCheckItem, UpdateCheckResult } from "../contract/remote.ts";
 import type { SourceStore } from "./lockstore.ts";
+import type { FingerprintStore } from "./fingerprints.ts";
+import type { HubLogger } from "../../platform/contract/host.ts";
+
+/** 同一批里最多同时请求几个仓库（每个仓库一次 trees API） */
+export const UPDATE_CONCURRENCY = 4;
 
 export interface UpdateDeps {
   github: GitHubClient;
   skills: SkillsLocalPort;
   sources: SourceStore;
+  /** 目录指纹存档（D-B18）；不注入则退化为「每次都比内容」 */
+  fingerprints?: FingerprintStore;
+  /** 记「回退下载整份归档」这类诊断信息用；不注入就不记 */
+  logger?: HubLogger;
   now?: () => Date;
 }
 
@@ -42,7 +60,8 @@ interface DownloadGroup {
   key: string;
   repo: string;
   ref?: string;
-  ids: string[];
+  /** 该组里每个技能的 lock 键（repo+ref+skillPath）→ 技能 id 列表 */
+  targets: { skillId: string; skillPath: string; contentHash?: string }[];
 }
 
 function groupKey(repo: string, ref: string | undefined): string {
@@ -52,6 +71,24 @@ function groupKey(repo: string, ref: string | undefined): string {
 /** 上游技能目录路径为空串 = 技能就在仓库根（FIX-6 / D-1 的根级 skillPath）；消息里说人话 */
 function displayDir(dirPath: string): string {
   return dirPath === "" ? "仓库根" : dirPath;
+}
+
+/**
+ * 「可以更新」的统一文案。
+ *
+ * 两条路径（指纹命中 / 现下载核对）必须给出**逐字相同**的一句 —— 指纹命中的那次
+ * 没有下载内容，拿不到实际 ref，用 group.ref ?? "HEAD" 顶上（也就是请求时用的那个 ref）。
+ */
+function updateAvailableMessage(repo: string, ref: string | undefined, dir: string): string {
+  return `上游 ${repo}@${ref ?? "HEAD"} 的 ${displayDir(dir)} 与登记的内容哈希不一致，可以更新。`;
+}
+
+/** 读取技能内容：先看计划，计划是 Error 就直接抛 */
+async function loadContent(plan: RepoContentsPlan, skillPath: string): Promise<SkillContent> {
+  const planned = plan.plans.get(skillPath);
+  if (planned === undefined) throw new Error("内部错误：没有该技能的内容计划。");
+  if (planned instanceof Error) throw planned;
+  return await planned.load();
 }
 
 export async function checkUpdates(
@@ -89,71 +126,108 @@ export async function checkUpdates(
       continue;
     }
     const key = groupKey(record.entry.repo, record.entry.ref);
+    const target = { skillId: skill.id, skillPath: record.entry.skillPath, contentHash: record.entry.skillFolderHash };
     const group = groups.get(key);
-    if (group) group.ids.push(skill.id);
-    else groups.set(key, { key, repo: record.entry.repo, ref: record.entry.ref, ids: [skill.id] });
+    if (group) group.targets.push(target);
+    else groups.set(key, { key, repo: record.entry.repo, ref: record.entry.ref, targets: [target] });
   }
 
   const auth = await deps.github.auth();
-  const tarballs = new Map<string, TarballResult | Error>();
-  for (const group of groups.values()) {
-    try {
-      // 按 repo+ref 分组，每个仓库只下载一次
-      tarballs.set(group.key, await deps.github.downloadTarball(group.repo, group.ref));
-    } catch (error) {
-      tarballs.set(group.key, error instanceof Error ? error : new Error(String(error)));
-    }
-  }
+  // D-B18：整次检查共用一个并发闸门（上限 12）—— 多组并行时每组的 raw 都从这里过，
+  // 因此「在途请求数」是全局上限而不是「组数 × 每组上限」。
+  const limiter = createLimiter(OPERATION_CONCURRENCY);
+  // 各组并行（上限 4），每个仓库一次 trees API。同一批里任何一组的失败只影响它自己。
+  const plans = await mapLimited([...groups.values()], UPDATE_CONCURRENCY, async (group) => {
+    const plan = await planRepoContents(
+      { github: deps.github },
+      {
+        repo: group.repo,
+        ref: group.ref,
+        skillPaths: group.targets.map((target) => target.skillPath),
+        limiter,
+      },
+    ).catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))));
+    return [group.key, plan] as const;
+  });
+  const planByGroup = new Map<string, RepoContentsPlan | Error>(plans);
 
-  for (const skill of targets) {
-    if (results.some((r) => r.skillId === skill.id)) continue;
-    const record = await deps.sources.get(
-      { rootId: skill.rootId, dirName: skill.dirName, path: skill.path },
-      skill.name ?? skill.dirName,
-    );
-    if (record === undefined) continue;
-    const entry = record.entry;
-    const downloaded = tarballs.get(groupKey(entry.repo, entry.ref));
-    if (downloaded === undefined) continue;
-    if (downloaded instanceof Error) {
-      results.push({ skillId: skill.id, status: "error", message: downloaded.message });
-      continue;
+  // 技能之间也并行：多个仓库的技能一起排队过同一个闸门（上限 12），
+  // 而不是「一组一组串着来」。结果按 groups 的插入顺序摊平，因此返回顺序与串行时一致。
+  const groupList = [...groups.values()];
+  const perGroup = await mapLimited(groupList, UPDATE_CONCURRENCY, async (group) => {
+    const plan = planByGroup.get(group.key);
+    const items: UpdateCheckItem[] = [];
+    for (const target of group.targets) {
+      if (plan === undefined) {
+        items.push({ skillId: target.skillId, status: "error", message: "内部错误：没有对应的目录树结果。" });
+        continue;
+      }
+      if (plan instanceof Error) {
+        items.push({ skillId: target.skillId, status: "error", message: plan.message });
+        continue;
+      }
+      if (plan.fallbackReason !== undefined) deps.logger?.debug(plan.fallbackReason, { repo: group.repo });
+      const planned = plan.plans.get(target.skillPath);
+      const dir =
+        planned === undefined || planned instanceof Error ? skillDirOf(target.skillPath).dirPath : planned.dir;
+      // 1) 指纹快速路径：目录没变、且内容基准没被外部改过 → 一个字节都不下载，
+      //    直接返回上次核对出来的结论（有更新也照样报「有更新」）。
+      if (
+        planned !== undefined &&
+        !(planned instanceof Error) &&
+        planned.treeSha !== undefined &&
+        target.contentHash !== undefined &&
+        deps.fingerprints !== undefined
+      ) {
+        const saved = await deps.fingerprints.get(group.repo, group.ref, target.skillPath);
+        if (saved !== undefined && saved.treeSha === planned.treeSha && saved.contentHash === target.contentHash) {
+          if (saved.upToDate) {
+            items.push({ skillId: target.skillId, status: "up-to-date" });
+          } else {
+            items.push({
+              skillId: target.skillId,
+              status: "update-available",
+              message: updateAvailableMessage(group.repo, group.ref, dir),
+            });
+          }
+          continue;
+        }
+      }
+      let loaded: SkillContent;
+      try {
+        loaded = await loadContent(plan, target.skillPath);
+      } catch (error) {
+        items.push({
+          skillId: target.skillId,
+          status: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
+      // FIX-5：上游目录里有不安全路径时，只把这一项报成 error，其余技能照常检查
+      const upToDate = hashesEqual(loaded.hash, target.contentHash);
+      // 核对过就记指纹（结论一并记下）：下次命中就只剩一次 trees 请求，
+      // 「有更新」的那些不再每次重新下载整目录。
+      if (loaded.treeSha !== undefined && target.contentHash !== undefined) {
+        await deps.fingerprints?.put(group.repo, group.ref, target.skillPath, {
+          contentHash: target.contentHash,
+          treeSha: loaded.treeSha,
+          upToDate,
+        });
+      }
+      if (upToDate) {
+        items.push({ skillId: target.skillId, status: "up-to-date" });
+      } else {
+        items.push({
+          skillId: target.skillId,
+          status: "update-available",
+          message: updateAvailableMessage(group.repo, loaded.ref, dir),
+        });
+      }
     }
-    // FIX-6（D-1）：lock 的 skillPath 可以是根级 "SKILL.md"（npx skills 就是这么写的），
-    // 这时技能目录就是仓库根 —— 只有检查/应用更新允许这种形态（安装不允许，见 tar.ts）。
-    const located = locateSkillDirectory(downloaded.entries, entry.skillPath, { allowRoot: true });
-    if (located === undefined) {
-      results.push({
-        skillId: skill.id,
-        status: "error",
-        message: `在上游 ${entry.repo}@${downloaded.ref} 里找不到 ${entry.skillPath}（上游可能改名或删除了这个技能）。`,
-      });
-      continue;
-    }
-    // FIX-5：上游目录里有不安全路径时，只把这一项报成 error，其余技能照常检查
-    let upstreamHash: FolderHash;
-    try {
-      // FIX-7：根级技能（located.path === ''）的上游哈希按「实际会写盘的那批文件」算 ——
-      // 与安装侧 upstreamSkillHash 同一口径，安装完立刻检查必然是「最新」。
-      upstreamHash = upstreamSkillHash(downloaded.entries, located.path);
-    } catch (error) {
-      results.push({
-        skillId: skill.id,
-        status: "error",
-        message: error instanceof Error ? error.message : String(error),
-      });
-      continue;
-    }
-    if (hashesEqual(upstreamHash, entry.skillFolderHash)) {
-      results.push({ skillId: skill.id, status: "up-to-date" });
-    } else {
-      results.push({
-        skillId: skill.id,
-        status: "update-available",
-        message: `上游 ${entry.repo}@${downloaded.ref} 的 ${displayDir(located.path)} 与登记的内容哈希不一致，可以更新。`,
-      });
-    }
-  }
+    return items;
+  });
+  for (const items of perGroup) results.push(...items);
 
   const rate = deps.github.lastKnownRateLimit;
   const payload: UpdateCheckResult = {
@@ -195,74 +269,87 @@ export async function applyUpdates(
   for (const located of locatedList) {
     const entry = located.source!;
     const key = groupKey(entry.repo, entry.ref);
+    const target = { skillId: located.id, skillPath: entry.skillPath, contentHash: entry.skillFolderHash };
     const group = groups.get(key);
-    if (group) group.ids.push(located.id);
-    else groups.set(key, { key, repo: entry.repo, ref: entry.ref, ids: [located.id] });
+    if (group) group.targets.push(target);
+    else groups.set(key, { key, repo: entry.repo, ref: entry.ref, targets: [target] });
   }
 
-  const tarballs = new Map<string, TarballResult | Error>();
-  for (const group of groups.values()) {
-    try {
-      tarballs.set(group.key, await deps.github.downloadTarball(group.repo, group.ref));
-    } catch (error) {
-      tarballs.set(group.key, error instanceof Error ? error : new Error(String(error)));
-    }
-  }
+  // D-B18：同一仓库多个技能共用一次 trees 调用；各组并行（上限 4）；
+  // 整次更新共用一个并发闸门（上限 12），多个技能的 raw 一起排队。
+  const limiter = createLimiter(OPERATION_CONCURRENCY);
+  const plans = await mapLimited([...groups.values()], UPDATE_CONCURRENCY, async (group) => {
+    const plan = await planRepoContents(
+      { github: deps.github },
+      {
+        repo: group.repo,
+        ref: group.ref,
+        skillPaths: group.targets.map((target) => target.skillPath),
+        limiter,
+      },
+    ).catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))));
+    return [group.key, plan] as const;
+  });
+  const planByGroup = new Map<string, RepoContentsPlan | Error>(plans);
 
-  for (const located of locatedList) {
+  // 逐项处理，但**先并行把内容取回来**（一次更新里多个技能的 raw 一起过闸门），
+  // 再按原顺序串行落盘 —— 写盘与回收站操作必须保持确定性顺序，只有下载并行。
+  const prepared = await mapLimited(locatedList, OPERATION_CONCURRENCY, async (located) => {
     const entry = located.source!;
-    const downloaded = tarballs.get(groupKey(entry.repo, entry.ref));
-    if (downloaded === undefined) {
-      results.push({ skillId: located.id, ok: false, message: "内部错误：没有对应的下载结果。" });
-      continue;
+    const plan = planByGroup.get(groupKey(entry.repo, entry.ref));
+    if (plan === undefined) {
+      return { located, failure: "内部错误：没有对应的目录树结果。" } as const;
     }
-    if (downloaded instanceof Error) {
-      results.push({ skillId: located.id, ok: false, message: downloaded.message });
-      continue;
-    }
-    const locatedUpstream = locateSkillDirectory(downloaded.entries, entry.skillPath, { allowRoot: true });
-    if (locatedUpstream === undefined) {
-      results.push({
-        skillId: located.id,
-        ok: false,
-        message: `在上游 ${entry.repo}@${downloaded.ref} 里找不到 ${entry.skillPath}，未做任何改动。`,
-      });
-      continue;
+    if (plan instanceof Error) return { located, failure: plan.message } as const;
+    const planned = plan.plans.get(entry.skillPath);
+    if (planned instanceof Error) {
+      return { located, failure: `${planned.message.replace(/。$/, "")}，未做任何改动。` } as const;
     }
     // FIX-5（要求 B/C）：上游目录路径不安全（".." 段 / 反斜杠 / 盘符 …）→ 这一项直接拒绝，
     // 在 moveToTrash 之前返回，技能目录一个字节都不动。
     // FIX-6（D-1）：空串是「技能就在仓库根」的合法形态（没有路径可穿越），跳过这项判定。
-    const unsafeDir = locatedUpstream.path === "" ? undefined : describeUnsafePath(locatedUpstream.path);
+    const upstreamDir = planned === undefined ? skillDirOf(entry.skillPath).dirPath : planned.dir;
+    const unsafeDir = upstreamDir === "" ? undefined : describeUnsafePath(upstreamDir);
     if (unsafeDir !== undefined) {
-      results.push({
-        skillId: located.id,
-        ok: false,
-        message: `上游 ${entry.repo}@${downloaded.ref} 的技能目录路径 "${displayDir(locatedUpstream.path)}" 不安全（${unsafeDir}），未做任何改动。`,
-      });
-      continue;
+      return {
+        located,
+        failure: `上游 ${entry.repo}@${entry.ref ?? "HEAD"} 的技能目录路径 "${displayDir(upstreamDir)}" 不安全（${unsafeDir}），未做任何改动。`,
+      } as const;
     }
     // FIX-5：目录里任何一条文件路径不安全 → 整体拒绝本次更新（逐项，不影响其他技能）
-    let files: { rel: string; data: Buffer }[];
+    let loaded: SkillContent;
     try {
-      files = upstreamSkillFiles(downloaded.entries, locatedUpstream.path);
+      loaded = await loadContent(plan, entry.skillPath);
     } catch (error) {
-      results.push({
-        skillId: located.id,
-        ok: false,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      continue;
+      return {
+        located,
+        failure: `${error instanceof Error ? error.message : String(error)}未做任何改动。`,
+      } as const;
     }
-    if (files.length === 0) {
-      results.push({
-        skillId: located.id,
-        ok: false,
-        message: `上游 ${displayDir(locatedUpstream.path)} 里没有任何文件，未做任何改动。`,
-      });
-      continue;
+    if (loaded.files.length === 0) {
+      return {
+        located,
+        failure: `上游 ${displayDir(upstreamDir)} 里没有任何文件，未做任何改动。`,
+      } as const;
     }
+    return { located, upstreamDir, loaded } as const;
+  });
 
-    const applied = await applyOneUpdate(deps, located, downloaded, locatedUpstream.path, files, options.workspace);
+  for (const item of prepared) {
+    if ("failure" in item) {
+      results.push({ skillId: item.located.id, ok: false, message: item.failure });
+      continue;
+    }
+    const entry = item.located.source!;
+    const applied = await applyOneUpdate(
+      deps,
+      item.located,
+      item.loaded,
+      item.upstreamDir,
+      item.loaded.files,
+      options.workspace,
+      { repo: entry.repo, ref: entry.ref },
+    );
     results.push(applied);
   }
 
@@ -272,10 +359,11 @@ export async function applyUpdates(
 async function applyOneUpdate(
   deps: UpdateDeps,
   located: LocatedSkill,
-  tarball: TarballResult,
+  loaded: SkillContent,
   upstreamDir: string,
   files: { rel: string; data: Buffer }[],
   workspace: string | undefined,
+  origin: { repo: string; ref?: string },
 ): Promise<UpdateApplyItem> {
   const entry = located.source!;
   const wasDisabled = located.modelInvocationDisabled;
@@ -341,7 +429,7 @@ async function applyOneUpdate(
 
   // 4) 写回来源（新 skillFolderHash、updatedAt；installedAt 不变）
   const nowIso = (deps.now ?? (() => new Date()))().toISOString();
-  const newHash = recordedHash(upstreamSkillHash(tarball.entries, upstreamDir));
+  const newHash = recordedHash(loaded.hash);
   try {
     await deps.sources.upsert(
       { rootId: located.rootId, dirName: located.dirName, path: targetDir },
@@ -365,6 +453,15 @@ async function applyOneUpdate(
       message: `写回来源记录失败：${error instanceof Error ? error.message : String(error)}。${rollback}`,
       ...(trashId !== undefined ? { trashId } : {}),
     };
+  }
+
+  // 5) 刷新目录指纹（D-B18）：记录值与上游一致了（upToDate: true），下次检查只剩一次 trees 请求
+  if (loaded.treeSha !== undefined) {
+    await deps.fingerprints?.put(origin.repo, origin.ref, skillMdPathOf(upstreamDir), {
+      contentHash: newHash,
+      treeSha: loaded.treeSha,
+      upToDate: true,
+    });
   }
 
   const suffix = wasDisabled ? "（已保持停用状态）" : "";

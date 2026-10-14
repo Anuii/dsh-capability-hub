@@ -12,6 +12,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createSkillsRemoteModule } from "../../../src/skills/remote/module.ts";
+import { GitHubClient } from "../../../src/skills/remote/github.ts";
 import {
   archiveInstalledHash,
   jsonResponse,
@@ -300,4 +301,37 @@ test("在线：单技能仓库（SKILL.md 就在仓库根）→ 浏览 + 安装 
   if (before !== undefined) {
     assert.equal(await fs.readFile(realLock, "utf8"), before, "真实 lock 内容不得改变");
   }
+});
+
+test("在线：mattpocock/skills 的目录树能定位到 skills 目录（D-B18）", async (t) => {
+  if (!live) return t.skip("设置 RUN_LIVE=1 才执行");
+  const github = new GitHubClient({
+    logger: makeLogger().logger,
+    envTokenProvider: () => undefined,
+    ghTokenProvider: async () => undefined,
+    cacheAuth: false,
+  });
+  const tree = await github.tree("mattpocock/skills");
+  console.log(
+    "目录树：ref=" +
+      tree.ref +
+      " 根 sha=" +
+      tree.sha.slice(0, 12) +
+      " 条目=" +
+      tree.byPath.size +
+      " truncated=" +
+      tree.truncated,
+  );
+  assert.equal(tree.truncated, false, "mattpocock/skills 的树不该被截断");
+  const skillsDir = tree.byPath.get("skills");
+  assert.ok(skillsDir, "应能在树里找到 skills 目录");
+  assert.equal(skillsDir.type, "tree");
+  assert.match(skillsDir.sha, /^[0-9a-f]{40}$/, "目录条目必须带 git tree sha");
+  assert.ok(tree.byPath.get("skills/productivity/grilling"), "应能在树里找到 skills/productivity/grilling");
+  const blobs = [...tree.byPath.values()].filter(
+    (entry) => entry.type === "blob" && entry.path.startsWith("skills/productivity/grilling/"),
+  );
+  assert.ok(blobs.length >= 1, "该目录下应有文件");
+  const bytes = await github.rawFile("mattpocock/skills", tree.ref, blobs[0]!.path);
+  assert.ok(bytes.length > 0, "raw 下载应拿到字节");
 });

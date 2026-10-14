@@ -425,6 +425,15 @@ test("FIX-6 D-3：检查更新的响应带数字形式的剩余配额（成功�
     skills: [{ rootId: "user-agents", dirName: "grilling", path: dir, name: "grilling" }],
     rootPaths: { "user-agents": userAgents },
     routes: [
+      // D-B18：检查更新现在只发 trees（api.github.com），配额头要放在这条上
+      {
+        match: (u) => u.includes("/git/trees/"),
+        response: () =>
+          jsonResponse(
+            { sha: "a".repeat(40), truncated: false, tree: [] },
+            { headers: { "x-ratelimit-remaining": "4997" } },
+          ),
+      },
       {
         match: (u) => u.includes("/repos/"),
         response: () => jsonResponse({ default_branch: "main" }, { headers: { "x-ratelimit-remaining": "4998" } }),

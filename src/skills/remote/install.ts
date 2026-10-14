@@ -19,8 +19,10 @@ import { mkdir } from "node:fs/promises";
 import { writeDirectoryFiles } from "./fsx.ts";
 import { pathExists } from "../../shared/node/fsx.ts";
 import { recordedHash } from "./hash.ts";
-import { locateSkillDirectory } from "./tar.ts";
-import { rootSkillNameOf, skillMdTextOf, upstreamSkillFiles, upstreamSkillHash } from "./rootskill.ts";
+import { rootSkillNameOf, skillMdTextOf } from "./rootskill.ts";
+import { planRepoContents } from "./skilltree.ts";
+import { createLimiter } from "./limited.ts";
+import { OPERATION_CONCURRENCY } from "./github.ts";
 import type { SkillMetaReader } from "./skill-meta.ts";
 import { assertPathInsideDirectory, describeUnsafePath, safeRelativePath, safeSegmentName } from "./safepath.ts";
 import { skillDirOf, skillMdPathOf } from "./sourceurl.ts";
@@ -33,6 +35,7 @@ import type { SkillsLocalPort } from "./types.ts";
 import type { HubContext } from "../../platform/contract/host.ts";
 import type { InstallItemResult, InstallTarget, SourceEntry } from "../contract/remote.ts";
 import { PROJECT_TARGETS } from "./types.ts";
+import type { FingerprintStore } from "./fingerprints.ts";
 
 export interface InstallDeps {
   ctx: HubContext;
@@ -41,6 +44,8 @@ export interface InstallDeps {
   sources: SourceStore;
   /** 读 SKILL.md 的 name（根级技能的目录名用） */
   meta: SkillMetaReader;
+  /** 目录指纹存档（D-B18）；安装成功后写入，下次检查更新就只剩一次 trees 请求 */
+  fingerprints?: FingerprintStore;
   now?: () => Date;
 }
 
@@ -98,7 +103,22 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
   // FIX-5：先校验全部用户提交的 skillPath（整批拒绝），再下载 —— 坏输入不产生任何网络请求。
   for (const requested of options.skillPaths) assertUserSkillPath(String(requested));
 
-  const tarball = await deps.github.downloadTarball(repo, options.ref);
+  // D-B18：同一仓库多个技能共用一次 trees 调用；只下载选中的技能目录（根级技能与截断的树回退 tar.gz）。
+  const normalizedPaths = options.skillPaths.map((requested) => skillMdPathOf(skillDirOf(String(requested)).dirPath));
+  // D-B18：整次安装共用一个并发闸门（上限 12）—— 选中的多个技能目录一起下载
+  const limiter = createLimiter(OPERATION_CONCURRENCY);
+  const plan = await planRepoContents(
+    { github: deps.github },
+    {
+      repo,
+      ref: options.ref,
+      skillPaths: normalizedPaths,
+      // 安装要写回 lock 的 ref：没给分支时先解析默认分支（与旧实现写回的分支名一致）
+      resolveDefaultBranch: true,
+      limiter,
+    },
+  );
+  if (plan.fallbackReason !== undefined) deps.ctx.logger.debug(plan.fallbackReason, { repo });
   const nowIso = (deps.now ?? (() => new Date()))().toISOString();
   const results: InstallItemResult[] = [];
   /** 根级技能取不到 frontmatter name 时的目录名回退值（= 仓库名的最后一段） */
@@ -107,31 +127,40 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
   for (const requested of options.skillPaths) {
     const skillPath = skillMdPathOf(skillDirOf(String(requested)).dirPath);
     try {
-      // FIX-7：allowRoot —— 单技能仓库（SKILL.md 就在仓库根，npx skills 的 skillPath = "SKILL.md"
-      // 形态）也要能装。该开关只在 skillPath 没有目录段时起作用，非根级行为完全不变。
-      const located = locateSkillDirectory(tarball.entries, skillPath, { allowRoot: true });
-      if (located === undefined) {
-        throw notFound(`仓库 ${repo}@${tarball.ref} 里找不到技能 ${skillPath}。`);
+      const planned = plan.plans.get(skillPath);
+      if (planned instanceof Error) {
+        // 目录树失败（限流 / 网络 / 仓库不存在）是带错误码的 HubError：**原样抛出**，
+        // 否则「被限流」会被包成 404，界面上就看不到「设置 GITHUB_TOKEN 或 gh auth login」的提示。
+        // 「上游找不到这个技能」这类由 skilltree 生成、没有错误码的，按 NOT_FOUND 处理。
+        if (typeof (planned as { code?: unknown }).code === "string") throw planned;
+        throw notFound(planned.message);
+      }
+      const dirNameOfSkill =
+        planned === undefined ? skillDirOf(skillPath).dirName : (planned.dir.split("/").pop() ?? "");
+      // FIX-5（要求 C）：目录名必须是安全单段名、目录路径必须是安全相对路径 —— 在网络请求与
+      // 落盘**之前**就校验（坏上游路径不产生任何 raw 请求，技能根一个字节都不动）。
+      // 根级技能（dir === ""）没有路径可穿越，跳过；它的目录名要读 SKILL.md 才知道，见下面。
+      if (planned === undefined || planned.dir !== "") {
+        safeSegmentName(dirNameOfSkill, `上游 ${repo}@${options.ref ?? "HEAD"} 的技能目录名`);
+        safeRelativePath(planned?.dir ?? "", `上游 ${repo}@${options.ref ?? "HEAD"} 的技能目录路径`);
       }
       // 内容文件 = 真正会写盘的那一批（根级会排除 .git/.github 等元数据目录）；哈希与它同源。
-      const files = upstreamSkillFiles(tarball.entries, located.path);
+      const loaded = planned === undefined ? undefined : await planned.load();
+      const files = loaded?.files ?? [];
+      const refOf = loaded?.ref ?? options.ref ?? "HEAD";
       let dirName: string;
       /** 写进 lock / sources.json 的键（npx 语义：技能名；普通技能仍是 tar 里的目录名） */
       let storeName: string;
-      if (located.path === "") {
+      if (planned !== undefined && planned.dir === "") {
         // FIX-7：技能 = 仓库根。lock 键 = 原始技能名（取不到就用仓库名），
         // 目录名 = sanitizeName(键)（与 npx skills 的 getInstallPath 一致）；仍须通过 safeSegmentName 校验。
         const named = rootSkillNameOf(deps.meta, skillMdTextOf(files), repoBase);
-        safeSegmentName(named.dirName, `上游 ${repo}@${tarball.ref} 的技能目录名（技能名 ${named.key}）`);
+        safeSegmentName(named.dirName, `上游 ${repo}@${refOf} 的技能目录名（技能名 ${named.key}）`);
         dirName = named.dirName;
         storeName = named.key;
       } else {
-        // FIX-5（要求 C）：目录名必须是安全单段名、目录路径必须是安全相对路径；
-        // 目标目录再按 resolve/relative 确认落在技能根之内（纵深防御）。
-        safeSegmentName(located.dirName, `上游 ${repo}@${tarball.ref} 的技能目录名`);
-        safeRelativePath(located.path, `上游 ${repo}@${tarball.ref} 的技能目录路径`);
-        dirName = located.dirName;
-        storeName = located.dirName;
+        dirName = dirNameOfSkill;
+        storeName = dirNameOfSkill;
       }
       const destDir = path.join(rootPath, dirName);
       assertPathInsideDirectory(rootPath, destDir, "安装目标目录");
@@ -142,19 +171,28 @@ export async function installSkills(deps: InstallDeps, options: InstallOptions):
       await mkdir(rootPath, { recursive: true });
       await writeDirectoryFiles(destDir, files);
 
-      const folderHash = recordedHash(upstreamSkillHash(tarball.entries, located.path));
+      const folderHash = recordedHash(loaded!.hash);
       const entry: SourceEntry = {
         skillId: `${target}:${dirName}`,
         repo,
-        skillPath: skillMdPathOf(located.path),
+        skillPath,
         store: target === "user-agents" ? "skill-lock" : "hub",
         installedAt: nowIso,
         updatedAt: nowIso,
         skillFolderHash: folderHash,
       };
-      if (tarball.ref !== undefined) entry.ref = tarball.ref;
+      const refToStore = options.ref !== undefined && options.ref.trim() !== "" ? options.ref.trim() : loaded?.ref;
+      if (refToStore !== undefined && refToStore !== "") entry.ref = refToStore;
       const stored = await deps.sources.upsert({ rootId: target, dirName, path: destDir }, entry, storeName);
-      results.push({ skillPath: skillMdPathOf(located.path), ok: true, skillId: stored.skillId });
+      // 装完就记指纹：紧接着的「检查更新」只剩一次 trees 请求
+      if (loaded?.treeSha !== undefined) {
+        await deps.fingerprints?.put(repo, entry.ref, skillPath, {
+          contentHash: folderHash,
+          treeSha: loaded.treeSha,
+          upToDate: true,
+        });
+      }
+      results.push({ skillPath, ok: true, skillId: stored.skillId });
     } catch (error) {
       results.push({
         skillPath,
