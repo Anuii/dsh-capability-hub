@@ -33,15 +33,18 @@ Licensed under the MIT License.
 
 需要 DSH 0.2.x（Windows）。
 
-1. 取得 `.tgz` 安装包：
-   - 从 Releases 下载 `dsh-capability-hub-<版本>.tgz`；或
-   - 自行打包（见 [docs/DEV.md](docs/DEV.md) 的「打包」一节）：
-     `pwsh -NoProfile -File scripts\pack.ps1`
-2. 打开 DSH 的**插件**页 → **添加插件** → 粘贴 `.tgz` 的**绝对路径** → **安装**。
-3. 在「已安装」那一行点**立即启用**。
+1. 打开 DSH 的**插件**页 → **添加插件** → 在输入框里填包名 `dsh-capability-hub` → **安装**。
+2. 在「已安装」那一行点**立即启用**。
    （安装 ≠ 启用：只安装不启用时插件不会加载，接口是 404。）
-4. 升级：替换同名插件后需要**重启 DSH**，新代码才会加载。替换已加载的包是官方文档里
-   唯一要求重启的场景；平时的启用/停用是热生效的。
+3. 升级：在插件页安装新版本后需要**重启 DSH**，新代码才会加载。替换已加载的包是官方文档里
+   唯一要求重启的场景；平时的启用/停用是热生效的。升级不会动插件数据——
+   `~/.dsh/storages/dsh-capability-hub` 下的 MCP 配置、技能来源记录与镜像设置都保留。
+
+离线或想固定版本时，也可以直接装 `.tgz`：
+
+- 从 Releases 下载 `dsh-capability-hub-<版本>.tgz`；或自行打包（见 [docs/DEV.md](docs/DEV.md) 的「打包」一节）：
+  `pwsh -NoProfile -File scripts\pack.ps1`
+- 插件页 → **添加插件** → 粘贴 `.tgz` 的**绝对路径** → **安装** → **立即启用**。
 
 详细步骤、测试 profile 的搭法、以及升级时容易踩的坑，见 [docs/DEV.md](docs/DEV.md)。
 

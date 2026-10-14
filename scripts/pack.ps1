@@ -10,6 +10,9 @@
     3. 用本机 npm 打包到 <仓库根>\dist\（从这里取 tgz；dist\ 不进版本库）；
     4. 用 tar -tzf 列出包内文件，并断言没有中间产物 lib/.client.raw.js。
 
+  包名只在 package.json 里写一次：tgz 文件名由它推出（<scope>-<name>-<版本>.tgz），并与 npm pack
+  实际产出的文件名核对。
+
   用法（在包根）：
     pwsh -File scripts\pack.ps1
     pwsh -File scripts\pack.ps1 -NoBuild            # 跳过构建，只重打包
@@ -76,12 +79,20 @@ if (Test-Path -LiteralPath $rawPath) { Remove-Item -LiteralPath $rawPath -Force 
 if (-not (Test-Path -LiteralPath $DistDir)) { New-Item -ItemType Directory -Path $DistDir -Force | Out-Null }
 
 # stderr 也收进来（失败时给原因），但它们是 ErrorRecord 而不是字符串，先统一转成文本；
-# 「npm notice filename: x.tgz」这类提示行里有空格，文件名只认整行就是 *.tgz 的那一行。
+# 文件名从两类行里取：提示行「npm notice filename: x.tgz」（带空格，不能整行匹配），
+# 以及最后那行裸文件名。作用域包的 tgz 名是 <scope>-<name>-<版本>.tgz（@ 去掉、/ 换成 -）。
 $packOut = @(& $Npm pack --pack-destination $DistDir 2>&1 | ForEach-Object { "$_" })
 if ($LASTEXITCODE -ne 0) { throw "npm pack 失败：$($packOut -join ' | ')" }
-$tgzName = ($packOut | Where-Object { $_.Trim() -match '^\S+\.tgz$' } | Select-Object -Last 1)
+$tgzName = $null
+foreach ($line in $packOut) {
+  $t = "$line".Trim()
+  if ($t -match '^(?:npm notice\s+)?filename:\s*(\S+\.tgz)$') { $tgzName = $Matches[1] }
+  elseif ($t -match '^(\S+\.tgz)$') { $tgzName = $Matches[1] }
+}
 if (-not $tgzName) { throw "没解析出 tgz 文件名：$($packOut -join ' | ')" }
-$tgzName = $tgzName.Trim()
+# 与 package.json 推出来的名字对一下：包名改了、解析还认着旧格式的话，这里会当场失败。
+$expectedTgz = ((($pkg.name -replace '^@', '') -replace '/', '-')) + "-$($pkg.version).tgz"
+if ($tgzName -ne $expectedTgz) { throw "npm pack 的文件名与预期不符：实际 $tgzName，预期 $expectedTgz" }
 $tgzPath = Join-Path $DistDir $tgzName
 Write-Output "[pack] tarball: $tgzPath"
 

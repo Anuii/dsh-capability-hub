@@ -20,7 +20,7 @@ pwsh -NoProfile -File scripts\dev-link.ps1 watch # 测试 profile 跟随源码�
 YAML 对拍要在 Electron-as-node 下运行，命令见 docs/DEV.md 第 2 节；MCP 的真实连接在测试 profile 里用冒烟脚本与 `scripts/ui-walk-mcp.mjs` 验证。
 
 ## 硬规则
-1. **`link:` 只许指向暂存目录，绝不指向源码目录**：Windows 上 pnpm 移除 link 依赖时会顺着 junction 清空目标目录。测试 profile 只用 `scripts/dev-link.ps1` 建的 link（目标是 `<profile>\.dev-link\dsh-capability-hub`，里面只有可重建的构建产物）；其他 profile（包括 Desktop）一律装 `scripts/pack.ps1` 打出的 tgz。对任何 profile 做插件或 pnpm 操作之前，先确认 `git status --short` 为空，且该 profile 的 `node_modules\dsh-capability-hub` 要么是真实目录，要么是指向上述暂存目录的链接（`dev-link.ps1 status` 会检查）；指向别处立即停手。详见 docs/DEV.md 第 4 节。
+1. **`link:` 只许指向暂存目录，绝不指向源码目录**：Windows 上 pnpm 移除 link 依赖时会顺着 junction 清空目标目录。测试 profile 只用 `scripts/dev-link.ps1` 建的 link（目标是 `<profile>\.dev-link\dsh-capability-hub`——这个目录名是固定字面量，不是包名——里面只有可重建的构建产物）；其他 profile（包括 Desktop）一律装 `scripts/pack.ps1` 打出的 tgz。对任何 profile 做插件或 pnpm 操作之前，先确认 `git status --short` 为空，且该 profile 的 `node_modules\<package.json 的 name>` 要么是真实目录，要么是指向上述暂存目录的链接（`dev-link.ps1 status` 会检查）；指向别处立即停手。详见 docs/DEV.md 第 4 节。
 2. **使用者的真实数据只读**：`~/.agents`（含 `.skill-lock.json`）、`~/.dsh/storages/dsh-capability-hub`、`~/.claude*`、`~/.codex`。开发与走查只在隔离的测试 profile 里做，用 devOverrides 把 homeDir 指向 `.dev/home` 夹具。使用者日常用的 Desktop profile 只读，安装、升级由使用者本人在插件页完成。
 3. **走查不得新建会话**：测试 profile 与 Desktop 共用 `~/.dsh` 的会话存储，新会话会出现在使用者真实的会话列表里。
 4. **不按进程名杀进程**（不用 `taskkill /IM`），只清理自己启动的 PID 或占用的端口。
@@ -34,3 +34,4 @@ YAML 对拍要在 Electron-as-node 下运行，命令见 docs/DEV.md 第 2 节�
 - 规则写进可单测的视图模型或状态仓库（经数据 adapter 访问宿主），组件只渲染；不为测内部细节而导出函数。
 - 界面文案写在各页的 `strings.ts`；颜色只用主题变量；界面用 `src/kit` 的组件拼。
 - 完成的标准：tsc 0 错、全部单测通过；改界面要有亮色、暗色截图，并满足 UI-DESIGN 第 5 节。
+- **包名只在 `package.json` 里写一次**：构建时由 build.mjs 注入 `__HUB_PACKAGE__`（src/version.ts），客户端 keyed slot 的 key 由它拼出；开发脚本也从 package.json 读。`test/platform/package-identity.test.ts` 钉住「package.json name = cordis.patch.yml name = 兜底值」，同时钉住**不跟着包名走**的接口前缀与数据目录（改名会把已装用户的数据读丢）。

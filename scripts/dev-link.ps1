@@ -9,6 +9,8 @@
   本脚本的做法：junction 只指向一个**暂存目录**
       <profile>\.dev-link\dsh-capability-hub
   里面只有可随时重新生成的四个文件（package.json、cordis.patch.yml、lib\index.js、lib\client.js）。
+  暂存目录名是**固定字面量**（不是包名）：它只是 profile 里一个临时目录，改名没有意义。包名本身
+  从 package.json 读（支持 @scope/name 这类作用域包，安装位置相应变成 node_modules\@scope\name）。
   pnpm 就算顺着链接删，也只会删掉这些产物；源码目录从来不在任何链接的目标里。
   暂存目录放在 profile 目录内，是为了让模块解析的祖先链与 tgz 安装完全一致
   （向上能找到 ~/.dsh/profiles/node_modules 里 DSH 自带的 @modelcontextprotocol/*）。
@@ -38,7 +40,7 @@ param(
   [string]$Action = 'status',
   [switch]$NoBuild,
   [switch]$Restart,
-  # disable 时重新安装的 tgz；默认 dist\dsh-capability-hub-<package.json 版本>.tgz
+  # disable 时重新安装的 tgz；默认 dist\<npm pack 的文件名>.tgz（包名去掉 @scope/ 并把 / 换成 -）
   [string]$Tgz,
   [int]$Port = 19411,
   # 只用于测试 profile；desktop 一律拒绝
@@ -49,13 +51,21 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $PackageRoot = Split-Path -Parent $PSScriptRoot
-$PackageName = 'dsh-capability-hub'
+# 包名只在 package.json 里写一次：脚本从这里读，改名（含加作用域）不用再改脚本。
+$Pkg = Get-Content -LiteralPath (Join-Path $PackageRoot 'package.json') -Raw | ConvertFrom-Json
+$PackageName = [string]$Pkg.name
+if ([string]::IsNullOrWhiteSpace($PackageName)) { throw 'package.json 里读不到 name。' }
+# 包名 → node_modules 下的相对路径：作用域包 @scope/name 落在 node_modules\@scope\name。
+$PackageDir = $PackageName -replace '/', '\'
+# npm pack 的 tgz 文件名：包名去掉 @scope/ 前缀，把 / 换成 -。
+$TgzBase = ($PackageName -replace '^@', '') -replace '/', '-'
 if ($ProfileName -eq 'desktop') { throw '拒绝：dev-link 只用于测试 profile，desktop 继续用 tgz 安装。' }
 
 $ProfileRoot = Join-Path $env:USERPROFILE ('.dsh\profiles\' + $ProfileName)
 $StageRoot   = Join-Path $ProfileRoot '.dev-link'
-$Stage       = Join-Path $StageRoot $PackageName
-$Installed   = Join-Path $ProfileRoot ('node_modules\' + $PackageName)
+# 固定目录名（不是包名）：见文件头说明。
+$Stage       = Join-Path $StageRoot 'dsh-capability-hub'
+$Installed   = Join-Path $ProfileRoot ('node_modules\' + $PackageDir)
 $StageFiles  = @('package.json', 'cordis.patch.yml', 'lib\index.js', 'lib\client.js')
 
 if (-not $DshInstallDir) { $DshInstallDir = $env:DSH_INSTALL_DIR }
@@ -234,7 +244,7 @@ switch ($Action) {
     $state = Get-InstallState
     if (-not $Tgz) {
       $version = (Get-Content -LiteralPath (Join-Path $PackageRoot 'package.json') -Raw | ConvertFrom-Json).version
-      $Tgz = Join-Path $PackageRoot "dist\$PackageName-$version.tgz"
+      $Tgz = Join-Path $PackageRoot "dist\$TgzBase-$version.tgz"
     }
     if (-not (Test-Path -LiteralPath $Tgz)) { throw "找不到 tgz：$Tgz（先 scripts\pack.ps1，或用 -Tgz 指定）" }
     Assert-StageSafe

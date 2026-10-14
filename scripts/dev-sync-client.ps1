@@ -15,6 +15,8 @@
       并经 /plugins/events(SSE) 把新 rev 推给浏览器。
   所以覆盖文件后最多等一个轮询周期，刷新页面就会请求新的 rev。
 
+  目标位置从 package.json 的 name 推出（支持 @scope/name）：node_modules\<包名>。
+
   安全：目标目录必须是**真实目录**（Attributes 里没有 ReparsePoint、LinkType 为空），
   否则立刻退出并报错。例外：link 方式（目标是 scripts\dev-link.ps1 建的 junction）下改为调用
   dev-link.ps1 sync，由它核对链接目标正好是暂存目录。这条检查是为了防止包管理器顺着 junction 删除时把源码目录一起清空
@@ -41,9 +43,15 @@ $ErrorActionPreference = 'Stop'
 
 $PackageRoot = Split-Path -Parent $PSScriptRoot
 $RepoRoot    = $PackageRoot
+# 包名只在 package.json 里写一次：脚本从这里读，改名（含加作用域）不用再改脚本。
+$Pkg = Get-Content -LiteralPath (Join-Path $PackageRoot 'package.json') -Raw | ConvertFrom-Json
+$PackageName = [string]$Pkg.name
+if ([string]::IsNullOrWhiteSpace($PackageName)) { throw 'package.json 里读不到 name。' }
+# 作用域包 @scope/name 在 profile 里落在 node_modules\@scope\name。
+$PackageDir   = $PackageName -replace '/', '\'
 $SourceClient = Join-Path $PackageRoot 'lib\client.js'
 $ProfileRoot  = Join-Path $env:USERPROFILE ('.dsh\profiles\' + $ProfileName)
-$TargetDir    = Join-Path $ProfileRoot 'node_modules\dsh-capability-hub'
+$TargetDir    = Join-Path $ProfileRoot ('node_modules\' + $PackageDir)
 $TargetClient = Join-Path $TargetDir 'lib\client.js'
 
 # desktop profile 与真实用户目录一律不动。
@@ -132,8 +140,8 @@ $pidBefore = Get-PortPid $Port
 Write-Output "== target: $TargetClient"
 Assert-RealDirectory -Path $ProfileRoot -Label 'profile 根目录' | Out-Null
 Assert-RealDirectory -Path (Join-Path $ProfileRoot 'node_modules') -Label 'node_modules' | Out-Null
-Assert-RealDirectory -Path $TargetDir -Label 'node_modules\dsh-capability-hub' | Out-Null
-Assert-RealDirectory -Path (Join-Path $TargetDir 'lib') -Label 'node_modules\dsh-capability-hub\lib' | Out-Null
+Assert-RealDirectory -Path $TargetDir -Label ('node_modules\' + $PackageDir) | Out-Null
+Assert-RealDirectory -Path (Join-Path $TargetDir 'lib') -Label ('node_modules\' + $PackageDir + '\lib') | Out-Null
 Write-Output '== 安全检查通过：目标目录是真实目录（无 ReparsePoint，LinkType 为空）'
 
 $before = Get-Sha256 $TargetClient

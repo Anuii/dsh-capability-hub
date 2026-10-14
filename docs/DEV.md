@@ -117,6 +117,10 @@ CRLF 技能的启停只改一行）。快照不属于本仓库，指向你自己
 列包内文件并断言没有多余的中间产物。产物 `dist\dsh-capability-hub-<版本>.tgz` 里只有
 `package.json`、`lib/index.js`、`lib/client.js`、`cordis.patch.yml`，外加 npm 无论如何都会附带的 `README.md` 与 `LICENSE`。
 
+包名只在 `package.json` 里写一次，脚本都从那里读：tgz 文件名按 npm 的规则推出
+（`<包名去 @、/ 换成 ->-<版本>.tgz`；作用域包 `@scope/name` 就是 `scope-name-<版本>.tgz`），
+并与 `npm pack` 实际产出的名字核对。改包名（含加作用域）不需要动任何脚本。
+
 `node` / `npm` 默认走 `PATH`，也可以用 `-Node` / `-Npm` 显式指定。
 
 ---
@@ -162,6 +166,10 @@ DSH 安装路径由 `DSH_INSTALL_DIR`（安装目录；不要用 `DSH_HOME`，�
 | **link 暂存目录**（日常开发，默认） | 边改边看 | `link:<profile>/.dev-link/dsh-capability-hub` | `dev-link.ps1 watch` 自动写入；客户端刷新页面，宿主 `dev-profile.ps1 restart` |
 | **tgz**（发版前验收、Desktop） | 验证「打出来的包」本身 | `file:<仓库根>/dist/dsh-capability-hub-<版本>.tgz` | 重新打包 → 先卸载再安装 → 重启 |
 
+> 两种方式里的**包名**都从 `package.json` 读：已安装位置是 `node_modules\<包名>`（作用域包即
+> `node_modules\@scope\name`），tgz 名同理。只有暂存目录名 `.dev-link\dsh-capability-hub` 是
+> **固定字面量**，不是包名——它只是 profile 里的一个临时目录，改名没有意义。
+
 link 方式：
 
     pwsh -NoProfile -File scripts\dev-link.ps1 enable          # tgz → link（会停、启 profile）
@@ -184,7 +192,7 @@ tgz 方式：
 立即启用。
 
 > **重新打包同一个版本号时**：`file:` 依赖说明符没变，pnpm 会直接说 `Already up to date`
-> 并跳过解包——即使 tgz 内容已经变了，`node_modules\dsh-capability-hub\lib\client.js`
+> 并跳过解包——即使 tgz 内容已经变了，`node_modules\<包名>\lib\client.js`
 > 还是旧的。要让新产物真的进去，先 `remove` 再 `add` 同一个 tgz，然后重启。
 > 判断有没有换上的办法是比对 `lib\client.js` 与 tgz 里那一个的 SHA256。
 
@@ -211,7 +219,7 @@ tgz 方式：
 `node_modules\dsh-capability-hub` 这个 junction **把目标目录里的文件全部删掉**（目录本身留下）。
 当时 link 指向的是源码目录，于是源码目录被整个清空。
 
-所以 link 的目标只能是暂存目录 `<profile>\.dev-link\dsh-capability-hub`：
+所以 link 的目标只能是暂存目录 `<profile>\.dev-link\dsh-capability-hub`（名字固定，与包名无关）：
 
 - 里面只有四个可随时重新生成的文件（`package.json`、`cordis.patch.yml`、`lib\index.js`、`lib\client.js`），
   由 `build.mjs --also-out` 与 `dev-link.ps1` 写入；被 pnpm 清空也只需再 `sync` 一次。
