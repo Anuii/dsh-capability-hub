@@ -5,7 +5,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildSkillTree,
-  dirOptions,
   dirTagText,
   defaultExpanded,
   filterKeyOf,
@@ -73,21 +72,6 @@ test("目录标签：skills 前一段；没有 skills 段取最后一段；盘�
   assert.equal(dirTagText("E:\\skills"), "skills");
 });
 
-test("目录筛选选项：按层级分段、含空目录、带技能数；不存在且没有技能的目录不列", () => {
-  const options = dirOptions(LIST);
-  assert.deepEqual(
-    options.map((o) => [o.level, o.tag, o.count]),
-    [
-      ["builtin", "dsh-agent-preset", 1],
-      ["user", ".agents", 3],
-      ["user", ".dsh", 1],
-      ["user", "team-skills", 1],
-      ["project", ".dsh", 1],
-    ],
-  );
-  assert.equal(options.find((o) => o.rootId === "user-agents")!.title, "C:\\Users\\me\\.agents\\skills");
-});
-
 test("默认视图：三个层级按 DSH 内置 / 用户级 / 项目级排列，DSH 内置不细分", () => {
   const tree = buildSkillTree({ list: LIST, query: "", filter: "all", sources: SOURCES, hasWorkspace: true });
   assert.equal(tree.filtering, false);
@@ -149,7 +133,7 @@ test("没有工作区：项目级只给一行说明；没有 DSH 内置技能时
   assert.equal(project.total, 0);
 });
 
-test("搜索 / 筛选 / 目录筛选：只留有匹配的层级与仓库，计数按匹配数", () => {
+test("搜索 / 筛选：只留有匹配的层级与仓库，计数按匹配数", () => {
   const searched = buildSkillTree({ list: LIST, query: "tdd", filter: "all", sources: SOURCES, hasWorkspace: true });
   assert.equal(searched.filtering, true);
   assert.deepEqual(
@@ -182,21 +166,6 @@ test("搜索 / 筛选 / 目录筛选：只留有匹配的层级与仓库，计�
     ["project"],
   );
 
-  const byDir = buildSkillTree({
-    list: LIST,
-    query: "",
-    filter: "all",
-    dir: "user-dsh",
-    sources: SOURCES,
-    hasWorkspace: true,
-  });
-  assert.equal(byDir.filtering, true);
-  assert.equal(byDir.shown, 1);
-  assert.deepEqual(
-    byDir.levels.map((l) => l.level),
-    ["user"],
-  );
-
   const none = buildSkillTree({ list: LIST, query: "不存在的词", filter: "all", sources: SOURCES, hasWorkspace: true });
   assert.equal(none.shown, 0);
   assert.deepEqual(none.levels, []);
@@ -207,7 +176,7 @@ test("折叠：DSH 内置默认折叠；筛选时有匹配的分组先展开、�
     foldExpanded(state, scope, key, defaultExpanded(key));
   const toggle = (state: FoldState, scope: string, key: string): FoldState =>
     foldToggle(state, scope, key, defaultExpanded(key));
-  const none = filterKeyOf("", "all", "");
+  const none = filterKeyOf("", "all");
   assert.equal(none, "");
   let state = EMPTY_FOLD;
   assert.equal(isExpanded(state, none, levelKey("builtin")), false, "DSH 内置默认折叠");
@@ -215,7 +184,7 @@ test("折叠：DSH 内置默认折叠；筛选时有匹配的分组先展开、�
   state = toggle(state, none, levelKey("user"));
   assert.equal(isExpanded(state, none, levelKey("user")), false, "不筛选时用户折叠了用户级");
 
-  const enabled = filterKeyOf("", "enabled", "");
+  const enabled = filterKeyOf("", "enabled");
   assert.notEqual(enabled, "");
   assert.equal(isExpanded(state, enabled, levelKey("user")), true, "进入筛选：全部展开");
   assert.equal(isExpanded(state, enabled, levelKey("builtin")), true);
@@ -224,14 +193,14 @@ test("折叠：DSH 内置默认折叠；筛选时有匹配的分组先展开、�
   state = toggle(state, enabled, repoKey("user", "mattpocock/skills"));
   assert.equal(isExpanded(state, enabled, repoKey("user", "mattpocock/skills")), false, "二级分组同样可以折叠");
 
-  const disabled = filterKeyOf("", "disabled", "");
+  const disabled = filterKeyOf("", "disabled");
   assert.equal(isExpanded(state, disabled, levelKey("user")), true, "换一种筛选：重新全部展开");
   assert.equal(isExpanded(state, none, levelKey("user")), false, "清空筛选：回到不筛选时的折叠");
   assert.equal(isExpanded(state, none, levelKey("builtin")), false);
 
-  assert.equal(filterKeyOf(" Grill ", "all", ""), filterKeyOf("grill", "all", ""), "搜索词大小写与首尾空格不算新筛选");
-  assert.equal(isFiltering("  ", "all", ""), false);
-  assert.equal(isFiltering("", "all", "user-dsh"), true);
+  assert.equal(filterKeyOf(" Grill ", "all"), filterKeyOf("grill", "all"), "搜索词大小写与首尾空格不算新筛选");
+  assert.equal(isFiltering("  ", "all"), false);
+  assert.equal(isFiltering("", "attention"), true, "状态筛选同样算「筛选生效中」");
 });
 
 test("目录标签只在层级里有不止一个技能目录时显示", () => {

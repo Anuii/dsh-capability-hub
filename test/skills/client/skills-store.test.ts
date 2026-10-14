@@ -99,6 +99,10 @@ test("启停：成功后只替换那一行，在途时置灰；失败给中文�
   assert.equal(after[1], store.state.get().list!.skills[1], "别的行原样不动");
   assert.equal(store.state.get().busyIds.size, 0);
 
+  // 反向：允许模型调用时的 Toast 与开关提示是同一套说法
+  const back = await store.toggle({ ...a, modelInvocationDisabled: true }, true);
+  assert.deepEqual(back, { ok: true, message: "已允许模型调用「a」", fieldErrors: [] });
+
   const failing = await loaded(fake({ setEnabled: async () => Promise.reject(new Error("文件被占用")) }));
   const r = await failing.toggle(a, false);
   assert.equal(r.ok, false);

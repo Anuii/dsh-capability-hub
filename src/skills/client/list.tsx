@@ -6,6 +6,7 @@
  *
  * 分组（tree.ts）：一级 = 层级（DSH 内置默认折叠 / 用户级 / 项目级），二级 = 来源仓库。
  * 折叠用 kit 的 useFold（规则见 kit/fold.ts），状态在本组件里（标签隐藏而不卸载，切标签不会丢）。
+ * 工具栏没有目录下拉（使用者决定）：目录标签照旧只在同一层级混了多个技能目录时出现在行上。
  */
 import * as React from "react";
 import {
@@ -25,16 +26,7 @@ import { t } from "./strings.ts";
 import type { FilterId, MatchContext } from "./format.ts";
 import { skillRowView } from "./row.ts";
 import { SkillSwitch } from "./switch.tsx";
-import {
-  LEVELS,
-  buildSkillTree,
-  defaultExpanded,
-  dirOptions,
-  dirTagIndex,
-  filterKeyOf,
-  levelLabel,
-  type LevelView,
-} from "./tree.ts";
+import { buildSkillTree, defaultExpanded, dirTagIndex, filterKeyOf, type LevelView } from "./tree.ts";
 import type { ListResult, SkillSummary } from "../contract/local.ts";
 
 export interface SkillListProps {
@@ -44,8 +36,6 @@ export interface SkillListProps {
   homeDir?: string;
   query: string;
   filter: FilterId;
-  /** 目录筛选（rootId）；"" = 全部目录 */
-  dir: string;
   context: MatchContext;
   /** 启停在途的技能 id（开关置灰） */
   busyIds: ReadonlySet<string>;
@@ -102,41 +92,6 @@ function SkillRow(props: {
   );
 }
 
-/** 工具栏里的「目录」筛选：原生下拉，按层级分段，含空目录与技能数。 */
-export function DirFilter(props: {
-  list: ListResult;
-  value: string;
-  onChange(rootId: string): void;
-}): React.ReactElement {
-  const options = dirOptions(props.list);
-  return (
-    <select
-      className={kit.select}
-      value={props.value}
-      aria-label={t("skills.dirFilter.label")}
-      title={options.find((option) => option.rootId === props.value)?.title ?? t("skills.dirFilter.label")}
-      data-testid="skills-dir-filter"
-      data-active={props.value === "" ? undefined : ""}
-      onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.onChange(event.target.value)}
-    >
-      <option value="">{t("skills.dirFilter.all")}</option>
-      {LEVELS.map((level) => {
-        const items = options.filter((option) => option.level === level);
-        if (items.length === 0) return null;
-        return (
-          <optgroup key={level} label={levelLabel(level)}>
-            {items.map((option) => (
-              <option key={option.rootId} value={option.rootId} title={option.title}>
-                {t("skills.dirFilter.option", { tag: option.tag, count: option.count })}
-              </option>
-            ))}
-          </optgroup>
-        );
-      })}
-    </select>
-  );
-}
-
 /** 技能列表（工具栏由 index.tsx 渲染）。 */
 export function SkillList(props: SkillListProps): React.ReactElement {
   const remote = useStoreState(remoteStore.state);
@@ -147,13 +102,12 @@ export function SkillList(props: SkillListProps): React.ReactElement {
     query: props.query,
     filter: props.filter,
     context: props.context,
-    dir: props.dir,
     hasWorkspace,
     ...(sourcesReady ? { sources: remote.sources } : {}),
   });
   const tags = React.useMemo(() => dirTagIndex(props.list.roots), [props.list.roots]);
   // 筛选时有匹配的分组先全部展开，但仍可手动折叠（只在这一次筛选里有效），清空后回到原来的折叠。
-  const fold = useFold(filterKeyOf(props.query, props.filter, props.dir));
+  const fold = useFold(filterKeyOf(props.query, props.filter));
   const toggle = (key: string): void => fold.toggle(key, defaultExpanded(key));
   const expanded = (key: string): boolean => fold.expanded(key, defaultExpanded(key));
 

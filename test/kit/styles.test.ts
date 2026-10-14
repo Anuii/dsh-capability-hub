@@ -204,7 +204,7 @@ test("ListGroup 的 title 可选：不传时整条标题行都不渲染", () => 
   assert.ok(KIT_CSS.includes("." + kit.group + "{"));
 });
 
-test("ListFoot 是 kit 的组件；技能页 0.3.0 起用目录筛选取代「空目录」脚注", () => {
+test("ListFoot 是 kit 的组件；技能页用 kit 的列表组件，不再手写脚注与目录下拉", () => {
   const listSurface = fs.readFileSync(path.join(kitDir, "ListSurface.tsx"), "utf8");
   assert.ok(listSurface.includes("export function ListFoot"));
   assert.ok(KIT_CSS.includes("." + kit.foot + "{"));
@@ -212,7 +212,12 @@ test("ListFoot 是 kit 的组件；技能页 0.3.0 起用目录筛选取代「�
   assert.ok(KIT_CSS.includes("." + kit.footAction + "{"));
   const skillsList = fs.readFileSync(path.join(srcDir, "skills", "client", "list.tsx"), "utf8");
   assert.equal(skillsList.includes("listFootAction"), false, "技能页不该再手写脚注按钮");
-  assert.ok(skillsList.includes("DirFilter"), "空目录改由「目录」筛选呈现（D-B15）");
+  assert.equal(skillsList.includes("DirFilter"), false, "工具栏的「目录」下拉已删除（使用者决定）");
+  const skillsIndex = fs.readFileSync(path.join(srcDir, "skills", "client", "index.tsx"), "utf8");
+  assert.equal(/DirFilter|afterFilters/.test(skillsIndex), false, "技能页工具栏不再有目录下拉（afterFilters）");
+  const skillsTree = fs.readFileSync(path.join(srcDir, "skills", "client", "tree.ts"), "utf8");
+  assert.equal(/dirOptions|DirOption/.test(skillsTree), false, "目录筛选的选项逻辑一并删除");
+  assert.ok(skillsTree.includes("export function dirTagIndex"), "行上的目录标签照旧（只在同层级混了多个目录时出现）");
 });
 
 test("可折叠分组：标题行是按钮、带 aria-expanded，二级分组无外框", () => {

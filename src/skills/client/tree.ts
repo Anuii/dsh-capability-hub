@@ -7,7 +7,6 @@
  *          DSH 内置不细分；某层级全是无来源、或来源数据不可用时，不显示二级、直接列技能。
  *   目录标签 = 技能所在技能目录路径里最后一个 skills 段之前的那一段（.agents / .dsh），
  *          没有 skills 段时取最后一段；完整路径做悬停提示。只在层级里有不止一个目录的技能时显示（multiDir）。
- *   目录筛选 = 按技能目录（rootId）筛选；选项含空目录、带技能数、按层级分段。
  *   折叠 = 调用方持有「被用户折叠的分组 key 集合」；搜索 / 任何筛选生效时一律展开，
  *          清空后回到用户原来的折叠状态（集合本身没被改动过）。
  */
@@ -48,7 +47,7 @@ export function levelLabel(level: SkillLevel): string {
   return t("skills.root.project");
 }
 
-/* ---------------- 目录标签与目录筛选 ---------------- */
+/* ---------------- 目录标签 ---------------- */
 
 /** 技能目录的短名：最后一个 skills 段之前的那一段；没有就取最后一段。 */
 export function dirTagText(path: string): string {
@@ -63,41 +62,6 @@ export function dirTagText(path: string): string {
     break;
   }
   return segments[segments.length - 1]!;
-}
-
-export interface DirOption {
-  /** 筛选值 = 技能目录的 rootId */
-  rootId: string;
-  level: SkillLevel;
-  tag: string;
-  /** 该目录下的技能总数（不受搜索 / 筛选影响） */
-  count: number;
-  /** 完整路径（悬停提示） */
-  title: string;
-}
-
-/**
- * 目录筛选的选项：DSH 会加载的全部技能目录（存在的目录，含空目录；不存在但列表里有技能的也算），
- * 按层级（LEVELS 顺序）再按短名排序。
- */
-export function dirOptions(list: Pick<ListResult, "roots" | "skills">): DirOption[] {
-  const counts = new Map<string, number>();
-  for (const skill of list.skills) counts.set(skill.rootId, (counts.get(skill.rootId) ?? 0) + 1);
-  const options = list.roots
-    .filter((root) => root.exists || (counts.get(root.rootId) ?? 0) > 0)
-    .map((root) => ({
-      rootId: root.rootId,
-      level: levelOfRoot(root),
-      tag: dirTagText(root.path),
-      count: counts.get(root.rootId) ?? 0,
-      title: root.path,
-    }));
-  return options.sort(
-    (left, right) =>
-      LEVELS.indexOf(left.level) - LEVELS.indexOf(right.level) ||
-      left.tag.localeCompare(right.tag) ||
-      left.rootId.localeCompare(right.rootId),
-  );
 }
 
 /** rootId → 目录标签（行上用）。 */
@@ -148,8 +112,6 @@ export interface TreeInput {
   query: string;
   filter: FilterId;
   context?: MatchContext;
-  /** 目录筛选（rootId）；"" = 全部目录 */
-  dir?: string;
   /** 来源表；undefined = 来源数据不可用（远程模块降级 / 请求失败 / 还没加载完） */
   sources?: Readonly<Record<string, SourceEntry>>;
   /** 当前会话有没有工作区 */
@@ -164,15 +126,15 @@ export function defaultExpanded(key: string): boolean {
   return key !== levelKey("builtin");
 }
 
-export function isFiltering(query: string, filter: FilterId, dir: string | undefined): boolean {
-  return query.trim() !== "" || filter !== "all" || (dir ?? "") !== "";
+export function isFiltering(query: string, filter: FilterId): boolean {
+  return query.trim() !== "" || filter !== "all";
 }
 
 /**
- * 当前这一次筛选的标识（kit/fold.ts 的 scope）：不筛选时是 ""；搜索词、状态筛选、目录筛选任何一项变了，标识就变。
+ * 当前这一次筛选的标识（kit/fold.ts 的 scope）：不筛选时是 ""；搜索词或状态筛选变了，标识就变。
  */
-export function filterKeyOf(query: string, filter: FilterId, dir: string | undefined): string {
-  return isFiltering(query, filter, dir) ? [query.trim().toLowerCase(), filter, dir ?? ""].join("\u0000") : "";
+export function filterKeyOf(query: string, filter: FilterId): string {
+  return isFiltering(query, filter) ? [query.trim().toLowerCase(), filter].join("\u0000") : "";
 }
 
 function repoGroups(
@@ -201,14 +163,11 @@ function repoGroups(
  */
 export function buildSkillTree(input: TreeInput): TreeView {
   const { list } = input;
-  const dir = input.dir ?? "";
-  const filtering = isFiltering(input.query, input.filter, dir);
+  const filtering = isFiltering(input.query, input.filter);
   const rootById = new Map(list.roots.map((root) => [root.rootId, root]));
   const levelOf = (skill: SkillSummary): SkillLevel =>
     levelOfRoot(rootById.get(skill.rootId) ?? { rootId: skill.rootId, path: skill.path });
-  const kept = list.skills.filter(
-    (skill) => matches(skill, input.query, input.filter, input.context) && (dir === "" || skill.rootId === dir),
-  );
+  const kept = list.skills.filter((skill) => matches(skill, input.query, input.filter, input.context));
 
   const levels: LevelView[] = [];
   for (const level of LEVELS) {
