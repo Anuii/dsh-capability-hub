@@ -1,7 +1,7 @@
 /**
  * session-guard.mjs：走查 / 截图脚本共用的会话守卫（只读会话存储）。
  *
- * 夹具全在 os.tmpdir() 下的临时目录里自建（zstdCompressSync 造日志、utimesSync 设修改时间），
+ * 夹具全在 os.tmpdir() 下的临时目录里自建（**多帧** zstdCompressSync 造日志、utimesSync 设修改时间），
  * **绝不读真实的 ~/.dsh**（AGENTS.md 硬规则 2）。
  */
 import assert from "node:assert/strict";
@@ -34,7 +34,15 @@ function makeRoot(): string {
   return mkdtempSync(join(tmpdir(), "session-guard-"));
 }
 
-/** 写一个会话目录：header 为头，events 追加在头后面；mtimeMs 决定「多久没动过」。 */
+/**
+ * 把若干行编成 DSH 真实存储那样的**多帧** zstd：每行一帧，首尾相接。
+ * （真实会话是一批事件一帧，一个会话上百帧；单帧夹具会掩盖「只解第一帧」的 bug。）
+ */
+function multiFrame(lines: string[]): Buffer {
+  return Buffer.concat(lines.map((line) => zstdCompressSync(Buffer.from(line + "\n", "utf8"))));
+}
+
+/** 写一个会话目录：header 为头，events 追加在头后面（每行一帧）；mtimeMs 决定「多久没动过」。 */
 function writeSession(root: string, workspace: string, id: string, options: SessionOptions = {}): string {
   const {
     header = { type: "session", version: 4, id, cwd: "C:\\work", delegationDepth: 0 },
@@ -45,7 +53,7 @@ function writeSession(root: string, workspace: string, id: string, options: Sess
   mkdirSync(dir, { recursive: true });
   const lines = [JSON.stringify(header), ...events.map((event) => JSON.stringify(event))];
   const file = join(dir, SESSION_FILE);
-  writeFileSync(file, zstdCompressSync(Buffer.from(lines.join("\n"), "utf8")));
+  writeFileSync(file, multiFrame(lines));
   const stamp = new Date(mtimeMs);
   utimesSync(file, stamp, stamp);
   return file;
@@ -239,7 +247,7 @@ describe("session-guard: pickViewTarget", () => {
       const dir = join(root, "--w--", "session-badhead11");
       mkdirSync(dir, { recursive: true });
       const file = join(dir, SESSION_FILE);
-      writeFileSync(file, zstdCompressSync(Buffer.from("{ not json\n" + JSON.stringify(turnStart), "utf8")));
+      writeFileSync(file, multiFrame(["{ not json", JSON.stringify(turnStart)]));
       const stamp = new Date(NOW - 2 * HOUR);
       utimesSync(file, stamp, stamp);
       assert.equal(pick(root), undefined);
@@ -260,16 +268,70 @@ describe("session-guard: pickViewTarget", () => {
       const file = join(dir, SESSION_FILE);
       writeFileSync(
         file,
-        zstdCompressSync(
-          Buffer.from(
-            JSON.stringify({ type: "session", version: 4, delegationDepth: 0 }) + "\n" + '{"note":"turn/start"',
-            "utf8",
-          ),
-        ),
+        multiFrame([JSON.stringify({ type: "session", version: 4, delegationDepth: 0 }), '{"note":"turn/start"']),
       );
       const stamp = new Date(NOW - 2 * HOUR);
       utimesSync(file, stamp, stamp);
       assert.equal(pick(root), undefined);
+    });
+  });
+
+  it("turn/start 在后面的帧里也能找到（真实会话是多帧 zstd）", () => {
+    withRoot((root) => {
+      // 头一帧，中间一堆事件帧，turn/start 只在最后一帧 —— 只解第一帧会误判成「空白会话」。
+      const dir = join(root, "--w--", "session-late1111");
+      mkdirSync(dir, { recursive: true });
+      const file = join(dir, SESSION_FILE);
+      writeFileSync(
+        file,
+        multiFrame([
+          JSON.stringify({ type: "session", version: 4, delegationDepth: 0 }),
+          JSON.stringify({ type: "user/message", text: "a" }),
+          JSON.stringify({ type: "assistant/message", text: "b" }),
+          JSON.stringify({ type: "user/message", text: "c" }),
+          JSON.stringify(turnStart),
+        ]),
+      );
+      const stamp = new Date(NOW - 2 * HOUR);
+      utimesSync(file, stamp, stamp);
+      assert.equal(pick(root), "session-late1111");
+    });
+  });
+
+  it("多帧但没有 turn/start 的仍不选", () => {
+    withRoot((root) => {
+      const dir = join(root, "--w--", "session-multiblank");
+      mkdirSync(dir, { recursive: true });
+      const file = join(dir, SESSION_FILE);
+      writeFileSync(
+        file,
+        multiFrame([
+          JSON.stringify({ type: "session", version: 4, delegationDepth: 0 }),
+          JSON.stringify({ type: "session/end-seed" }),
+          JSON.stringify({ type: "user/message", text: "a" }),
+        ]),
+      );
+      const stamp = new Date(NOW - 2 * HOUR);
+      utimesSync(file, stamp, stamp);
+      assert.equal(pick(root), undefined);
+    });
+  });
+
+  it("中间夹一段不是合法帧的魔数字节时照样能解出其余帧", () => {
+    withRoot((root) => {
+      const dir = join(root, "--w--", "session-fakemagic");
+      mkdirSync(dir, { recursive: true });
+      const file = join(dir, SESSION_FILE);
+      const head = zstdCompressSync(
+        Buffer.from(JSON.stringify({ type: "session", version: 4, delegationDepth: 0 }) + "\n"),
+      );
+      const tail = zstdCompressSync(Buffer.from(JSON.stringify(turnStart) + "\n"));
+      // 28 B5 2F FD 只是恰好出现的字节，后面跟的不是真帧；解不动要跳过，不能挡住后面的真帧。
+      const fakeMagic = Buffer.from([0x28, 0xb5, 0x2f, 0xfd, 0x00, 0x01, 0x02, 0x03]);
+      writeFileSync(file, Buffer.concat([head, fakeMagic, tail]));
+      const stamp = new Date(NOW - 2 * HOUR);
+      utimesSync(file, stamp, stamp);
+      assert.equal(pick(root), "session-fakemagic");
     });
   });
 

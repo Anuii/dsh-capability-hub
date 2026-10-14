@@ -7,7 +7,7 @@
  * 共用同一份会话存储，新建的会话会出现在使用者真实的会话列表里（AGENTS.md 硬规则 3）。
  *
  * 会话存储布局：<DSH_HOME 或 ~/.dsh>/sessions/<工作区目录名>/<session-…>/session.v4.jsonl.zstd
- * （zstd 压缩的 JSONL；第一行是 {"type":"session","version":4,…,"delegationDepth":0,…} 的头）。
+ * （JSONL，**多帧** zstd 压缩；第一帧的头是 {"type":"session","version":4,…,"delegationDepth":0,…}）。
  *
  * 本模块的键一律用 "/" 连接「工作区目录名」与「会话目录名」，与磁盘上的路径分隔符无关。
  */
@@ -27,6 +27,8 @@ const SESSION_ID_HEAD = 8;
 /** 打印时工作区目录名保留的头 / 尾字符数（中间是被替换掉的绝对路径）。 */
 const WORKSPACE_HEAD = 4;
 const WORKSPACE_TAIL = 7;
+/** zstd 帧魔数：28 B5 2F FD。 */
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
 
 /**
  * 会话存储的根目录：<DSH_HOME 或 ~/.dsh>/sessions。
@@ -119,6 +121,40 @@ export function redactSession(key) {
 }
 
 /**
+ * 解出会话日志的全部文本。
+ *
+ * DSH 的 session.v4.jsonl.zstd 是**多个 zstd 帧首尾相接**（每追加一批事件写一帧，一个真实会话可能上百帧），
+ * 而 zstdDecompressSync 与 createZstdDecompress 流都**只解第一帧**（于是只剩会话头，turn/start 全看不见）。
+ * 所以按魔数找出每个帧的起点，对每个起点单独解（它解完这一帧就停），再把各帧文本按顺序拼起来；
+ * 某个起点解不动就跳过（魔数字节可能只是恰好出现在压缩数据里）。
+ *
+ * @param {string} file
+ * @returns {string} 全部帧的文本；一帧都解不出时是空串
+ */
+function readSessionText(file) {
+  let buffer;
+  try {
+    buffer = readFileSync(file);
+  } catch {
+    return "";
+  }
+  let text = "";
+  let at = buffer.indexOf(ZSTD_MAGIC);
+  while (at !== -1) {
+    try {
+      const part = zstdDecompressSync(buffer.subarray(at)).toString("utf8");
+      // 帧尾通常带换行；万一没有，补一个，免得两帧的行粘成一条坏 JSON。
+      if (text !== "" && !text.endsWith("\n") && part !== "") text += "\n";
+      text += part;
+    } catch {
+      // 不是真帧，跳过
+    }
+    at = buffer.indexOf(ZSTD_MAGIC, at + 1);
+  }
+  return text;
+}
+
+/**
  * 这个会话能不能安全地当初始视图：头是 session、delegationDepth 为 0、日志里出现过 turn/start。
  * 解压或头解析失败一律当不能用。
  *
@@ -126,12 +162,8 @@ export function redactSession(key) {
  * @returns {boolean}
  */
 function isReusableSession(file) {
-  let text;
-  try {
-    text = zstdDecompressSync(readFileSync(file)).toString("utf8");
-  } catch {
-    return false;
-  }
+  const text = readSessionText(file);
+  if (text === "") return false;
   const lines = text.split("\n");
   let header;
   try {
