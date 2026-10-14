@@ -272,9 +272,28 @@ export const zh = {
   "skills.remote.menu.checking": "正在检查…",
   "skills.remote.menu.updateAll": "全部更新（{count}）",
   "skills.remote.menu.applying": "正在更新…",
+  "skills.remote.menu.mirror": "GitHub 镜像…",
+  "skills.remote.menu.mirrorSet": "GitHub 镜像：{host}",
   "skills.remote.menu.trash": "回收站",
   "skills.remote.menu.trashCount": "回收站（{count}）",
   "skills.remote.menu.workspaceNone": "没有当前会话工作区，不显示项目级技能",
+
+  /* ---- 远程 · GitHub 镜像（D-B18）---- */
+  "skills.remote.mirror.title": "GitHub 镜像",
+  "skills.remote.mirror.body":
+    "从 GitHub 下载技能文件（安装、更新）时经过这个镜像。检查更新走 GitHub 接口，不经过镜像。镜像能看到并改动下载内容，请只用你信任的镜像；走镜像时不会发送 GitHub 令牌。",
+  "skills.remote.mirror.label": "镜像地址（前缀）",
+  "skills.remote.mirror.placeholder": "https://ghfast.top/",
+  "skills.remote.mirror.emptyHint": "留空保存即清除镜像，改为直连 GitHub。",
+  "skills.remote.mirror.test": "测试",
+  "skills.remote.mirror.testing": "测试中…",
+  "skills.remote.mirror.testOk": "可用 · {ms} 毫秒",
+  "skills.remote.mirror.testOkNoMs": "可用",
+  "skills.remote.mirror.testFailed": "不可用。",
+  "skills.remote.mirror.save": "保存",
+  "skills.remote.mirror.saving": "保存中…",
+  "skills.remote.mirror.saved": "已保存 GitHub 镜像",
+  "skills.remote.mirror.cleared": "已清除 GitHub 镜像，改为直连 GitHub",
 
   "skills.remote.bar.checkSummary": "检查完成：有更新 {available} · 最新 {upToDate} · 无来源 {noSource} · 出错 {error}",
   "skills.remote.bar.updateSummary": "更新完成：成功 {ok} · 失败 {failed}",

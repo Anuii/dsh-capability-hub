@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SKILLS_CSS } from "../../../src/skills/client/styles.ts";
+import { zh } from "../../../src/skills/client/strings.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const skillsDir = path.resolve(here, "..", "..", "..", "src", "skills", "client");
@@ -47,16 +48,41 @@ test("GitHub 凭据与配额不在详情里出现", () => {
   assert.equal(/github-auth|loadAuth/.test(update), false, "更新那一段不再去问凭据");
 });
 
-test("「⋯」菜单里没有 GitHub 凭据项，只剩两个远程动作", () => {
+test("「⋯」菜单里没有 GitHub 凭据项，远程动作是三个（含 GitHub 镜像…）", () => {
   const batch = fs.readFileSync(path.join(skillsDir, "remote", "batch.tsx"), "utf8");
   const index = fs.readFileSync(path.join(skillsDir, "index.tsx"), "utf8");
-  // 菜单项由 batch.tsx 的 items 产出；id 集合必须正好是这两个
-  assert.deepEqual([...batch.matchAll(/id: "([a-z-]+)"/g)].map((m) => m[1]).sort(), ["check-all", "update-all"]);
+  // 菜单项由 batch.tsx 的 items 产出：检查全部更新 → 全部更新 → GitHub 镜像…（顺序即数组顺序）
+  assert.deepEqual(
+    [...batch.matchAll(/id: "([a-z-]+)"/g)].map((m) => m[1]),
+    ["check-all", "update-all", "mirror"],
+  );
   assert.equal(/authItem/.test(batch + index), false, "只读信息项 authItem 已删除");
   assert.equal(/github-auth|authModeLabel|loadAuth/.test(batch + index), false, "客户端不再为它取凭据");
   assert.equal(/id: "github"/.test(batch + index), false);
   // 「回收站」仍由 index.tsx 接在动作项后面
   assert.ok(index.includes('id: "trash"'));
+});
+
+test("「GitHub 镜像…」对话框：testid 齐全，说明句覆盖三层意思", () => {
+  const dialog = fs.readFileSync(path.join(skillsDir, "remote", "mirror-dialog.tsx"), "utf8");
+  for (const id of [
+    "skills-mirror-dialog",
+    "skills-mirror-input",
+    "skills-mirror-test",
+    "skills-mirror-save",
+    "skills-mirror-result",
+    "skills-mirror-cancel",
+  ]) {
+    assert.ok(dialog.includes('"' + id + '"'), "对话框缺少 data-testid：" + id);
+  }
+  // 菜单项的 testid（走查脚本按它点开对话框）
+  const batch = fs.readFileSync(path.join(skillsDir, "remote", "batch.tsx"), "utf8");
+  assert.ok(batch.includes('testId: "skills-remote-mirror"'));
+  // 三层意思：只作用于下载 / 检查更新不走镜像 / 镜像可见可改且不带令牌
+  const body = zh["skills.remote.mirror.body"];
+  assert.ok(body.includes("下载"));
+  assert.ok(body.includes("检查更新"));
+  assert.ok(body.includes("令牌"));
 });
 
 test("有来源时才渲染更新那一段", () => {

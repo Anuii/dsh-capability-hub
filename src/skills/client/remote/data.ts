@@ -8,6 +8,7 @@
 
 import { api } from "../../../platform/client/api.ts";
 import { listSkills, workspaceQuery } from "../data.ts";
+import type { MirrorAdapter } from "./mirror-model.ts";
 import type { RepoViewAdapter } from "./repo-view-store.ts";
 import type {
   BrowseResult,
@@ -15,9 +16,11 @@ import type {
   DiscoveryRepoView,
   InstallItemResult,
   InstallTarget,
+  MirrorTestResult,
   RepoChange,
   RepoRecord,
   SearchResultItem,
+  SkillsRemoteSettings,
   SourceEntry,
   UpdateApplyResult,
   UpdateCheckResult,
@@ -201,6 +204,45 @@ export async function installSkills(input: InstallInput, workspace: string | und
   const data = await api.post<{ results?: InstallItemResult[] }>("skills/install", withWorkspace(body, workspace));
   return Array.isArray(data?.results) ? data.results : [];
 }
+
+/* ---------------- GitHub 镜像设置（D-B18） ---------------- */
+
+/** GET skills/settings → 只读设置（读不到镜像时只有 version）。 */
+export async function fetchSettings(): Promise<SkillsRemoteSettings> {
+  const data = await api.get<Partial<SkillsRemoteSettings>>("skills/settings");
+  const settings: SkillsRemoteSettings = { version: typeof data?.version === "number" ? data.version : 0 };
+  if (typeof data?.githubMirror === "string" && data.githubMirror.trim() !== "") {
+    settings.githubMirror = data.githubMirror.trim();
+  }
+  return settings;
+}
+
+/** POST skills/settings { githubMirror } → 保存后的设置（空串 = 清除；非法地址抛 422）。 */
+export async function saveSettings(githubMirror: string): Promise<SkillsRemoteSettings> {
+  const data = await api.post<Partial<SkillsRemoteSettings>>("skills/settings", { githubMirror });
+  const settings: SkillsRemoteSettings = { version: typeof data?.version === "number" ? data.version : 0 };
+  if (typeof data?.githubMirror === "string" && data.githubMirror.trim() !== "") {
+    settings.githubMirror = data.githubMirror.trim();
+  }
+  return settings;
+}
+
+/** POST skills/settings/test-mirror { githubMirror } → { ok, ms?, message? }（不保存；失败不抛错）。 */
+export async function testMirror(githubMirror: string): Promise<MirrorTestResult> {
+  const data = await api.post<Partial<MirrorTestResult>>("skills/settings/test-mirror", { githubMirror });
+  return {
+    ok: data?.ok === true,
+    ...(typeof data?.ms === "number" ? { ms: data.ms } : {}),
+    ...(typeof data?.message === "string" ? { message: data.message } : {}),
+  };
+}
+
+/** 「GitHub 镜像」对话框（mirror-model.ts）的 HTTP adapter。 */
+export const mirrorApi: MirrorAdapter = {
+  load: fetchSettings,
+  save: saveSettings,
+  test: testMirror,
+};
 
 /* ---------------- 仓库视图的 adapter ---------------- */
 

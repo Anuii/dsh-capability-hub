@@ -170,6 +170,7 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
   const counts = filterCounts(skills, context);
   const detail = detailId === undefined ? undefined : skills.find((skill) => skill.id === detailId);
 
+  // 顺序：远程的三个动作（检查全部更新 / 全部更新 / GitHub 镜像…）→ 分隔线 → 回收站 → 只读信息行
   const more: MenuItem[] = [
     ...remote.items,
     {
