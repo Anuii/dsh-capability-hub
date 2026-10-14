@@ -1,37 +1,27 @@
 /**
- * view-model.ts 的纯逻辑单测：一行服务器的摘要、状态点、副标题、缓存，筛选与计数，排序，时间与时长。
+ * view-model.ts 的纯逻辑单测：一行服务器的摘要、状态点、副标题、状态文字，筛选与计数，排序。
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compactSummaryText, isPathLike, shortPart } from "../../../src/mcp/client/view-model.ts";
 import {
-  activeInstanceCount,
-  cacheLineText,
-  cachedToolNames,
-  cooldownRemainingMs,
-  formatClock,
-  formatDuration,
+  compactSummaryText,
+  isPathLike,
   matchesFilter,
   matchesQuery,
+  reorderNames,
   rowSubtitleText,
   runtimeIndex,
-  formatTimestamp,
-  lifecycleLabel,
-  reorderNames,
+  scopeLabel,
   serverFilterCounts,
   serverStatusTone,
   serverSummaryText,
+  shortPart,
+  stateText,
   statusTitle,
   viewSummaryText,
   visibleServers,
 } from "../../../src/mcp/client/view-model.ts";
-import { makeServerView } from "./fixtures.ts";
-
-/* ---------------- UI-B：列表筛选 / 状态点 / 副标题 ---------------- */
-
-const NOW = 1_760_000_000_000;
-
-/* ---------------- 排序 ---------------- */
+import { makeRow, makeRuntime, makeServerView } from "./fixtures.ts";
 
 test("reorderNames（拖动排序）", () => {
   const names = ["a", "b", "c"];
@@ -40,46 +30,35 @@ test("reorderNames（拖动排序）", () => {
   assert.deepEqual(names, ["a", "b", "c"], "原数组不能被改动");
 });
 
-/* ---------------- 展示 ---------------- */
-
-test("serverSummaryText 与 viewSummaryText", () => {
+test("serverSummaryText 与 viewSummaryText；scopeLabel", () => {
   assert.equal(serverSummaryText({ transport: "stdio", command: "node", args: ["-y", "pkg"] }), "node -y pkg");
   assert.equal(serverSummaryText({ transport: "stdio" }).length > 0, true);
   assert.equal(serverSummaryText({ transport: "streamable-http", url: "https://x/y" }), "https://x/y");
   assert.equal(viewSummaryText(makeServerView({ args: ["a"] })), "node a");
+  assert.match(scopeLabel("global"), /全局一份/);
+  assert.match(scopeLabel("session"), /按会话/);
 });
 
-test("lifecycleLabel / formatTimestamp", () => {
-  assert.equal(lifecycleLabel("eager").startsWith("eager"), true);
-  assert.equal(lifecycleLabel("lazy-keep-alive").startsWith("lazy-keep-alive"), true);
-  assert.equal(lifecycleLabel("nonsense").startsWith("lazy"), true);
-  assert.equal(formatTimestamp(0).length, 16);
-  assert.equal(formatTimestamp(undefined), "");
+test("matchesFilter：全部 / 已启用 / 已停用 / 有错误（连接失败或未连接；停用的不算）", () => {
+  const on = makeServerView({ serverName: "on" });
+  const off = makeServerView({ serverName: "off", disabled: true });
+  const failed = makeRow({ name: "on", state: "failed", tools: [], error: "x" });
+  const lost = makeRow({ name: "on", state: "disconnected", tools: [] });
+  assert.equal(matchesFilter(on, undefined, "all"), true);
+  assert.equal(matchesFilter(on, undefined, "enabled"), true);
+  assert.equal(matchesFilter(off, undefined, "disabled"), true);
+  assert.equal(matchesFilter(on, makeRow({ name: "on" }), "failing"), false);
+  assert.equal(matchesFilter(on, failed, "failing"), true);
+  assert.equal(matchesFilter(on, lost, "failing"), true);
+  assert.equal(matchesFilter(off, failed, "failing"), false);
 });
 
-test("matchesFilter：全部 / 已启用 / 已停用 / 有错误", () => {
-  const enabled = makeServerView({ serverName: "a" });
-  const disabled = makeServerView({ serverName: "b", disabled: true });
-  const failing = makeServerView({ serverName: "c", setFields: ["serverName", "transport", "command"] });
-  const rows = new Map([["c", { name: "c", disabled: false, lastFailure: { message: "启动失败", at: NOW } }]]);
-  assert.equal(matchesFilter(enabled, undefined, "all"), true);
-  assert.equal(matchesFilter(disabled, undefined, "enabled"), false);
-  assert.equal(matchesFilter(disabled, undefined, "disabled"), true);
-  assert.equal(matchesFilter(failing, rows.get("c"), "failing"), true);
-  assert.equal(matchesFilter(enabled, undefined, "failing"), false);
-});
-
-test("matchesQuery：名称 / 命令 / 描述 / 标签，大小写不敏感", () => {
-  const view = makeServerView({
-    serverName: "Demo",
-    args: ["-y", "pkg"],
-    meta: { description: "本地回显", tags: ["走查"] },
-  });
+test("matchesQuery：名称 / 命令 / 描述，大小写不敏感", () => {
+  const view = makeServerView({ serverName: "GitHub", args: ["server.js"], meta: { description: "Issues 与 PR" } });
   assert.equal(matchesQuery(view, ""), true);
-  assert.equal(matchesQuery(view, "demo"), true);
-  assert.equal(matchesQuery(view, "node"), true);
-  assert.equal(matchesQuery(view, "回显"), true);
-  assert.equal(matchesQuery(view, "走查"), true);
+  assert.equal(matchesQuery(view, "github"), true);
+  assert.equal(matchesQuery(view, "SERVER.JS"), true);
+  assert.equal(matchesQuery(view, "issues"), true);
   assert.equal(matchesQuery(view, "nope"), false);
 });
 
@@ -89,127 +68,59 @@ test("serverFilterCounts / visibleServers：计数与搜索筛选一致", () => 
     makeServerView({ serverName: "b", disabled: true }),
     makeServerView({ serverName: "c" }),
   ];
-  const rows = new Map([["c", { name: "c", disabled: false, lastFailure: { message: "启动失败", at: NOW } }]]);
+  const rows = runtimeIndex(makeRuntime([makeRow({ name: "a" }), makeRow({ name: "c", state: "failed", tools: [] })]));
   assert.deepEqual(serverFilterCounts(servers, rows), { all: 3, enabled: 2, disabled: 1, failing: 1 });
   assert.deepEqual(
-    visibleServers(servers, rows, "", "disabled").map((view) => view.serverName),
-    ["b"],
-  );
-  assert.deepEqual(
-    visibleServers(servers, rows, "c", "all").map((view) => view.serverName),
+    visibleServers(servers, rows, "", "failing").map((s) => s.serverName),
     ["c"],
   );
   assert.deepEqual(
-    visibleServers(servers, rows, "c", "failing").map((view) => view.serverName),
-    ["c"],
+    visibleServers(servers, rows, "a", "all").map((s) => s.serverName),
+    ["a"],
   );
-  assert.deepEqual(visibleServers(servers, rows, "c", "disabled"), []);
 });
 
-test("serverStatusTone：冷却 > 失败 > 有活跃实例 > 空闲", () => {
-  const cooling = {
-    name: "x",
-    disabled: false,
-    lastFailure: { message: "启动失败", at: NOW, cooldownUntil: NOW + 30_000 },
-  };
-  assert.equal(serverStatusTone(cooling, 2, NOW), "cooling");
-  assert.equal(serverStatusTone(cooling, 2, NOW + 30_000), "failed");
-  assert.equal(
-    serverStatusTone({ name: "x", disabled: false, lastFailure: { message: "启动失败", at: NOW } }, 0, NOW),
-    "failed",
-  );
-  assert.equal(serverStatusTone(undefined, 1, NOW), "active");
-  assert.equal(serverStatusTone(undefined, 0, NOW), "idle");
+test("serverStatusTone / statusTitle：连接中琥珀、出错红、已连接或有会话挂着强调色、其余灰", () => {
+  const view = makeServerView({ serverName: "a" });
+  assert.equal(serverStatusTone(view, undefined), "idle");
+  assert.equal(serverStatusTone(makeServerView({ disabled: true }), makeRow({ name: "a" })), "idle");
+  assert.equal(serverStatusTone(view, makeRow({ name: "a", state: "connecting" })), "cooling");
+  assert.equal(serverStatusTone(view, makeRow({ name: "a", state: "failed" })), "failed");
+  assert.equal(serverStatusTone(view, makeRow({ name: "a", state: "disconnected" })), "failed");
+  assert.equal(serverStatusTone(view, makeRow({ name: "a" })), "active");
+  assert.equal(serverStatusTone(view, makeRow({ name: "a", state: "session", sessions: 0 })), "idle");
+  assert.equal(serverStatusTone(view, makeRow({ name: "a", state: "session", sessions: 2 })), "active");
   assert.equal(statusTitle("idle"), undefined);
-  assert.equal(typeof statusTitle("active"), "string");
-  assert.equal(typeof statusTitle("failed"), "string");
-  assert.equal(typeof statusTitle("cooling"), "string");
+  assert.equal(statusTitle("active"), "已连接");
+  assert.equal(statusTitle("failed"), "连接失败");
+  assert.equal(statusTitle("cooling"), "正在连接");
 });
 
-test("cooldownRemainingMs / formatDuration：倒计时随 now 递减，冷却结束为 0", () => {
-  const failure = { message: "启动失败", at: NOW, cooldownUntil: NOW + 47_000 };
-  assert.equal(cooldownRemainingMs(failure, NOW), 47_000);
-  assert.equal(cooldownRemainingMs(failure, NOW + 47_000), 0);
-  assert.equal(cooldownRemainingMs(undefined, NOW), 0);
-  assert.equal(formatDuration(65_000), "1 分 05 秒");
-  assert.equal(formatDuration(999), "0 秒");
-  assert.equal(formatDuration(3_900_000), "1 小时 05 分");
+test("rowSubtitleText：命令 / 地址 + 「· N 个工具」或「· 按会话」；没连上或停用时只有命令", () => {
+  const view = makeServerView({ serverName: "a", args: ["x.js"] });
+  assert.equal(rowSubtitleText(view, undefined), "node x.js");
+  assert.equal(rowSubtitleText(view, makeRow({ name: "a" })), "node x.js · 2 个工具");
+  assert.equal(rowSubtitleText(view, makeRow({ name: "a", state: "session", tools: [] })), "node x.js · 按会话");
+  assert.equal(rowSubtitleText(view, makeRow({ name: "a", state: "failed", tools: [] })), "node x.js");
   assert.equal(
-    cooldownRemainingMs({ message: "x", at: NOW, cooldownUntil: NOW + 1000 }, NOW + 60_000),
-    0,
-    "时钟回拨 / 已过期一律夹到 0",
-  );
-  assert.equal(cooldownRemainingMs({ message: "x", at: NOW }, NOW), 0, "cooldownUntil 缺失 = 冷却已结束");
-});
-
-test("rowSubtitleText：命令 / 地址 + 「· N 个工具」（没有缓存时省略）", () => {
-  const view = makeServerView({ args: ["-y", "pkg"] });
-  assert.equal(rowSubtitleText(view, undefined), "node -y pkg");
-  assert.equal(
-    rowSubtitleText(view, {
-      name: "demo",
-      disabled: false,
-      cache: { toolCount: 4, updatedAt: NOW, stale: false, tools: [] },
-    }),
-    "node -y pkg · 4 个工具",
-  );
-  assert.equal(
-    rowSubtitleText(makeServerView({ transport: "streamable-http", url: "https://x/y" }), undefined),
-    "https://x/y",
+    rowSubtitleText(makeServerView({ disabled: true, args: ["x.js"] }), makeRow({ name: "a" })),
+    "node x.js",
   );
 });
 
-test("cacheLineText / cachedToolNames：抽屉「工具」小节", () => {
-  assert.equal(cacheLineText(undefined), "还没有工具缓存：保存或刷新后会自动探测一次，探测到的工具随即注册给模型");
-  const row = {
-    name: "demo",
-    disabled: false,
-    cache: { toolCount: 2, updatedAt: NOW, stale: true, tools: [{ name: "echo" }, { name: "slow" }] },
-  };
-  assert.equal(cacheLineText(row).includes("缓存 2 个工具"), true);
-  assert.equal(cacheLineText(row).includes("缓存已过期"), true);
-  assert.deepEqual(cachedToolNames(row), ["echo", "slow"], "老宿主没给 exposedAs 时退回原名");
-  const exposed = {
-    ...row,
-    cache: {
-      ...row.cache,
-      tools: [
-        { name: "echo", exposedAs: "mcp__demo__echo" },
-        { name: "slow", exposedAs: "mcp__demo__slow" },
-      ],
-    },
-  };
-  assert.deepEqual(cachedToolNames(exposed), ["mcp__demo__echo", "mcp__demo__slow"], "列模型看到的名字");
-  assert.deepEqual(cachedToolNames(undefined), []);
-  assert.deepEqual(
-    cachedToolNames({
-      name: "demo",
-      disabled: false,
-      cache: { toolCount: 1, updatedAt: NOW, stale: false, tools: [] },
-    }),
-    [],
+test("stateText：抽屉「工具」一节的状态文字", () => {
+  const view = makeServerView({ serverName: "a" });
+  assert.match(stateText(makeServerView({ disabled: true }), makeRow({ name: "a" })), /已停用/);
+  assert.match(stateText(view, undefined), /还没读到/);
+  assert.match(stateText(view, makeRow({ name: "a", state: "connecting" })), /正在连接/);
+  assert.match(stateText(view, makeRow({ name: "a" })), /已连接 · 2 个工具/);
+  assert.match(stateText(view, makeRow({ name: "a", state: "disconnected" })), /未连接/);
+  assert.match(
+    stateText(view, makeRow({ name: "a", state: "failed", error: "spawn ENOENT" })),
+    /连接失败：spawn ENOENT/,
   );
-});
-
-test("activeInstanceCount / runtimeIndex：从运行态会话里数实例", () => {
-  const inst = (server: string) => ({ server, state: "ready", startedAt: NOW, lastUsedAt: NOW });
-  const runtime = {
-    servers: [{ name: "demo", disabled: false }],
-    sessions: [
-      { sessionId: "s1", instances: [inst("demo"), inst("other")] },
-      { sessionId: "s2", instances: [inst("demo")] },
-    ],
-  };
-  assert.equal(activeInstanceCount(runtime, "demo"), 2);
-  assert.equal(activeInstanceCount(runtime, "nope"), 0);
-  assert.equal(activeInstanceCount(undefined, "demo"), 0);
-  assert.deepEqual([...runtimeIndex(runtime).keys()], ["demo"]);
-});
-
-test("formatClock：本地 HH:mm", () => {
-  assert.match(formatClock(NOW), /^\d{2}:\d{2}$/);
-  assert.equal(formatClock(undefined), "");
-  assert.equal(formatClock(0), "");
+  assert.match(stateText(view, makeRow({ name: "a", state: "failed" })), /详见 DSH 日志/);
+  assert.match(stateText(view, makeRow({ name: "a", state: "session", sessions: 3 })), /当前 3 个会话已连接/);
 });
 
 test("列表行的紧凑命令：路径只留文件名，可执行文件去掉扩展名，包名与地址原样", () => {

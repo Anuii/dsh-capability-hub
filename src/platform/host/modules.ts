@@ -14,7 +14,8 @@
  */
 import type { HubContext } from "../contract/host.ts";
 import type { HubModule, RouteTable } from "../contract/host.ts";
-import type { SdkLoadState } from "./sdk-loader.ts";
+import type { McpClientLoadState } from "./mcp-client-loader.ts";
+import type { PluginScope, RegisteredTool } from "../../mcp/contract/runtime.ts";
 import type { YamlLoadState } from "./yaml-loader.ts";
 import { createMcpConfigModule } from "../../mcp/config/module.ts";
 import { createSkillsLocalModule } from "../../skills/local/module.ts";
@@ -166,41 +167,40 @@ export interface FeatureState {
   mcpRuntime?: ReturnType<typeof createMcpRuntimeModule>;
   /** skills-local ← skills-remote.lockStash 是否绑定成功。 */
   lockStashBound: boolean;
-  /** 后台工作（runtime.start()）是否已经无异常地跑起来。 */
-  runtimeStarted: boolean;
-  /** start() 的失败原因（成功时 undefined）。 */
-  runtimeStartError?: string;
   /** 接线过程中的中文说明（health 里可见）。 */
   notes: string[];
 }
 
 export function makeFeatureState(): FeatureState {
-  return { lockStashBound: false, runtimeStarted: false, notes: [] };
+  return { lockStashBound: false, notes: [] };
 }
 
 /**
  * 4 个真实模块的加载表（依赖顺序）：**mcp-config → skills-local → skills-remote
- * → lockStash 绑定 → mcp-runtime → runtime.start()**。
+ * → lockStash 绑定 → mcp-runtime**（运行时的 start() 由外壳在路由注册后调用）。
  *
  * 降级语义（D-F1「永不失败外壳」）：
  *   - 每个模块的 load 由 ModuleRegistry 独立 try/catch（同步抛与 rejected Promise 都算）；
  *   - 上游缺失时下游**主动抛错**，因此下游在 health 里显示 degraded 并带中文原因，
  *     而不是静默地半残废（例如 mcp-config 挂了，mcp-runtime 必然不可用）；
- *   - runtime.start() 只做后台工作（配置监听、空闲巡检、启动探测）。它失败**不摘模块**
- *     （三条路由与懒加载路径仍然可用），只在 FeatureState 里记原因并进 health。
  *   - LockStash 绑定失败同样只记原因：skills-local 的删除路径会退化成「lock 条目留在
  *     原处」，其余功能不受影响。
  */
 export function createFeatureModuleEntries(options: {
   ctx: HubContext;
-  sdk: SdkLoadState;
+  /** DSH 官方 MCP 插件（ADR-0010） */
+  mcpClient: McpClientLoadState;
+  /** 插件根作用域：全局一份的 MCP 服务器挂在这里 */
+  root: PluginScope;
+  /** 读插件根作用域里已注册的工具 */
+  listTools(): RegisteredTool[];
   /** DSH 自带的 yaml 库：技能模块解析 frontmatter 用（ADR-0006）。 */
   yaml: YamlLoadState;
   state: FeatureState;
   /** 调试开关：强制这些模块装载失败（降级验证用，见 devOverrides.failModules）。 */
   failModules?: string[];
 }): ModuleEntry[] {
-  const { ctx, sdk, yaml, state } = options;
+  const { ctx, mcpClient, yaml, state } = options;
   const log = ctx.logger;
   const forced = new Set(options.failModules ?? []);
 
@@ -262,28 +262,16 @@ export function createFeatureModuleEntries(options: {
         }
         const config = state.mcpConfig;
         if (config === undefined) {
-          throw new Error("依赖 mcp-config 未加载：缺少配置来源，运行态不可用");
+          throw new Error("依赖 mcp-config 未加载：缺少配置来源，MCP 服务器不会挂载");
         }
-        if (sdk.status !== "loaded") {
-          throw new Error("MCP SDK 未加载：" + sdk.message);
-        }
-        const mod = createMcpRuntimeModule(moduleCtx, { config: config.source, sdk: sdk.sdk });
+        if (mcpClient.status !== "loaded") throw new Error(mcpClient.message);
+        const mod = createMcpRuntimeModule(moduleCtx, {
+          config: config.source,
+          client: mcpClient.plugin,
+          root: options.root,
+          listTools: options.listTools,
+        });
         state.mcpRuntime = mod;
-        // start() 是 T3b 记录的「加法」：不调用它就只有懒加载路径，没有自动探测与空闲回收。
-        // 它是纯后台工作，fire-and-forget（绝不阻塞模块装载，也就不会拖住路由注册）。
-        void mod.start().then(
-          () => {
-            state.runtimeStarted = true;
-          },
-          (error: unknown) => {
-            state.runtimeStarted = false;
-            state.runtimeStartError = errorText(error);
-            state.notes.push("mcp-runtime.start() 失败：" + state.runtimeStartError);
-            log.warn(
-              "mcp-runtime.start() 失败（自动探测与空闲回收不可用，其余功能不受影响）：" + state.runtimeStartError,
-            );
-          },
-        );
         return mod as unknown as HubModule;
       },
     },

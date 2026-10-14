@@ -18,7 +18,7 @@ import { fetchHealth, type HealthPayload } from "./api.ts";
 import { t as tt } from "./strings.ts";
 import { useCurrentSession, type SessionsHook } from "./useCurrentWorkspace.ts";
 import { styles } from "./styles.ts";
-import { degradeInfo, degradeNames, hostVersionMismatch } from "./degrade.ts";
+import { degradeInfo, hostVersionMismatch } from "./degrade.ts";
 import { HUB_VERSION } from "../../version.ts";
 import { Banner, KitPreview, searchFlag } from "../../kit/index.ts";
 import { SkillsTab } from "../../skills/client/index.tsx";
@@ -123,23 +123,26 @@ function DiagnosticsBody(props: {
     rows.push([tt("env.home"), health.homeDir]);
     rows.push([tt("env.dshHome"), health.dshHome]);
     rows.push([tt("env.hubHome"), health.hubHome]);
+    const client = health.mcpClient;
     rows.push([
-      tt("env.sdk"),
-      health.sdk.status === "loaded"
-        ? "v" + (health.sdk.version ?? "?") + " — " + (health.sdk.mainResolved ?? "")
-        : "失败：" + (health.sdk.message ?? ""),
+      tt("env.mcpClient"),
+      client === undefined
+        ? "—"
+        : client.status === "loaded"
+          ? "v" + (client.version ?? "?")
+          : tt("status.degraded") + "：" + (client.message ?? ""),
     ]);
     rows.push([tt("env.modules"), health.modules.map((m) => m.name + "=" + m.status).join("，")]);
-    const mcpTools = health.tools;
+    const servers = health.mcpServers;
     rows.push([
-      tt("env.tool"),
-      mcpTools === undefined
+      tt("env.mcpServers"),
+      servers === undefined
         ? "—"
-        : mcpTools.error !== undefined
-          ? tt("status.degraded") + "：" + mcpTools.error
-          : tt("env.toolsCount", { count: mcpTools.registered.length }) +
-            (mcpTools.failed.length > 0 ? tt("env.toolsFailed", { count: mcpTools.failed.length }) : "") +
-            (mcpTools.prompt ? "" : tt("env.promptMissing")),
+        : tt("env.mcpServersCount", {
+            total: servers.length,
+            connected: servers.filter((server) => server.state === "connected").length,
+            tools: servers.reduce((sum, server) => sum + server.toolCount, 0),
+          }),
     ]);
   }
   rows.push([tt("env.workspace"), props.workspace ?? tt("env.workspaceNone")]);
@@ -162,7 +165,7 @@ function DiagnosticsBody(props: {
 }
 
 /**
- * 标签正文：两个标签各自在自己的目录里实现（src/skills/client|mcp；0.3.0 起运行态是 MCP 页底部的「运行中」区域），
+ * 标签正文：两个标签各自在自己的目录里实现（src/skills/client|mcp），
  * 外壳只负责按 TabProps 契约传值（见 tab-props.ts 与 docs/CLIENT-GUIDE.md 第 3 节）。
  */
 function TabBody({ tab, props }: { tab: PanelTab; props: TabProps }): React.ReactElement {
@@ -222,7 +225,6 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
   const staleHost = hostVersionMismatch(health, HUB_VERSION);
   const tabProps: TabProps = {
     workspace: current.workspace,
-    ...(current.sessionId === undefined ? {} : { sessionId: current.sessionId }),
     openTab: setTab,
     reportAttention,
   };
@@ -265,7 +267,7 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
               testId: "capability-hub-degraded-details",
             }}
           >
-            {tt("env.degraded", { modules: degradeNames(degrade, tt("env.mcpTool")).join("、") })}
+            {tt("env.degraded", { modules: degrade.degraded.join("、") })}
           </Banner>
         )}
         {preview ? (

@@ -11,7 +11,7 @@
 import { promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { emptyRawConfig, toEffectiveConfig } from "./schema.ts";
+import { emptyRawConfig, toEffectiveConfig, withoutDeprecated } from "./schema.ts";
 import type { RawMcpConfigFile } from "../contract/config.ts";
 import type { EffectiveMcpConfig, McpConfigSource } from "../contract/config.ts";
 import type { HubLogger } from "../../platform/contract/host.ts";
@@ -126,17 +126,13 @@ export function createMcpStore(hubHome: string, logger: HubLogger, opts: McpStor
     }
     const record = parsed as Record<string, unknown>;
     const rawServers = Array.isArray(record.servers) ? record.servers : [];
-    const settings =
-      record.settings && typeof record.settings === "object" && !Array.isArray(record.settings)
-        ? (record.settings as RawMcpConfigFile["settings"])
-        : {};
+    // 0.7.0：旧文件里的全局 settings 与废弃字段读到即丢（下次保存写回的文件里就没有了）
     return {
       raw: {
         version: 1,
-        settings,
-        servers: rawServers.filter(
-          (s) => s !== null && typeof s === "object" && !Array.isArray(s),
-        ) as RawMcpConfigFile["servers"],
+        servers: rawServers
+          .filter((s): s is Record<string, unknown> => s !== null && typeof s === "object" && !Array.isArray(s))
+          .map((s) => withoutDeprecated(s)),
       },
       mtime,
       warnings: notes,

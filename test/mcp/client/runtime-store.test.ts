@@ -1,150 +1,117 @@
 /**
- * runtime-store.ts：MCP 页运行状态的唯一读取处。用内存 adapter 与假计时器，通过仓库的接口测。
+ * runtime-store.ts：GET mcp/runtime 的唯一读取处——读取、静默刷新、重新连接后重读、保存后等连接结果、轮询。
  */
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  POLL_INTERVAL_MS,
-  PROBE_ATTEMPTS,
   createRuntimeStore,
   normalizeRuntimeStatus,
-  previewAdapter,
+  SETTLE_ATTEMPTS,
   type RuntimeAdapter,
   type RuntimeTimers,
 } from "../../../src/mcp/client/runtime-store.ts";
 import type { RuntimeStatus } from "../../../src/mcp/contract/runtime.ts";
+import { makeRow, makeRuntime } from "./fixtures.ts";
 
-const status = (toolCount?: number): RuntimeStatus => ({
-  servers: [
-    {
-      name: "demo",
-      disabled: false,
-      ...(toolCount === undefined ? {} : { cache: { toolCount, updatedAt: 1, stale: false, tools: [] } }),
+function fakeTimers() {
+  const ticks: (() => void)[] = [];
+  let hidden = false;
+  const timers: RuntimeTimers = {
+    every(_ms, run) {
+      ticks.push(run);
+      return () => {
+        const index = ticks.indexOf(run);
+        if (index >= 0) ticks.splice(index, 1);
+      };
     },
-  ],
-  sessions: [],
-});
+    sleep: async () => {},
+    hidden: () => hidden,
+  };
+  return { timers, ticks, setHidden: (value: boolean) => (hidden = value) };
+}
 
-/** 内存 adapter：按顺序吐出预设的结果（Error 表示这一次失败），并记下调用。 */
-function fakeAdapter(results: Array<RuntimeStatus | Error>): RuntimeAdapter & { calls: string[] } {
+function setup(sequence: (RuntimeStatus | Error)[]) {
   const calls: string[] = [];
   let index = 0;
-  return {
-    calls,
+  const adapter: RuntimeAdapter = {
     async status() {
       calls.push("status");
-      const next = results[Math.min(index, results.length - 1)]!;
+      const next = sequence[Math.min(index, sequence.length - 1)]!;
       index += 1;
       if (next instanceof Error) throw next;
       return next;
     },
-    async refresh(name) {
-      calls.push("refresh:" + name);
-      return { toolCount: 4 };
-    },
-    async disconnect(name, sessionId) {
-      calls.push("disconnect:" + name + ":" + (sessionId ?? "*"));
-      return { closed: 2 };
+    async reconnect(name) {
+      calls.push("reconnect " + name);
+      return makeRow({ name });
     },
   };
-}
-
-/** 假计时器：every 记下回调，由测试手动触发；sleep 立即返回。 */
-function fakeTimers(): RuntimeTimers & { tick(): void; active(): number; setHidden(value: boolean): void } {
-  const runs = new Set<() => void>();
-  let hidden = false;
-  return {
-    every(ms, run) {
-      assert.equal(ms, POLL_INTERVAL_MS);
-      runs.add(run);
-      return () => runs.delete(run);
-    },
-    sleep: async () => undefined,
-    hidden: () => hidden,
-    tick: () => [...runs].forEach((run) => run()),
-    active: () => runs.size,
-    setHidden: (value) => {
-      hidden = value;
-    },
-  };
-}
-
-test("reload：成功给快照；还没数据时失败记 error；有数据后静默失败只记 pollError、保留旧数据", async () => {
-  const store = createRuntimeStore(
-    fakeAdapter([new Error("宿主没响应"), status(1), new Error("断网"), status(2)]),
-    fakeTimers(),
-  );
-  await store.reload(true);
-  assert.deepEqual(store.state.get(), { error: "宿主没响应" }, "没有数据时静默失败也要显示错误");
-  await store.reload(false);
-  assert.deepEqual(store.state.get(), { status: status(1) });
-  await store.reload(true);
-  assert.deepEqual(store.state.get(), { status: status(1), pollError: "断网" });
-  await store.reload(true);
-  assert.deepEqual(store.state.get(), { status: status(2) }, "成功后提示消失");
-});
-
-test("刷新缓存、断开实例：调用接口后自己重读一次（调用方不必再通知别人）", async () => {
-  const adapter = fakeAdapter([status(1)]);
-  const store = createRuntimeStore(adapter, fakeTimers());
-  assert.deepEqual(await store.refresh("demo"), { toolCount: 4 });
-  assert.deepEqual(await store.disconnect("demo"), { closed: 2 });
-  await store.disconnect("demo", "s1");
-  assert.deepEqual(adapter.calls, [
-    "refresh:demo",
-    "status",
-    "disconnect:demo:*",
-    "status",
-    "disconnect:demo:s1",
-    "status",
-  ]);
-  assert.deepEqual(store.state.get().status, status(1));
-});
-
-test("waitForTools：工具缓存出现就返回工具数；读失败不算结束；最多看 6 次", async () => {
-  const found = createRuntimeStore(fakeAdapter([status(), new Error("忙"), status(3)]), fakeTimers());
-  assert.equal(await found.waitForTools("demo"), 3);
-  assert.deepEqual(found.state.get().status, status(3), "等待期间读到的状态也进快照");
-
-  const adapter = fakeAdapter([status()]);
-  const never = createRuntimeStore(adapter, fakeTimers());
-  assert.equal(await never.waitForTools("demo"), undefined);
-  assert.equal(adapter.calls.length, PROBE_ATTEMPTS);
-});
-
-test("轮询：多处启动只用一个计时器；页面不可见时跳过；全部停止后计时器才停", async () => {
   const timers = fakeTimers();
-  const adapter = fakeAdapter([status(1)]);
-  const store = createRuntimeStore(adapter, timers);
+  return { store: createRuntimeStore(adapter, timers.timers), calls, ...timers };
+}
+
+test("读取：成功存快照；没有数据时失败记 error；已有数据后静默失败只记 pollError", async () => {
+  const { store } = setup([new Error("接口 500"), makeRuntime([makeRow({ name: "a" })]), new Error("网络断了")]);
+  await store.reload();
+  assert.equal(store.state.get().error, "接口 500");
+  await store.reload();
+  assert.equal(store.state.get().error, undefined);
+  assert.equal(store.state.get().status?.servers[0]!.name, "a");
+  await store.reload(true);
+  assert.equal(store.state.get().pollError, "网络断了");
+  assert.equal(store.state.get().status?.servers[0]!.name, "a", "旧数据保留");
+});
+
+test("重新连接：调接口后重读一次", async () => {
+  const { store, calls } = setup([makeRuntime([makeRow({ name: "a" })])]);
+  const row = await store.reconnect("a");
+  assert.equal(row.name, "a");
+  assert.deepEqual(calls, ["reconnect a", "status"]);
+});
+
+test("等连接结果：不再是 connecting 就返回那一行；一直连接中则超时返回 undefined", async () => {
+  const connecting = makeRuntime([makeRow({ name: "a", state: "connecting", tools: [] })]);
+  const done = makeRuntime([makeRow({ name: "a" })]);
+  const first = setup([connecting, new Error("读失败不算结束"), done]);
+  const row = await first.store.waitSettled("a");
+  assert.equal(row?.state, "connected");
+  const second = setup([connecting]);
+  assert.equal(await second.store.waitSettled("a"), undefined);
+  assert.equal(second.calls.length, SETTLE_ATTEMPTS);
+});
+
+test("轮询：多处启动只有一个计时器；页面不可见时跳过；全部停止后计时器撤掉", async () => {
+  const { store, calls, ticks, setHidden } = setup([makeRuntime([])]);
   const stopA = store.startPolling();
   const stopB = store.startPolling();
-  assert.equal(timers.active(), 1);
-  timers.tick();
+  assert.equal(ticks.length, 1);
+  ticks[0]!();
   await Promise.resolve();
-  assert.equal(adapter.calls.length, 1);
-  timers.setHidden(true);
-  timers.tick();
-  assert.equal(adapter.calls.length, 1, "页面不可见时不读");
+  assert.equal(calls.length, 1);
+  setHidden(true);
+  ticks[0]!();
+  assert.equal(calls.length, 1, "不可见时不读");
   stopA();
   stopA();
-  assert.equal(timers.active(), 1, "还有人在用");
+  assert.equal(ticks.length, 1);
   stopB();
-  assert.equal(timers.active(), 0);
+  assert.equal(ticks.length, 0);
 });
 
-test("开发预览：服务器状态照常读，会话换成示例；断开不调用接口", async () => {
-  const sample = (): RuntimeStatus => ({ servers: [], sessions: [{ sessionId: "p", instances: [] }] });
-  const base = fakeAdapter([status(1)]);
-  const preview = previewAdapter(base, sample);
-  assert.deepEqual(await preview.status(), { servers: status(1).servers, sessions: sample().sessions });
-  assert.deepEqual(await preview.disconnect("demo"), { closed: 0 });
-  assert.equal(base.calls.includes("disconnect:demo:*"), false);
-  const broken = previewAdapter(fakeAdapter([new Error("x")]), sample);
-  assert.deepEqual((await broken.status()).servers, [], "宿主读不到时预览照样有会话");
-});
-
-test("normalizeRuntimeStatus：缺字段补默认值，丢掉坏的实例条目", () => {
-  assert.deepEqual(normalizeRuntimeStatus(undefined), { servers: [], sessions: [] });
-  const raw = { sessions: [{ instances: [null, { server: "a" }, { nope: 1 }] }] } as unknown as Partial<RuntimeStatus>;
-  assert.deepEqual(normalizeRuntimeStatus(raw).sessions, [{ sessionId: "", instances: [{ server: "a" }] }]);
+test("normalizeRuntimeStatus：丢掉坏条目，补默认值", () => {
+  const status = normalizeRuntimeStatus({
+    servers: [
+      null as never,
+      { name: "a", scope: "global", state: "connected" } as never,
+      { name: "b", scope: "session", state: "session", tools: [{ name: "x" }, {} as never], sessions: 2 },
+    ],
+  });
+  assert.deepEqual(
+    status.servers.map((server) => [server.name, server.tools.length, server.sessions]),
+    [
+      ["a", 0, 0],
+      ["b", 1, 2],
+    ],
+  );
+  assert.deepEqual(normalizeRuntimeStatus(undefined), { servers: [] });
 });

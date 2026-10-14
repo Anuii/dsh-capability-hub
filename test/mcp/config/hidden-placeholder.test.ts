@@ -8,7 +8,6 @@
  *   - 新建服务器（没有 originalName，或 originalName 指向的服务器不存在）→ VALIDATION(422)，
  *     details 的 path 指向具体键（server.env.API_KEY）。
  *   - 编辑已有服务器：键名存在于原配置 → 行为不变（保留原值）；原配置里没有的新键 → 同样拒绝。
- *   - import/apply 走服务端原值，不受影响。
  *
  * 全部落盘都在 os.tmpdir() 的临时目录（PLAN §4）。
  */
@@ -25,7 +24,6 @@ import {
   expectRejection,
   makeContext,
   makeTempDir,
-  readJson,
   recordingLogger,
   type RecordingLogger,
 } from "./helpers.ts";
@@ -229,61 +227,6 @@ describe("FIX-3 upsert 编辑：原有键保留原值，新键被拒（H2）", (
       );
       assert.equal(await fs.readFile(h.configPath(), "utf8"), before, "被拒绝的提交不得改动配置文件");
       const revealed = (await h.call("POST mcp/servers/reveal", { name: "demo" })) as {
-        server: { env: Record<string, string> };
-      };
-      assert.deepEqual(revealed.server.env, { TOKEN: SECRET_ENV });
-    } finally {
-      await h.cleanup();
-    }
-  });
-});
-
-describe("FIX-3 import/apply 不受影响（H3）", () => {
-  it("导入写的是服务端原值（明文），不是占位符", async () => {
-    const h = await harness();
-    try {
-      await fs.writeFile(
-        join(h.homeDir, ".claude.json"),
-        JSON.stringify({
-          mcpServers: {
-            imported: { command: "node", env: { TOKEN: SECRET_ENV }, headers: { Authorization: SECRET_HEADER } },
-          },
-        }),
-        "utf8",
-      );
-      const data = (await h.call("POST mcp/import/apply", { sourceId: "claude-code", names: ["imported"] })) as {
-        imported: string[];
-        skipped: { name: string; reason: string }[];
-      };
-      assert.deepEqual(data.imported, ["imported"]);
-      assert.deepEqual(data.skipped, []);
-      const revealed = (await h.call("POST mcp/servers/reveal", { name: "imported" })) as {
-        server: { env: Record<string, string>; headers: Record<string, string> };
-      };
-      assert.deepEqual(revealed.server.env, { TOKEN: SECRET_ENV }, "导入必须落明文原值");
-      assert.deepEqual(revealed.server.headers, { Authorization: SECRET_HEADER });
-      const onDisk = JSON.stringify(await readJson(h.configPath()));
-      assert.equal(onDisk.includes(SECRET_ENV), true, "落盘的就是真实值");
-      assert.equal(onDisk.includes("***hidden***"), false, "落盘里不得出现占位符");
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("导入后再用占位符编辑：原有键照常保留导入的原值", async () => {
-    const h = await harness();
-    try {
-      await fs.writeFile(
-        join(h.homeDir, ".claude.json"),
-        JSON.stringify({ mcpServers: { imported: { command: "node", env: { TOKEN: SECRET_ENV } } } }),
-        "utf8",
-      );
-      await h.call("POST mcp/import/apply", { sourceId: "claude-code", names: ["imported"] });
-      await h.call("POST mcp/servers/upsert", {
-        originalName: "imported",
-        server: { serverName: "imported", transport: "stdio", command: "node", env: { TOKEN: HIDDEN } },
-      });
-      const revealed = (await h.call("POST mcp/servers/reveal", { name: "imported" })) as {
         server: { env: Record<string, string> };
       };
       assert.deepEqual(revealed.server.env, { TOKEN: SECRET_ENV });

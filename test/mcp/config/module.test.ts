@@ -1,5 +1,5 @@
 /**
- * module.ts：PLAN §3.7「MCP·配置」全部路由 + 错误码 + 遮罩 + 导入。
+ * module.ts：「MCP·配置」全部路由 + 错误码 + 遮罩。
  * 全部落在 os.tmpdir() 的临时目录；命令检查用临时 bin 目录 + 自定义 PATH。
  */
 
@@ -56,22 +56,18 @@ async function harness(opts: { commandCheck?: CommandCheckOptions } = {}): Promi
 const stdioServer = { serverName: "demo", transport: "stdio", command: "node" };
 
 describe("module: 路由表", () => {
-  it("实现 PLAN §3.7 的全部 13 个 MCP·配置路由", async () => {
+  it("实现全部 8 个 MCP·配置路由（0.7.0 删除设置、预设与导入）", async () => {
     const h = await harness();
     try {
       assert.deepEqual(Object.keys(h.module.routes).sort(), [
         "GET mcp/config",
-        "GET mcp/import/sources",
-        "GET mcp/presets",
         "POST mcp/check-command",
-        "POST mcp/import/apply",
         "POST mcp/parse-json",
         "POST mcp/servers/delete",
         "POST mcp/servers/reorder",
         "POST mcp/servers/reveal",
         "POST mcp/servers/toggle",
         "POST mcp/servers/upsert",
-        "POST mcp/settings/update",
       ]);
       assert.equal(typeof h.module.source.get, "function");
       assert.equal(typeof h.module.source.onChange, "function");
@@ -85,12 +81,7 @@ describe("module: 路由表", () => {
     const h = await harness();
     try {
       const data = (await h.call("GET mcp/config")) as Record<string, unknown>;
-      assert.deepEqual(data.settings, {
-        idleTimeoutMin: 10,
-        outputGuard: { enabled: true, maxBytes: 51200, maxLines: 2000 },
-        failureBackoffMs: 60000,
-      });
-      assert.deepEqual(data.settingsSet, []);
+      assert.deepEqual(Object.keys(data).sort(), ["servers", "warnings"]);
       assert.deepEqual(data.servers, []);
       assert.deepEqual(data.warnings, []);
     } finally {
@@ -100,23 +91,16 @@ describe("module: 路由表", () => {
 });
 
 describe("module: upsert", () => {
-  it("新增服务器并返回视图（含 setFields 与默认值提示）", async () => {
+  it("新增服务器并返回视图（含 setFields；scope 缺省为全局一份）", async () => {
     const h = await harness();
     try {
       const data = (await h.call("POST mcp/servers/upsert", { server: stdioServer })) as {
-        server: {
-          serverName: string;
-          setFields: string[];
-          defaults: { lifecycle: string };
-          args: string[];
-          lifecycle: string;
-        };
+        server: { serverName: string; setFields: string[]; args: string[]; scope: string };
       };
       assert.equal(data.server.serverName, "demo");
       assert.deepEqual(data.server.setFields.sort(), ["command", "serverName", "transport"]);
-      assert.equal(data.server.defaults.lifecycle, "lazy");
       assert.deepEqual(data.server.args, []);
-      assert.equal(data.server.lifecycle, "lazy");
+      assert.equal(data.server.scope, "global");
       const onDisk = (await readJson(join(h.hubHome, "mcp", "config.json"))) as { servers: unknown[] };
       assert.deepEqual(onDisk.servers, [stdioServer]);
     } finally {
@@ -439,58 +423,7 @@ describe("module: delete / toggle / reorder", () => {
   });
 });
 
-describe("module: 设置 / 校验 / 解析 / 预设 / 检查", () => {
-  it("settings/update 只落盘非默认项", async () => {
-    const h = await harness();
-    try {
-      const data = (await h.call("POST mcp/settings/update", {
-        settings: { idleTimeout: 5, outputGuard: { maxBytes: 1024 }, failureBackoffMs: 60000 },
-      })) as {
-        settings: {
-          idleTimeoutMin: number;
-          outputGuard: { maxBytes: number; maxLines: number };
-          failureBackoffMs: number;
-        };
-        settingsSet: string[];
-      };
-      assert.equal(data.settings.idleTimeoutMin, 5);
-      assert.deepEqual(data.settings.outputGuard, { enabled: true, maxBytes: 1024, maxLines: 2000 });
-      assert.equal(data.settings.failureBackoffMs, 60000);
-      assert.deepEqual(data.settingsSet.sort(), ["idleTimeout", "outputGuard"]);
-      const onDisk = (await readJson(join(h.hubHome, "mcp", "config.json"))) as { settings: Record<string, unknown> };
-      assert.deepEqual(onDisk.settings, { idleTimeout: 5, outputGuard: { maxBytes: 1024 } });
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("settings/update 拒绝非法值", async () => {
-    const h = await harness();
-    try {
-      const error = await expectRejection(() => h.call("POST mcp/settings/update", { settings: { idleTimeout: -3 } }));
-      assert.equal(error.code, "VALIDATION");
-      assert.deepEqual(
-        (error.details as { path: string }[]).map((d) => d.path),
-        ["settings.idleTimeout"],
-      );
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("全局 idleTimeout 影响服务器的 idleTimeoutMin 解析", async () => {
-    const h = await harness();
-    try {
-      await h.call("POST mcp/servers/upsert", { server: stdioServer });
-      await h.call("POST mcp/settings/update", { settings: { idleTimeout: 2 } });
-      const config = (await h.call("GET mcp/config")) as { servers: { idleTimeoutMin: number }[] };
-      assert.equal(config.servers[0].idleTimeoutMin, 2);
-      assert.equal(h.module.source.get().servers[0].idleTimeoutMin, 2);
-    } finally {
-      await h.cleanup();
-    }
-  });
-
+describe("module: 解析 / 检查", () => {
   it("parse-json 识别并返回服务器", async () => {
     const h = await harness({ commandCheck: { pathEnv: "", pathExt: ".CMD", platform: "win32" } });
     try {
@@ -512,26 +445,6 @@ describe("module: 设置 / 校验 / 解析 / 预设 / 检查", () => {
       );
       const bad = await expectRejection(() => h.call("POST mcp/parse-json", { text: 123 }));
       assert.equal(bad.code, "BAD_REQUEST");
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("presets 返回 5 个模板并附带命令可用性", async () => {
-    const h = await harness({ commandCheck: { pathEnv: "", pathExt: ".CMD", platform: "win32" } });
-    try {
-      const data = (await h.call("GET mcp/presets")) as {
-        presets: { id: string; commandFound: boolean; title: string; description: string }[];
-      };
-      assert.deepEqual(
-        data.presets.map((p) => p.id),
-        ["fetch", "time", "memory", "sequential-thinking", "context7"],
-      );
-      for (const preset of data.presets) {
-        assert.equal(preset.commandFound, false);
-        assert.ok(preset.title.length > 0);
-        assert.ok(preset.description.length > 0);
-      }
     } finally {
       await h.cleanup();
     }
@@ -571,104 +484,10 @@ describe("module: 设置 / 校验 / 解析 / 预设 / 检查", () => {
   });
 });
 
-describe("module: 只读导入", () => {
-  it("import/sources 返回两个来源且服务器已遮罩", async () => {
-    const h = await harness();
-    try {
-      await fs.writeFile(
-        join(h.homeDir, ".claude.json"),
-        JSON.stringify({ mcpServers: { imported: { command: "node", env: { TOKEN: SECRET_ENV } } } }),
-        "utf8",
-      );
-      const data = (await h.call("GET mcp/import/sources")) as {
-        sources: { id: string; found: boolean; servers: Record<string, unknown>[] }[];
-      };
-      assert.deepEqual(
-        data.sources.map((s) => s.id),
-        ["claude-code", "codex"],
-      );
-      assert.equal(data.sources[0].found, true);
-      assert.equal(data.sources[1].found, false);
-      assert.deepEqual((data.sources[0].servers[0] as { env: Record<string, string> }).env, { TOKEN: "***hidden***" });
-      assert.equal(JSON.stringify(data).includes(SECRET_ENV), false);
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("import/apply 落盘明文、同名跳过、可被后续 upsert 接受", async () => {
-    const h = await harness();
-    try {
-      await fs.writeFile(
-        join(h.homeDir, ".claude.json"),
-        JSON.stringify({
-          mcpServers: {
-            imported: { command: "node", args: ["x"], env: { TOKEN: SECRET_ENV } },
-            clash: { command: "node" },
-          },
-        }),
-        "utf8",
-      );
-      await h.call("POST mcp/servers/upsert", {
-        server: { serverName: "clash", transport: "stdio", command: "node-other" },
-      });
-
-      const data = (await h.call("POST mcp/import/apply", {
-        sourceId: "claude-code",
-        names: ["imported", "clash", "absent"],
-      })) as {
-        imported: string[];
-        skipped: { name: string; reason: string }[];
-      };
-      assert.deepEqual(data.imported, ["imported"]);
-      assert.deepEqual(
-        data.skipped.map((s) => s.name),
-        ["clash", "absent"],
-      );
-      assert.match(data.skipped[0].reason, /同名服务器已存在/);
-      assert.equal(data.skipped[0].reason.includes(SECRET_ENV), false);
-
-      const revealed = (await h.call("POST mcp/servers/reveal", { name: "imported" })) as {
-        server: { env: Record<string, string> };
-      };
-      assert.deepEqual(revealed.server.env, { TOKEN: SECRET_ENV });
-      const onDisk = (await readJson(join(h.hubHome, "mcp", "config.json"))) as { servers: { serverName: string }[] };
-      assert.deepEqual(
-        onDisk.servers.map((s) => s.serverName),
-        ["clash", "imported"],
-      );
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("import/apply 的 sourceId 非法或来源缺失时给出 4xx", async () => {
-    const h = await harness();
-    try {
-      const bad = await expectRejection(() => h.call("POST mcp/import/apply", { sourceId: "vscode", names: [] }));
-      assert.equal(bad.status, 400);
-      const noFile = await expectRejection(() => h.call("POST mcp/import/apply", { sourceId: "codex", names: ["x"] }));
-      assert.equal(noFile.status, 404);
-      assert.match(noFile.message, /没有找到 Codex 的配置文件/);
-    } finally {
-      await h.cleanup();
-    }
-  });
-});
-
 describe("module: 敏感值不泄漏", () => {
   it("除 reveal 外的所有响应与日志都不含明文", async () => {
     const h = await harness({ commandCheck: { pathEnv: "", pathExt: ".CMD", platform: "win32" } });
     try {
-      await fs.writeFile(
-        join(h.homeDir, ".claude.json"),
-        JSON.stringify({
-          mcpServers: {
-            fromclaude: { command: "node", env: { TOKEN: SECRET_ENV }, headers: { Authorization: SECRET_HEADER } },
-          },
-        }),
-        "utf8",
-      );
       const responses: unknown[] = [];
       responses.push(
         await h.call("POST mcp/servers/upsert", {
@@ -678,16 +497,18 @@ describe("module: 敏感值不泄漏", () => {
       responses.push(await h.call("GET mcp/config"));
       responses.push(await h.call("POST mcp/servers/toggle", { name: "demo", disabled: true }));
       responses.push(await h.call("POST mcp/servers/reorder", { names: ["demo"] }));
-      responses.push(await h.call("POST mcp/settings/update", { settings: { idleTimeout: 1 } }));
       // parse-json 只回显「本次请求提交的文本」，不读取已存储的配置：
       // 这里故意粘贴一段无关 JSON，验证已存储的敏感值不会从这条路由漏出去。
       responses.push(
         await h.call("POST mcp/parse-json", { text: JSON.stringify({ mcpServers: { p: { command: "node" } } }) }),
       );
-      responses.push(await h.call("GET mcp/presets"));
-      responses.push(await h.call("GET mcp/import/sources"));
-      responses.push(await h.call("POST mcp/import/apply", { sourceId: "claude-code", names: ["fromclaude"] }));
       responses.push(await h.call("POST mcp/check-command", { command: "node" }));
+
+      // 遮盖只发生在响应与日志里：删除之前，磁盘上的 config.json 存的就是真实值
+      const beforeDelete = await fs.readFile(join(h.hubHome, "mcp", "config.json"), "utf8");
+      assert.equal(beforeDelete.includes(SECRET_ENV), true, "磁盘上存的是真实值，不是占位符");
+      assert.equal(beforeDelete.includes(SECRET_HEADER), true, "headers 同样存的是真实值");
+
       responses.push(await h.call("POST mcp/servers/delete", { name: "demo" }));
 
       for (const [index, response] of responses.entries()) {
@@ -698,9 +519,10 @@ describe("module: 敏感值不泄漏", () => {
       assert.equal(h.logger.text().includes(SECRET_ENV), false, "日志泄漏了 env 明文");
       assert.equal(h.logger.text().includes(SECRET_HEADER), false, "日志泄漏了 headers 明文");
 
-      // 磁盘上必然是明文（这是配置本身），但只应存在于 config.json 里
+      // 删掉 demo 之后，磁盘上不再有明文
       const onDisk = await fs.readFile(join(h.hubHome, "mcp", "config.json"), "utf8");
-      assert.equal(onDisk.includes(SECRET_ENV), true);
+      assert.equal(onDisk.includes(SECRET_ENV), false, "服务器已删除，磁盘上不该还有明文");
+      assert.equal(onDisk.includes(SECRET_HEADER), false, "服务器已删除，headers 明文也该消失");
       const files: string[] = [];
       const walk = async (dir: string): Promise<void> => {
         for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
@@ -728,29 +550,6 @@ describe("module: 敏感值不泄漏", () => {
       });
       assert.equal(JSON.stringify(data).includes(SECRET_ENV), false);
       assert.equal(h.logger.text().includes(SECRET_ENV), false);
-    } finally {
-      await h.cleanup();
-    }
-  });
-
-  it("导入路径绝不写 Claude Code / Codex 文件与 homeDir", async () => {
-    const h = await harness();
-    try {
-      const claudePath = join(h.homeDir, ".claude.json");
-      const claudeText = JSON.stringify({ mcpServers: { imported: { command: "node", env: { TOKEN: SECRET_ENV } } } });
-      await fs.writeFile(claudePath, claudeText, "utf8");
-      const before = await fs.stat(claudePath);
-      const homeBefore = (await fs.readdir(h.homeDir)).sort();
-
-      await h.call("GET mcp/import/sources");
-      await h.call("POST mcp/import/apply", { sourceId: "claude-code", names: ["imported"] });
-      await h.call("POST mcp/servers/upsert", { server: stdioServer });
-
-      assert.equal(await fs.readFile(claudePath, "utf8"), claudeText, "导入不得改写 Claude Code 配置");
-      const after = await fs.stat(claudePath);
-      assert.equal(after.mtimeMs, before.mtimeMs, "导入不得触碰 Claude Code 文件的 mtime");
-      assert.deepEqual((await fs.readdir(h.homeDir)).sort(), homeBefore, "homeDir 下不得新增任何文件");
-      await assert.rejects(async () => await fs.stat(join(h.homeDir, ".codex")));
     } finally {
       await h.cleanup();
     }

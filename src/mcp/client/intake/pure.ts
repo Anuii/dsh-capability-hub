@@ -1,14 +1,13 @@
 /**
- * 三种添加方式（D-C2）的纯逻辑：粘贴 JSON 的识别计划、同名冲突与改名建议、
- * 勾选与阻断判定、导入的候选挑选。不碰 DOM / React / 网络，node:test 直接测。
+ * 粘贴 JSON 添加服务器（D-C2，0.7.0 起唯一的添加方式）的纯逻辑：识别计划、同名冲突与改名建议、
+ * 勾选与阻断判定。不碰 DOM / React / 网络，node:test 直接测。
  *
- * 「落盘形态」服务器（ParsedServer）由宿主 mapServerFields() 产出：
- * 只有 serverName / transport / command / args / cwd / url / env / headers 会被识别，
- * 预设与导入还可能多出 lifecycle / disabled / debug。
+ * 「落盘形态」服务器（ParsedServer）由宿主 mapServerFields() 产出：标准写法的字段之外，
+ * 本插件自己的字段（envFrom、scope、meta……）也原样带着，保存时由宿主校验。
  */
 
-import type { ParsedServer, SkippedServer } from "../../contract/config.ts";
-import { HIDDEN, SERVER_NAME_RE } from "../../rules/server.ts";
+import type { ParsedServer } from "../../contract/config.ts";
+import { HIDDEN, SERVER_FIELDS, SERVER_NAME_RE } from "../../rules/server.ts";
 import { isPlainObject } from "../../rules/values.ts";
 
 /** 粘贴预览里一行的状态。 */
@@ -50,17 +49,6 @@ export function hiddenKeys(server: ParsedServer): string[] {
     }
   }
   return out;
-}
-
-/** 服务器里的敏感字段摘要（值一律不显示，只说有几个键）。 */
-export function secretSummary(server: ParsedServer): string {
-  const parts: string[] = [];
-  for (const field of ["env", "headers"] as const) {
-    const raw = server[field];
-    if (isPlainObject(raw) && Object.keys(raw).length > 0)
-      parts.push(field + " " + Object.keys(raw).length + " 项（值已遮罩）");
-  }
-  return parts.join(" · ");
 }
 
 /** 把非法字符换成连字符并截到 32 位；结果可能仍为空，调用方负责兜底。 */
@@ -161,25 +149,13 @@ export function blockedRows(rows: readonly PasteRow[], selected: readonly number
   return rows.filter((row) => selected.includes(row.index) && row.status !== "new");
 }
 
-/** 落盘形态 → upsert 的 server 体（只带本插件认识的字段）。 */
+/** 落盘形态 → upsert 的 server 体（只带白名单里的字段，按白名单顺序）。 */
 export function rawToSubmit(server: ParsedServer): Record<string, unknown> {
   const out: Record<string, unknown> = { serverName: server.serverName };
-  const fields = [
-    "transport",
-    "command",
-    "args",
-    "cwd",
-    "url",
-    "env",
-    "headers",
-    "lifecycle",
-    "disabled",
-    "debug",
-  ] as const;
-  for (const field of fields) {
-    const value = server[field];
-    if (value === undefined) continue;
-    out[field] = value;
+  const record = server as unknown as Record<string, unknown>;
+  for (const field of SERVER_FIELDS) {
+    if (field === "serverName") continue;
+    if (record[field] !== undefined) out[field] = record[field];
   }
   return out;
 }
@@ -187,9 +163,4 @@ export function rawToSubmit(server: ParsedServer): Record<string, unknown> {
 /** 粘贴内容里带 ***hidden*** 占位符的服务器名（新建时该占位符会被当成真实值，必须先提示）。 */
 export function placeholderNames(servers: readonly ParsedServer[]): string[] {
   return servers.filter((server) => hiddenKeys(server).length > 0).map((server) => server.serverName);
-}
-
-/** 导入候选：来源里找到、且当前配置里没有同名的服务器（同名由服务端跳过，这里只做默认勾选）。 */
-export function importableNames(servers: readonly ParsedServer[], existingNames: readonly string[]): string[] {
-  return servers.filter((server) => !existingNames.includes(server.serverName)).map((server) => server.serverName);
 }

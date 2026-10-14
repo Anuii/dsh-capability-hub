@@ -1,264 +1,441 @@
 /**
- * mcp-runtime：把已配置的 MCP 服务器的每个工具直接交给 DSH 注册（D-D1），并在调用时按需起进程。
+ * MCP 运行时（ADR-0010）：把配置里的服务器挂载成 DSH 官方 @deepseek-ai/dsh-mcp-client 的插件实例。
  *
- * 对应决策：
- * - D-D1 每个已启用服务器的每个可见工具注册成 DSH 工具 mcp__<服务器>__<工具>（来自工具缓存，
- *        参数 schema 转成 DSH 子集）；服务器说明与服务器自带的用法说明进系统提示词。
- * - D-D3 会话隔离：实例键 = 会话 id + 服务器名；子代理会话各持一套；会话结束全部回收。
- * - D-D4 生命周期二维（启动时机 × 回收）：lazy / lazy-keep-alive / eager / keep-alive。
- * - D-D5 idleTimeout 默认 10 分钟、0 = 不回收；关闭时结束整棵进程树。
- * - D-D6 输出护栏默认 50 KiB / 2000 行，保头部，超出落文件并告诉模型路径。
- * - D-D7 失败退避；取消不算失败（failures.ts）。
- * - D-D8 envFrom 失败拒绝启动，绝不注入空值。
- * - D-C6 新增/改配置的服务器后台自动探测一次（拉清单 → 工具随之注册）；每次成功调用后顺带刷新。
+ * 本插件只管「挂在哪、什么时候挂、挂什么配置」，连接、工具注册、图片、MCP 资源、断线重连、
+ * 服务器用法说明进提示词都由官方插件负责：
+ *   - scope=global（默认）：挂在插件根作用域，插件启动或启用时连接，所有会话与子代理共用一个进程；
+ *   - scope=session：每个 agent（会话或子代理）创建时挂在它的 agent.ctx 上，随 agent 一起释放；
+ *   - envFrom 先由本插件执行命令解析成 env，失败就不挂，状态里写原因（绝不注入空值，D-D8）；
+ *   - 配置变化按「挂载指纹」只重挂变了的服务器；停用、删除即卸下。
  *
- * 结构：core.ts（共享状态与探测）→ tool-specs.ts（工具清单与提示词）、actions/call.ts（调用）、
- * status-view.ts（HTTP 视图）；本文件负责对外接口、工具集合变化通知、会话事件、配置变化与定时任务。
+ * 全局挂载用 failOnStartupError: true，这样首次连接失败时能拿到原因（状态显示「连接失败：…」，
+ * 由使用者点「重新连接」）；连上之后的断线由官方插件自动重连。按会话的挂载不让失败冒泡到 agent。
  */
 
-import { IDLE_SWEEP_INTERVAL_MS } from "./constants.ts";
-import { computeConfigHash, isEntryValid } from "./atoms/metadata-cache.ts";
-import { RuntimeCore, type CoreOptions, type SessionRef } from "./core.ts";
-import { buildPromptText, buildToolSpecs } from "./tool-specs.ts";
-import { callTool } from "./actions/call.ts";
-import { runtimeStatusView } from "./status-view.ts";
-import type { EffectiveMcpConfig } from "../contract/config.ts";
-import type { McpRuntime, McpToolSpec, RuntimeStatus } from "../contract/runtime.ts";
+import { resolveEnvFrom, type EnvFromRunner } from "./atoms/env-from.ts";
+import { conflict, notFound } from "../../shared/errors.ts";
 import { errorText } from "../../shared/error-text.ts";
-import { conflict, notFound, upstream } from "../../shared/errors.ts";
+import type { EffectiveMcpConfig, EffectiveServer, McpConfigSource } from "../contract/config.ts";
+import type {
+  McpClientPlugin,
+  McpRuntime,
+  PluginScope,
+  RegisteredTool,
+  RuntimeServerView,
+  RuntimeStatus,
+} from "../contract/runtime.ts";
+import type { HubLogger } from "../../platform/contract/host.ts";
 
-export { clipToolDescription, probeSessionId } from "./core.ts";
-export type { ProbeReason, SessionRef } from "./core.ts";
+/** 不设超时（toolCallTimeoutMs ≤ 0）时交给官方插件的值：一天。 */
+const NO_TIMEOUT_MS = 24 * 3600 * 1000;
+/** 描述只取第一行、最多这么多字（界面列表用）。 */
+const TOOL_DESCRIPTION_MAX = 160;
 
-export interface McpRuntimeOptions extends CoreOptions {
-  sweepIntervalMs?: number;
-  cacheWatchIntervalMs?: number;
-  envFromRunner?: never;
+export interface McpRuntimeOptions {
+  config: McpConfigSource;
+  /** 官方 dsh-mcp-client 模块 */
+  client: McpClientPlugin;
+  /** 插件根作用域：全局一份的服务器挂在这里 */
+  root: PluginScope;
+  /** 读插件根作用域里已注册的工具（DSH 的 ctx.tools.schemas()） */
+  listTools(): RegisteredTool[];
+  logger: HubLogger;
+  /** envFrom 的命令执行器（测试替换） */
+  envFromRunner?: EnvFromRunner;
+  now?(): number;
 }
 
 export interface McpRuntimeInternal extends McpRuntime {
-  /** 启动后台巡检与配置监听，并做一次启动探测。 */
-  start(): Promise<void>;
-  status(): Promise<RuntimeStatus>;
-  refresh(serverName: string): Promise<{ toolCount: number }>;
-  disconnect(serverName: string, sessionId?: string): Promise<{ closed: number }>;
-  /** 手工触发一次空闲巡检（测试用）。 */
-  sweepOnce(): Promise<number>;
-  /** 等所有后台探测结束（测试用）。 */
-  waitForBackgroundWork(): Promise<void>;
-  /** 当前是否有后台工作（测试用）。 */
-  backgroundCount(): number;
+  /** 卸下再挂上（全局：重连这一个；按会话：在每个现存 agent 上重挂）。 */
+  reconnect(name: string): Promise<RuntimeServerView>;
+  /** 等所有进行中的挂载与卸载结束（测试与 dispose 用）。 */
+  settle(): Promise<void>;
+}
+
+/** cordis Fiber 的最小面。 */
+interface FiberLike {
+  dispose?(): unknown;
+  then?(onFulfilled: (value: unknown) => unknown, onRejected: (error: unknown) => unknown): unknown;
+}
+
+interface GlobalMount {
+  fingerprint: string;
+  fiber?: FiberLike;
+  state: "connecting" | "connected" | "failed";
+  error?: string;
+  since: number;
+  /** 挂载代次：配置连改两次时，旧的那次结果晚到不能覆盖新的 */
+  generation: number;
+}
+
+interface AgentMounts {
+  scope: PluginScope;
+  /** 服务器名 → 指纹与 fiber */
+  mounts: Map<string, { fingerprint: string; fiber?: FiberLike }>;
+}
+
+/** 影响挂载的字段：变了就要重挂（描述、顺序不算）。 */
+export function mountFingerprint(server: EffectiveServer): string {
+  return JSON.stringify([
+    server.transport,
+    server.command ?? "",
+    server.args,
+    server.cwd ?? "",
+    server.env,
+    server.envFrom,
+    server.allowEmpty,
+    server.envFromTimeoutMs,
+    server.url ?? "",
+    server.headers,
+    server.toolCallTimeoutMs,
+    server.scope,
+  ]);
+}
+
+/** 生效服务器 + 解析好的 env → 官方插件的配置输入。 */
+export function clientConfigInput(
+  server: EffectiveServer,
+  env: Record<string, string>,
+  failOnStartupError: boolean,
+): Record<string, unknown> {
+  const toolCallTimeoutMs = server.toolCallTimeoutMs > 0 ? server.toolCallTimeoutMs : NO_TIMEOUT_MS;
+  if (server.transport === "streamable-http") {
+    return {
+      transport: "streamable-http",
+      serverName: server.serverName,
+      url: server.url ?? "",
+      headers: { ...server.headers },
+      toolCallTimeoutMs,
+      failOnStartupError,
+    };
+  }
+  return {
+    transport: "stdio",
+    serverName: server.serverName,
+    command: server.command ?? "",
+    args: [...server.args],
+    env,
+    ...(server.cwd === undefined || server.cwd === "" ? {} : { cwd: server.cwd }),
+    toolCallTimeoutMs,
+    failOnStartupError,
+  };
+}
+
+/** 模型看到的工具名前缀（官方插件的命名：mcp__<服务器>__<工具>；服务器名 ≤32 字，前缀不会被截断）。 */
+export function toolPrefix(serverName: string): string {
+  return "mcp__" + serverName + "__";
+}
+
+function firstLine(text: string | undefined): string | undefined {
+  if (typeof text !== "string") return undefined;
+  const line = (text.split(/\r\n|\r|\n/, 1)[0] ?? "").trim();
+  if (line === "") return undefined;
+  if (line.length <= TOOL_DESCRIPTION_MAX) return line;
+  const clipped = line.slice(0, TOOL_DESCRIPTION_MAX);
+  const last = clipped.charCodeAt(clipped.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? clipped.slice(0, -1) : clipped;
+}
+
+function fiberOf(value: unknown): FiberLike | undefined {
+  return value !== null && (typeof value === "object" || typeof value === "function")
+    ? (value as FiberLike)
+    : undefined;
+}
+
+/** 等 fiber 激活完成：可 await 就 await，不可就当作已完成。 */
+async function activated(fiber: FiberLike | undefined): Promise<void> {
+  if (fiber === undefined || typeof fiber.then !== "function") return;
+  await new Promise<void>((resolve, reject) => {
+    fiber.then!(
+      () => resolve(),
+      (error) => reject(error),
+    );
+  });
+}
+
+/** 官方插件激活失败时的原因：错误本身多半是「initial connection … failed」，真正的原因在 cause 里。 */
+function failureText(error: unknown): string {
+  const cause = (error as { cause?: unknown } | undefined)?.cause;
+  return cause === undefined ? errorText(error) : errorText(cause);
 }
 
 export function createMcpRuntime(options: McpRuntimeOptions): McpRuntimeInternal {
-  const core = new RuntimeCore(options);
-  const { clock, logger, cache, pool } = core;
-  const sweepIntervalMs = options.sweepIntervalMs ?? IDLE_SWEEP_INTERVAL_MS;
-  const cacheWatchIntervalMs = options.cacheWatchIntervalMs ?? IDLE_SWEEP_INTERVAL_MS;
-  const toolListeners = new Set<() => void>();
-
-  let specs: McpToolSpec[] = buildToolSpecs(core);
-  let fingerprint = JSON.stringify(specs);
-  let sweepTimer: unknown;
-  let cacheWatchTimer: unknown;
-  let unsubscribeConfig: (() => void) | undefined;
+  const { config, client, root, logger } = options;
+  const now = options.now ?? (() => Date.now());
+  const globals = new Map<string, GlobalMount>();
+  const agents = new Map<string, AgentMounts>();
+  /** 按会话服务器解析好的 env：指纹 → 值（配置变了指纹就变，自然失效；重新连接时清掉） */
+  const sessionEnv = new Map<string, Promise<{ env?: Record<string, string>; error?: string }>>();
+  const pending = new Set<Promise<unknown>>();
+  /** 正在卸下的全局挂载：同名服务器重挂前要等它卸完（官方插件按作用域占用 serverName，旧的没卸完新的会撞名） */
+  const unmounting = new Map<string, Promise<void>>();
+  let current: EffectiveMcpConfig = config.get();
+  let started = false;
   let disposed = false;
+  let generation = 0;
 
-  // ---------------------------------------------------------------- 工具集合
+  const track = <T>(promise: Promise<T>): Promise<T> => {
+    pending.add(promise);
+    void promise.then(
+      () => pending.delete(promise),
+      () => pending.delete(promise),
+    );
+    return promise;
+  };
 
-  /** 重新计算要注册的工具；内容真的变了才通知（注册集合稳定，提示词前缀缓存才不失效）。 */
-  function checkTools(): void {
-    const next = buildToolSpecs(core);
-    const nextFingerprint = JSON.stringify(next);
-    if (nextFingerprint === fingerprint) return;
-    specs = next;
-    fingerprint = nextFingerprint;
-    for (const listener of [...toolListeners]) {
-      try {
-        listener();
-      } catch (err) {
-        logger.warn("mcp-runtime 工具变化监听器抛错：" + errorText(err));
-      }
+  const dispose = async (fiber: FiberLike | undefined, label: string): Promise<void> => {
+    if (fiber === undefined || typeof fiber.dispose !== "function") return;
+    try {
+      await fiber.dispose();
+    } catch (error) {
+      logger.warn("卸下 MCP 服务器 " + label + " 时出错：" + errorText(error));
     }
-  }
-  core.cacheListeners.add(checkTools);
+  };
 
-  // ---------------------------------------------------------------- 配置变化
-
-  function applyConfigChange(next: EffectiveMcpConfig, prev: EffectiveMcpConfig): void {
-    core.config = next;
-    checkTools();
-    const before = new Map((prev.servers ?? []).map((server) => [server.serverName, server]));
-    for (const server of next.servers ?? []) {
-      const previous = before.get(server.serverName);
-      const hashChanged = !previous || computeConfigHash(previous) !== computeConfigHash(server);
-      if (server.disabled) {
-        if (previous && !previous.disabled) void pool.closeServer(server.serverName).catch(() => undefined);
-        continue;
-      }
-      if (previous?.disabled && !server.disabled) {
-        // 从停用改为启用：等价于新服务器，后台探测一次。
-        core.probeInBackground(server, "initial", "探测失败");
-        continue;
-      }
-      if (hashChanged) {
-        // 「怎么到达」变了 ⇒ 现有实例已经对不上，直接关掉；缓存按 configHash 自然失效。后台重探一次。
-        void pool.closeServer(server.serverName).catch(() => undefined);
-        core.probeInBackground(server, previous ? "config-change" : "initial", "的自动探测失败");
-      }
+  /** 解析 envFrom（没有就直接返回 env）。 */
+  const resolveEnv = async (server: EffectiveServer): Promise<{ env?: Record<string, string>; error?: string }> => {
+    if (Object.keys(server.envFrom).length === 0) return { env: { ...server.env } };
+    const result = await resolveEnvFrom({
+      envFrom: server.envFrom,
+      allowEmpty: server.allowEmpty,
+      timeoutMs: server.envFromTimeoutMs,
+      ...(options.envFromRunner === undefined ? {} : { runner: options.envFromRunner }),
+    });
+    if (result.failures.length > 0) {
+      return { error: "envFrom 取值失败：" + result.failures.map((failure) => failure.message).join("；") };
     }
-  }
+    return { env: { ...server.env, ...result.values } };
+  };
 
-  // ---------------------------------------------------------------- 定时任务
+  // ---------------------------------------------------------------- 全局一份
 
-  function scheduleSweep(): void {
-    sweepTimer = clock.setTimer(() => {
-      if (disposed) return;
-      // 巡检登记进 background：waitForBackgroundWork()（平台层与测试都用它）才真的等到这轮巡检结束。
-      // 不登记的话，「推进时钟 ⇒ 空闲实例已被回收」这类断言会与还没跑完的巡检赛跑。
-      core.track(sweepOnce().catch((err) => logger.warn("MCP 空闲巡检失败：" + errorText(err))));
-      scheduleSweep();
-    }, sweepIntervalMs);
-  }
-
-  async function sweepOnce(): Promise<number> {
-    await core.ensureCacheLoaded();
-    return pool.sweep(clock.now(), (serverName) => core.windowFor(serverName));
-  }
-
-  /** 缓存文件可能被另一个 DSH 进程改过：定期重新加载（后台探测会再写回去）。 */
-  function scheduleCacheWatch(): void {
-    cacheWatchTimer = clock.setTimer(() => {
-      if (disposed) return;
-      void core.ensureCacheLoaded().catch(() => undefined);
-      scheduleCacheWatch();
-    }, cacheWatchIntervalMs);
-  }
-
-  // ---------------------------------------------------------------- 对外接口
-
-  const runtime: McpRuntimeInternal = {
-    tools: () => specs,
-
-    onToolsChange(cb: () => void): () => void {
-      toolListeners.add(cb);
-      return () => {
-        toolListeners.delete(cb);
-      };
-    },
-
-    promptText: () => buildPromptText(core, specs),
-
-    async call(name: string, args: unknown, call): Promise<string> {
-      const session: SessionRef = {
-        sessionId: call.sessionId,
-        ...(call.parentSessionId !== undefined ? { parentSessionId: call.parentSessionId } : {}),
-      };
-      const title = core.sessionMeta.get(session.sessionId)?.title;
-      core.sessionMeta.set(session.sessionId, {
-        ...(session.parentSessionId !== undefined ? { parentSessionId: session.parentSessionId } : {}),
-        ...(title !== undefined ? { title } : {}),
-      });
-      const spec = specs.find((item) => item.name === name);
-      if (spec === undefined) {
-        throw new Error("工具 " + name + " 已不存在：它所在的 MCP 服务器可能已停用、删除，或工具清单刚刚变了。");
+  const mountGlobal = (server: EffectiveServer): Promise<void> => {
+    const fingerprint = mountFingerprint(server);
+    const gen = ++generation;
+    const entry: GlobalMount = { fingerprint, state: "connecting", since: now(), generation: gen };
+    globals.set(server.serverName, entry);
+    const run = async (): Promise<void> => {
+      await unmounting.get(server.serverName);
+      const resolved = await resolveEnv(server);
+      if (globals.get(server.serverName) !== entry || disposed) return;
+      if (resolved.env === undefined) {
+        Object.assign(entry, { state: "failed", error: resolved.error, since: now() });
+        logger.warn("MCP 服务器 " + server.serverName + " 没有挂载：" + resolved.error);
+        return;
       }
-      return callTool(core, spec, args, session, call.signal);
-    },
-
-    sessionStarted(info): void {
+      let fiber: FiberLike | undefined;
       try {
-        core.sessionMeta.set(info.sessionId, {
-          ...(info.parentSessionId !== undefined ? { parentSessionId: info.parentSessionId } : {}),
-          ...(info.title !== undefined ? { title: info.title } : {}),
-        });
-        for (const server of core.enabledServers()) {
-          if (server.lifecycle === "eager" || server.lifecycle === "keep-alive") {
-            // fire-and-forget，绝不 await：agent/created 是串行派发的，慢活会阻塞会话创建（F1-Q5）。
-            core.startResident(server, info);
-          }
+        fiber = fiberOf(root.plugin(client, client.Config(clientConfigInput(server, resolved.env, true))));
+        entry.fiber = fiber;
+        await activated(fiber);
+        if (globals.get(server.serverName) !== entry) return;
+        Object.assign(entry, { state: "connected", error: undefined, since: now() });
+      } catch (error) {
+        const message = failureText(error);
+        logger.warn("MCP 服务器 " + server.serverName + " 连接失败：" + message);
+        await dispose(fiber, server.serverName);
+        if (globals.get(server.serverName) !== entry) return;
+        Object.assign(entry, { state: "failed", error: message, fiber: undefined, since: now() });
+      }
+    };
+    return track(run());
+  };
+
+  const unmountGlobal = (name: string): Promise<void> => {
+    const entry = globals.get(name);
+    globals.delete(name);
+    const previous = unmounting.get(name) ?? Promise.resolve();
+    const job: Promise<void> = previous.then(() => dispose(entry?.fiber, name));
+    unmounting.set(name, job);
+    void job.then(() => {
+      if (unmounting.get(name) === job) unmounting.delete(name);
+    });
+    return track(job);
+  };
+
+  // ---------------------------------------------------------------- 按会话
+
+  const sessionEnvOf = (server: EffectiveServer): Promise<{ env?: Record<string, string>; error?: string }> => {
+    const key = server.serverName + "\u0000" + mountFingerprint(server);
+    let cached = sessionEnv.get(key);
+    if (cached === undefined) {
+      cached = resolveEnv(server);
+      sessionEnv.set(key, cached);
+    }
+    return cached;
+  };
+
+  const mountOnAgent = (sessionId: string, record: AgentMounts, server: EffectiveServer): Promise<void> => {
+    const slot = { fingerprint: mountFingerprint(server) } as { fingerprint: string; fiber?: FiberLike };
+    record.mounts.set(server.serverName, slot);
+    const run = async (): Promise<void> => {
+      const resolved = await sessionEnvOf(server);
+      if (record.mounts.get(server.serverName) !== slot || agents.get(sessionId) !== record || disposed) return;
+      if (resolved.env === undefined) {
+        logger.warn("MCP 服务器 " + server.serverName + " 没有挂到会话 " + sessionId + "：" + resolved.error);
+        return;
+      }
+      try {
+        slot.fiber = fiberOf(
+          record.scope.plugin(client, client.Config(clientConfigInput(server, resolved.env, false))),
+        );
+        await activated(slot.fiber);
+      } catch (error) {
+        logger.warn("MCP 服务器 " + server.serverName + " 挂到会话 " + sessionId + " 失败：" + failureText(error));
+      }
+    };
+    return track(run());
+  };
+
+  const sessionServers = (): EffectiveServer[] =>
+    current.servers.filter((server) => !server.disabled && server.scope === "session" && server.serverName !== "");
+  const globalServers = (): EffectiveServer[] =>
+    current.servers.filter((server) => !server.disabled && server.scope === "global" && server.serverName !== "");
+
+  /** 让全局挂载与每个 agent 的挂载对齐当前配置。 */
+  const reconcile = (): void => {
+    if (!started || disposed) return;
+    const wantGlobal = new Map(globalServers().map((server) => [server.serverName, server]));
+    for (const name of [...globals.keys()]) {
+      const want = wantGlobal.get(name);
+      if (want === undefined || mountFingerprint(want) !== globals.get(name)!.fingerprint) void unmountGlobal(name);
+    }
+    for (const [name, server] of wantGlobal) {
+      if (!globals.has(name)) void mountGlobal(server);
+    }
+    const wantSession = new Map(sessionServers().map((server) => [server.serverName, server]));
+    for (const [sessionId, record] of agents) {
+      for (const [name, server] of wantSession) {
+        const slot = record.mounts.get(name);
+        if (slot !== undefined && slot.fingerprint === mountFingerprint(server)) continue;
+        if (slot === undefined) {
+          void mountOnAgent(sessionId, record, server);
+          continue;
         }
-      } catch (err) {
-        logger.warn("MCP 会话启动处理失败：" + errorText(err));
+        // 配置变了：先卸旧的再挂新的（同一作用域里同名会撞）
+        record.mounts.delete(name);
+        void track(
+          dispose(slot.fiber, name + "@" + sessionId).then(() => {
+            if (agents.get(sessionId) === record && !record.mounts.has(name) && !disposed) {
+              return mountOnAgent(sessionId, record, server);
+            }
+            return undefined;
+          }),
+        );
       }
+      for (const [name, slot] of [...record.mounts]) {
+        if (wantSession.has(name)) continue;
+        record.mounts.delete(name);
+        void track(dispose(slot.fiber, name + "@" + sessionId));
+      }
+    }
+  };
+
+  const unsubscribe = config.onChange((next) => {
+    current = next;
+    reconcile();
+  });
+
+  // ---------------------------------------------------------------- 状态
+
+  const viewOf = (server: EffectiveServer, tools: RegisteredTool[]): RuntimeServerView => {
+    const base = { name: server.serverName, scope: server.scope, tools: [] as RegisteredTool[], sessions: 0 };
+    if (server.disabled) return { ...base, state: "disabled" };
+    if (server.scope === "session") {
+      let sessions = 0;
+      for (const record of agents.values()) if (record.mounts.has(server.serverName)) sessions += 1;
+      return { ...base, state: "session", sessions };
+    }
+    const entry = globals.get(server.serverName);
+    if (entry === undefined) return { ...base, state: "connecting" };
+    const prefix = toolPrefix(server.serverName);
+    const mine = tools
+      .filter((tool) => tool.name.startsWith(prefix))
+      .map((tool) => {
+        const description = firstLine(tool.description);
+        return description === undefined ? { name: tool.name } : { name: tool.name, description };
+      })
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    const view: RuntimeServerView = { ...base, state: entry.state, tools: mine, since: entry.since };
+    if (entry.error !== undefined) view.error = entry.error;
+    // 挂着但一个工具都没有：断线后官方插件在重连（或已放弃）
+    if (entry.state === "connected" && mine.length === 0) view.state = "disconnected";
+    return view;
+  };
+
+  const readTools = (): RegisteredTool[] => {
+    try {
+      return options.listTools();
+    } catch (error) {
+      logger.warn("读取已注册的工具失败：" + errorText(error));
+      return [];
+    }
+  };
+
+  return {
+    start(): void {
+      if (started || disposed) return;
+      started = true;
+      current = config.get();
+      reconcile();
     },
 
-    async sessionEnded(sessionId: string): Promise<void> {
-      core.sessionMeta.delete(sessionId);
-      const closed = await pool.closeSession(sessionId);
-      if (closed > 0) logger.debug("会话 " + sessionId + " 结束，已回收 " + closed + " 个 MCP 服务器实例");
+    agentCreated(sessionId: string, scope: PluginScope): void {
+      if (disposed || agents.has(sessionId)) return;
+      const record: AgentMounts = { scope, mounts: new Map() };
+      agents.set(sessionId, record);
+      for (const server of sessionServers()) void mountOnAgent(sessionId, record, server);
+    },
+
+    agentDisposed(sessionId: string): void {
+      // 挂在 agent.ctx 上的插件随作用域一起回收，这里只记账
+      agents.delete(sessionId);
+    },
+
+    status(): RuntimeStatus {
+      const tools = readTools();
+      return {
+        servers: current.servers.filter((server) => server.serverName !== "").map((server) => viewOf(server, tools)),
+      };
+    },
+
+    async reconnect(name: string): Promise<RuntimeServerView> {
+      const server = current.servers.find((item) => item.serverName === name);
+      if (server === undefined) throw notFound("找不到服务器「" + name + "」。");
+      if (server.disabled) throw conflict("服务器「" + name + "」已停用，先启用再重新连接。");
+      if (server.scope === "session") {
+        for (const key of [...sessionEnv.keys()]) if (key.startsWith(name + "\u0000")) sessionEnv.delete(key);
+        const jobs: Promise<void>[] = [];
+        for (const [sessionId, record] of agents) {
+          const slot = record.mounts.get(name);
+          record.mounts.delete(name);
+          jobs.push(dispose(slot?.fiber, name + "@" + sessionId).then(() => mountOnAgent(sessionId, record, server)));
+        }
+        await Promise.all(jobs);
+      } else {
+        await unmountGlobal(name);
+        await mountGlobal(server);
+      }
+      return viewOf(server, readTools());
+    },
+
+    async settle(): Promise<void> {
+      while (pending.size > 0) await Promise.allSettled([...pending]);
     },
 
     async dispose(): Promise<void> {
+      if (disposed) return;
       disposed = true;
-      if (sweepTimer !== undefined) clock.clearTimer(sweepTimer);
-      if (cacheWatchTimer !== undefined) clock.clearTimer(cacheWatchTimer);
-      unsubscribeConfig?.();
-      unsubscribeConfig = undefined;
-      toolListeners.clear();
-      core.cacheListeners.delete(checkTools);
-      await pool.closeAll();
-      await Promise.allSettled([...core.background]);
-      await core.spill.cleanup();
-    },
-
-    async start(): Promise<void> {
-      core.config = core.readConfig();
-      await core.ensureCacheLoaded();
-      checkTools();
-      scheduleSweep();
-      scheduleCacheWatch();
-      for (const server of core.enabledServers()) {
-        if (isEntryValid(cache.get(server.serverName), server, clock.now())) continue;
-        core.probeInBackground(server, "startup", "的启动探测失败");
+      unsubscribe();
+      const jobs: Promise<void>[] = [];
+      for (const [name, entry] of globals) jobs.push(dispose(entry.fiber, name));
+      globals.clear();
+      for (const [sessionId, record] of agents) {
+        for (const [name, slot] of record.mounts) jobs.push(dispose(slot.fiber, name + "@" + sessionId));
       }
-    },
-
-    status: () => runtimeStatusView(core),
-
-    async refresh(serverName: string): Promise<{ toolCount: number }> {
-      const server = core.findServer(serverName);
-      if (!server) throw notFound('没有名为 "' + serverName + '" 的 MCP 服务器');
-      if (server.disabled) throw conflict('服务器 "' + serverName + '" 已停用，无法刷新缓存');
-      try {
-        const entry = await core.probe(server, "manual");
-        return { toolCount: entry.tools.length };
-      } catch (err) {
-        // MCP 服务器连不上 / 拉清单失败：它是这次请求的上游
-        throw upstream(errorText(err));
-      }
-    },
-
-    async disconnect(serverName: string, sessionId?: string): Promise<{ closed: number }> {
-      if (!core.findServer(serverName)) throw notFound('没有名为 "' + serverName + '" 的 MCP 服务器');
-      return { closed: await pool.closeServer(serverName, sessionId) };
-    },
-
-    sweepOnce,
-
-    async waitForBackgroundWork(): Promise<void> {
-      for (;;) {
-        const pending = [...core.background, ...core.probes.values()];
-        if (pending.length === 0) return;
-        await Promise.allSettled(pending);
-        if (core.background.size === 0 && core.probes.size === 0) return;
-      }
-    },
-
-    backgroundCount(): number {
-      return core.background.size + core.probes.size;
+      agents.clear();
+      await Promise.all(jobs);
+      while (pending.size > 0) await Promise.allSettled([...pending]);
     },
   };
-
-  // 配置监听在**构造时**就挂上（而不是在 start() 里）：工具集合与设置解析不能依赖
-  // 「平台层是否调过 start()」。start() 只负责后台工作（读缓存、空闲巡检、启动探测）。
-  unsubscribeConfig = options.config.onChange((next, prev) => {
-    try {
-      applyConfigChange(next, prev);
-    } catch (err) {
-      logger.warn("MCP 配置变化处理失败：" + errorText(err));
-    }
-  });
-
-  return runtime;
 }

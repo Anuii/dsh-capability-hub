@@ -56,7 +56,7 @@ test("CSS 只用主题变量，没有硬编码颜色", () => {
 });
 
 test("样式表覆盖了关键容器类", () => {
-  const keys = ["root", "field", "jsonTextarea", "settings", "dialogBody", "form", "actions", "importSection"] as const;
+  const keys = ["root", "field", "jsonTextarea", "dialogBody", "actions"] as const;
   for (const key of keys) {
     assert.ok(MCP_CSS.includes("." + styles[key] + "{"), key);
   }

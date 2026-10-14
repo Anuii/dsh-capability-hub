@@ -1,24 +1,16 @@
 /**
- * MCP 服务器详情抽屉的正文（UI-DESIGN §5）：概览 → 工具 → 环境变量与请求头 → 最近失败。
+ * MCP 服务器详情抽屉的正文（UI-DESIGN §5）：概览 → 工具 → 环境变量与请求头。
  *
  * 两条纪律：
  *   - **遮罩**（D-C5）：env / headers 的值默认就是 ***hidden***，只有用户显式点「显示」
  *     才向服务端要一次明文，明文只存在本次抽屉的组件状态里；
- *   - **只在需要时出现**：最近失败小节只有真的有失败记录时才渲染，冷却倒计时只在冷却未结束时出现。
+ *   - 「工具」一节先说状态（已连接 · N 个工具 / 连接失败：原因 / 按会话……），再列模型看到的工具名；
+ *     「重新连接」= 卸下再挂上官方 MCP 插件实例（ADR-0010）。
  */
 
 import * as React from "react";
 import { revealServer } from "./data.ts";
-import {
-  cacheLineText,
-  cachedToolNames,
-  cooldownRemainingMs,
-  formatTimestamp,
-  formatDuration,
-  lifecycleLabel,
-  transportLabel,
-  viewSummaryText,
-} from "./view-model.ts";
+import { scopeLabel, stateText, transportLabel, viewSummaryText } from "./view-model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
@@ -30,14 +22,8 @@ import { errorText } from "../../shared/error-text.ts";
 export interface ServerDetailBodyProps {
   view: ServerView;
   row: RuntimeServerView | undefined;
-  /** 冷却倒计时用的当前时间（外壳每秒推进）。 */
-  now: number;
-  refreshing: boolean;
-  onRefresh(): void;
-  /** 该服务器在全部会话里的活跃实例数（0 时不显示「运行中的实例」一节）。 */
-  instances: number;
-  /** 「断开全部实例」：由 MCP 页弹确认框（0.3.0 从运行态标签移入，D-E1）。 */
-  onDisconnectAll(): void;
+  reconnecting: boolean;
+  onReconnect(): void;
   showToast(text: string, tone?: "success"): void;
 }
 
@@ -142,7 +128,7 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
     reveal(field);
   };
 
-  const meta = view.meta ?? {};
+  const description = view.meta?.description;
   const overview = [
     { label: t("mcp.detail.transport"), value: transportLabel(view.transport), testId: "mcp-detail-transport" },
     view.transport === "streamable-http"
@@ -163,47 +149,14 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
     ...(view.cwd === undefined || view.cwd === ""
       ? []
       : [{ label: t("mcp.detail.cwd"), value: view.cwd, mono: true, testId: "mcp-detail-cwd" }]),
-    { label: t("mcp.detail.lifecycle"), value: lifecycleLabel(view.lifecycle), testId: "mcp-detail-lifecycle" },
-    ...(meta.description === undefined || meta.description === ""
+    { label: t("mcp.detail.scope"), value: scopeLabel(view.scope), testId: "mcp-detail-scope" },
+    ...(description === undefined || description === ""
       ? []
-      : [{ label: t("mcp.detail.description"), value: meta.description, testId: "mcp-detail-description" }]),
-    ...(meta.tags === undefined || meta.tags.length === 0
-      ? []
-      : [{ label: t("mcp.detail.tags"), value: meta.tags.join("、"), testId: "mcp-detail-tags" }]),
-    ...(meta.homepage === undefined || meta.homepage === ""
-      ? []
-      : [
-          {
-            label: t("mcp.detail.homepage"),
-            value: (
-              <a href={meta.homepage} target="_blank" rel="noreferrer">
-                {meta.homepage}
-              </a>
-            ),
-            title: meta.homepage,
-            testId: "mcp-detail-homepage",
-          },
-        ]),
+      : [{ label: t("mcp.detail.description"), value: description, testId: "mcp-detail-description" }]),
   ];
 
-  /** 缓存一行：整行普通字体，只有时间保持等宽（复审打磨）。 */
-  const cacheLine = ((): React.ReactNode => {
-    const text = cacheLineText(row);
-    const time = row?.cache === undefined ? "" : formatTimestamp(row.cache.updatedAt);
-    const at = time === "" ? -1 : text.indexOf(time);
-    if (at < 0) return text;
-    return [
-      text.slice(0, at),
-      <span key="time" className={styles.mono}>
-        {time}
-      </span>,
-      text.slice(at + time.length),
-    ];
-  })();
-
-  const tools = cachedToolNames(row);
-  const failure = row?.lastFailure;
-  const remaining = cooldownRemainingMs(failure, props.now);
+  const tools = view.disabled ? [] : (row?.tools ?? []);
+  const failed = !view.disabled && (row?.state === "failed" || row?.state === "disconnected");
 
   return (
     <React.Fragment>
@@ -217,42 +170,31 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
           <Button
             size="sm"
             variant="outline"
-            data-testid="mcp-detail-refresh"
-            disabled={props.refreshing || view.disabled}
-            onClick={props.onRefresh}
+            data-testid="mcp-detail-reconnect"
+            disabled={props.reconnecting || view.disabled}
+            onClick={props.onReconnect}
           >
-            {props.refreshing ? t("mcp.detail.refreshing") : t("mcp.detail.refresh")}
+            {props.reconnecting ? t("mcp.detail.reconnecting") : t("mcp.detail.reconnect")}
           </Button>
         }
       >
-        <p className={styles.cacheLine} data-testid="mcp-detail-cache">
-          {cacheLine}
+        <p className={failed ? styles.failure : styles.cacheLine} data-testid="mcp-detail-state">
+          {stateText(view, row)}
         </p>
         {tools.length === 0 ? null : (
           <ul className={styles.toolList} data-testid="mcp-detail-tool-list">
             {tools.map((tool) => (
-              <li key={tool} className={styles.toolItem}>
-                {tool}
+              <li
+                key={tool.name}
+                className={styles.toolItem}
+                {...(tool.description === undefined ? {} : { title: tool.description })}
+              >
+                {tool.name}
               </li>
             ))}
           </ul>
         )}
       </Section>
-      {props.instances === 0 ? null : (
-        <Section
-          title={t("mcp.detail.instances")}
-          testId="mcp-detail-instances"
-          end={
-            <Button size="sm" variant="outline" data-testid="mcp-detail-disconnect-all" onClick={props.onDisconnectAll}>
-              {t("mcp.detail.disconnectAll", { count: props.instances })}
-            </Button>
-          }
-        >
-          <p className={styles.cacheLine} data-testid="mcp-detail-instances-text">
-            {t("mcp.detail.instancesText", { count: props.instances })}
-          </p>
-        </Section>
-      )}
       <Section title={t("mcp.detail.secrets")} testId="mcp-detail-secrets">
         <SecretBlock
           label={t("mcp.detail.env")}
@@ -276,21 +218,6 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
           </p>
         )}
       </Section>
-      {failure === undefined ? null : (
-        <Section title={t("mcp.detail.failure")} testId="mcp-detail-failure">
-          <p className={styles.failure} data-testid="mcp-detail-failure-message">
-            {failure.message}
-          </p>
-          <p className={styles.note} data-testid="mcp-detail-failure-time">
-            {t("mcp.detail.failureTime", { time: formatTimestamp(failure.at) })}
-          </p>
-          {remaining <= 0 ? null : (
-            <p className={styles.cooldown} data-testid="mcp-detail-failure-cooldown">
-              {t("mcp.row.cooldown", { remaining: formatDuration(remaining) })}
-            </p>
-          )}
-        </Section>
-      )}
     </React.Fragment>
   );
 }

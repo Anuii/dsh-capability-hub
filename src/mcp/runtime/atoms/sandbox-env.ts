@@ -53,21 +53,3 @@ export function proxyEnvironment(source: NodeJS.ProcessEnv = process.env): Recor
   }
   return env;
 }
-
-/**
- * 组装 stdio 子进程的 env。
- * 优先级（后者覆盖前者）：SDK 默认白名单 → 代理变量 → 服务器配置 env → envFrom 解析结果。
- */
-export function buildChildEnv(args: {
-  base?: Record<string, string> | undefined;
-  proxy?: Record<string, string> | undefined;
-  extra?: Record<string, string> | undefined;
-  fromCommands?: Record<string, string> | undefined;
-}): Record<string, string> {
-  return {
-    ...(args.base ?? fallbackDefaultEnvironment()),
-    ...(args.proxy ?? proxyEnvironment()),
-    ...(args.extra ?? {}),
-    ...(args.fromCommands ?? {}),
-  };
-}

@@ -1,19 +1,14 @@
 /**
- * 永不失败外壳（F5 §3.3 / D-F1）。
+ * 永不失败外壳（D-F1）。
  *
  * 职责：
  *   1. 解析 HubContext；
- *   2. 加载 MCP SDK（失败只降级）；
- *   3. 按依赖顺序装载各功能模块（4 个真实模块 + demo + 可选「故意失败」演示），
+ *   2. 加载 DSH 官方 MCP 插件与 yaml（失败只降级）；
+ *   3. 按依赖顺序装载各功能模块（4 个真实模块 + health + 可选「故意失败」演示），
  *      每个模块独立 try/catch，失败只记账（见 modules.ts 的 createFeatureModuleEntries）；
- *   4. 注册全局工具 mcp（**真实的 mcp-runtime**；它不可用时退回桩并写明原因）；
- *   5. 接会话事件桥（含不在册/已归档巡检）；
- *   6. 挂 HTTP 路由（前缀 /api/dsh-capability-hub/，继承 DSH browser-auth）；
- *   7. 写启动报告。
- *
- * 顺序为什么是「模块 → 工具 → 路由」：工具必须拿到**已经装载好的** mcp-runtime 实例
- * （schema/描述/execute 都来自它），所以模块装载必须在工具注册之前；而路由表是模块填的，
- * 注册路由又必须在模块装载之后。三项都不能提前。
+ *   4. 接 agent 事件（按会话的 MCP 服务器挂到 agent.ctx 上），再让 MCP 运行时挂载全局服务器（ADR-0010）；
+ *   5. 挂 HTTP 路由（前缀 /api/dsh-capability-hub/，继承 DSH browser-auth）；
+ *   6. 写启动报告。
  *
  * 所有失败都只记账并暴露在 GET health；apply() 本身永不 throw。
  */
@@ -34,50 +29,38 @@ import {
   type ModuleEntry,
   type ModuleStatus,
 } from "./modules.ts";
-import { loadMcpSdk, type SdkLoadState } from "./sdk-loader.ts";
+import { loadMcpClient, type McpClientLoadState } from "./mcp-client-loader.ts";
 import { loadYaml, type YamlLoadState } from "./yaml-loader.ts";
-import { createStubRuntime } from "./stub-runtime.ts";
-import { registerMcpTools, type McpToolsRegistration } from "./tool-registrar.ts";
-import { attachMcpPromptSection, type PromptSectionHandle } from "./prompt-section.ts";
-import { attachSessionBridge, type SessionBridge } from "./session-bridge.ts";
-import { createHealthModule, type McpToolsState } from "./health.ts";
+import { attachAgentHook } from "./agent-hook.ts";
+import { createHealthModule, type McpServerHealth } from "./health.ts";
 import { HUB_VERSION } from "../../version.ts";
 import { createRejectingModule, createThrowingModule } from "./failure-demo.ts";
-import type { McpRuntime } from "../../mcp/contract/runtime.ts";
+import type { PluginScope, RegisteredTool } from "../../mcp/contract/runtime.ts";
+import type { McpRuntimeModule } from "../../mcp/runtime/module.ts";
 import { errorText } from "../../shared/error-text.ts";
 
 /** 接线摘要（health 里的 wiring 字段）。 */
 export interface WiringSnapshot {
-  /** real = 真实的 mcp-runtime；stub = 退回桩实现。 */
-  runtimeSource: "real" | "stub";
-  /** 退回桩时的中文原因。 */
-  runtimeReason?: string;
   /** skills-local ← skills-remote.lockStash 是否绑定成功。 */
   lockStashBound: boolean;
-  /** mcp-runtime.start()（后台工作）是否已无异常跑起来。 */
-  runtimeStarted: boolean;
-  runtimeStartError?: string;
   /** 接线过程中的中文说明。 */
   notes: string[];
 }
 
-/** 外壳的运行时快照（health 用）。 */
+/** 外壳的运行时快照（health 与启动报告用）。 */
 export interface ShellSnapshot {
   routes: string[];
-  sdk: SdkLoadState;
+  mcpClient: McpClientLoadState extends infer S ? (S extends { plugin: unknown } ? Omit<S, "plugin"> : S) : never;
   modules: ModuleStatus[];
-  /** MCP 工具的注册状态（与 health 的 tools 同形）。 */
-  tools: McpToolsState;
-  sessionEventCount: number;
-  /** 已注册的已鉴权路由路径（V3）。 */
+  mcpServers: McpServerHealth[];
+  /** 已注册的已鉴权路由路径。 */
   registeredPaths: string[];
   /** 路由注册失败原因（成功时 undefined）。 */
   registrationError?: string;
-  /** 阶段 B 的接线摘要。 */
   wiring: WiringSnapshot;
 }
 
-/** 外壳句柄（测试与 V7 用）。 */
+/** 外壳句柄（测试用）。 */
 export interface Shell {
   ctx: PlatformContext;
   /** 已注册的路由表（路由器用的就是它）。 */
@@ -132,29 +115,6 @@ function readConnection(hostCtx: unknown, logger: PlatformContext["logger"]): Co
   return undefined;
 }
 
-/**
- * 尽力加载 @deepseek-ai/dsh-scope 的 carrierKeyOf（只读，绝不抛）。
- *
- * 为什么需要它：subagent/start 的监听器只收到一个 info 参数，父会话只存在于 scoped
- * dispatch 的 carrier（即监听器的 `this`）里；官方就是用 `carrierKeyOf(this)` 取父
- * agent 的（dsh-sdk-jsonrpc-server/lib/index.js:34-37、90-96）。该包是可选依赖：
- * 加载失败就返回 undefined，桥的其余父会话来源照常工作。
- *
- * 为什么用拼接的模块名：本插件不静态依赖 @deepseek-ai/*（理由见 tool-registrar.ts
- * 顶部），而且宿主构建把 @deepseek-ai/* 标成 external —— 拼接可以让打包器把它当
- * 纯运行时 import，不参与解析。
- */
-async function loadCarrierKeyOf(): Promise<((carrier: unknown) => unknown) | undefined> {
-  try {
-    const specifier = "@deepseek-ai/" + "dsh-scope";
-    const loaded = (await import(specifier)) as { carrierKeyOf?: unknown } | undefined;
-    const fn = loaded?.carrierKeyOf;
-    return typeof fn === "function" ? (fn as (carrier: unknown) => unknown) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** 读 DSH 版本（尽力而为）。 */
 function readDshVersion(): string | undefined {
   try {
@@ -163,6 +123,21 @@ function readDshVersion(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** 读插件根作用域里已注册的工具（DSH 的 ctx.tools.schemas()）；拿不到就是空数组。 */
+function toolLister(hostCtx: unknown): () => RegisteredTool[] {
+  return () => {
+    const service = safeGet(hostCtx, "tools") as { schemas?: () => unknown } | undefined;
+    if (service === undefined || typeof service.schemas !== "function") return [];
+    const list = service.schemas();
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((item): item is { name: string; description?: unknown } => typeof item?.name === "string")
+      .map((item) =>
+        typeof item.description === "string" ? { name: item.name, description: item.description } : { name: item.name },
+      );
+  };
 }
 
 /**
@@ -178,43 +153,43 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
   const registry = new ModuleRegistry(ctx, routes);
   logger.info(`启动：profile=${ctx.profileName} homeDir=${ctx.homeDir} hubHome=${ctx.hubHome}`);
 
-  // ---- 1. MCP SDK（永不抛） ----
-  const sdkState: SdkLoadState = await loadMcpSdk();
-  if (sdkState.status === "loaded") {
-    logger.info(`MCP SDK 已加载：${sdkState.info.mainResolved ?? "?"} v${sdkState.info.version ?? "?"}`);
-  } else {
-    logger.warn(`${sdkState.message}（mcp 工具将退回桩实现，只返回「不可用」）`);
-  }
-
-  // ---- 1b. DSH 自带的 yaml 库（技能模块解析 frontmatter 用；永不抛） ----
+  // ---- 1. DSH 官方 MCP 插件与 yaml 库（永不抛） ----
+  const mcpClientState: McpClientLoadState = await loadMcpClient();
+  if (mcpClientState.status === "loaded") logger.info(`DSH 官方 MCP 插件已加载：v${mcpClientState.version ?? "?"}`);
+  else logger.warn(`${mcpClientState.message}（MCP 服务器不会挂载）`);
   const yamlState: YamlLoadState = await loadYaml();
   if (yamlState.status === "loaded") logger.info(`yaml 库已加载：v${yamlState.version ?? "?"}`);
   else logger.warn(`${yamlState.message}（技能模块将降级）`);
+  const mcpClientView = (): ShellSnapshot["mcpClient"] =>
+    mcpClientState.status === "loaded"
+      ? { status: "loaded", ...(mcpClientState.version === undefined ? {} : { version: mcpClientState.version }) }
+      : mcpClientState;
 
-  // ---- 2. 模块表（4 个真实模块按依赖顺序；demo 放最前，失败演示放最后） ----
+  // ---- 2. 模块表（4 个真实模块按依赖顺序；health 放最前，失败演示放最后） ----
   const state: FeatureState = makeFeatureState();
-  /** 工具、提示词段落与运行时的当前状态（health 通过闭包实时读取）。 */
-  const toolState: { current?: McpToolsRegistration; prompt?: PromptSectionHandle; error?: string } = {};
-  const toolsOf = (): McpToolsState => ({
-    registered: toolState.current?.registered() ?? [],
-    failed: toolState.current?.failed() ?? [],
-    prompt: toolState.prompt?.attached() ?? false,
-    ...(toolState.error === undefined ? {} : { error: toolState.error }),
-  });
-  const runtimeState: { runtime?: McpRuntime; source: "real" | "stub"; reason?: string } = { source: "stub" };
+  const listTools = toolLister(hostCtx);
+  const mcpServers = (): McpServerHealth[] =>
+    (state.mcpRuntime?.runtime.status().servers ?? []).map((server) => ({
+      name: server.name,
+      scope: server.scope,
+      state: server.state,
+      toolCount: server.tools.length,
+      sessions: server.sessions,
+      ...(server.error === undefined ? {} : { error: server.error }),
+    }));
+  const wiringSnapshot = (): WiringSnapshot => ({ lockStashBound: state.lockStashBound, notes: [...state.notes] });
 
   const entries: ModuleEntry[] = [
     {
       name: "health",
-      // demo 的 health 要报 profileDir / packageRoot，用外壳自己的完整上下文。
+      // health 要报 profileDir / packageRoot，用外壳自己的完整上下文。
       load: () =>
         createHealthModule({
           ctx,
-          sdk: sdkState,
+          mcpClient: mcpClientState,
           yaml: yamlState,
           modules: () => registry.statuses(),
-          sessionEvents: () => bridge?.events() ?? [],
-          tools: toolsOf,
+          mcpServers,
           host: () => ({
             ...(readDshVersion() === undefined ? {} : { dshVersion: readDshVersion() }),
             pluginVersion: HUB_VERSION,
@@ -226,19 +201,14 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
             registered: registration?.paths ?? [],
             ...(registrationError === undefined ? {} : { error: registrationError }),
           }),
-          wiring: () => ({
-            runtimeSource: runtimeState.source,
-            ...(runtimeState.reason === undefined ? {} : { runtimeReason: runtimeState.reason }),
-            lockStashBound: state.lockStashBound,
-            runtimeStarted: state.runtimeStarted,
-            ...(state.runtimeStartError === undefined ? {} : { runtimeStartError: state.runtimeStartError }),
-            notes: [...state.notes],
-          }),
+          wiring: wiringSnapshot,
         }),
     },
     ...createFeatureModuleEntries({
       ctx,
-      sdk: sdkState,
+      mcpClient: mcpClientState,
+      root: hostCtx as PluginScope,
+      listTools,
       yaml: yamlState,
       state,
       ...(config.devOverrides?.failModules === undefined ? {} : { failModules: config.devOverrides.failModules }),
@@ -250,62 +220,20 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
   }
   await registry.loadAll(entries);
 
-  // ---- 3. MCP 工具：每个工具直接注册（D-D1），服务器说明进系统提示词；mcp-runtime 不可用时退回桩（什么都不注册） ----
-  const runtimeModule = registry.get<{ runtime: McpRuntime }>("mcp-runtime");
+  // ---- 3. MCP：先接 agent 事件（按会话的服务器），再挂全局服务器（ADR-0010） ----
+  const runtimeModule = registry.get<McpRuntimeModule>("mcp-runtime");
+  let detachAgentHook: (() => void) | undefined;
   if (runtimeModule !== undefined) {
-    runtimeState.runtime = runtimeModule.runtime;
-    runtimeState.source = "real";
-  } else {
-    const degraded = registry.statuses().find((entry) => entry.name === "mcp-runtime");
-    runtimeState.reason = degraded?.message ?? "mcp-runtime 未加载（原因未知）";
-    runtimeState.runtime = createStubRuntime({ reason: runtimeState.reason });
-    runtimeState.source = "stub";
-    logger.warn(`MCP 运行时不可用，不注册任何 MCP 工具：${runtimeState.reason}`);
-  }
-  const runtime = runtimeState.runtime;
-
-  const toolsFacade = safeGet(hostCtx, "tools") as { register?: (definition: unknown) => () => void } | undefined;
-  if (toolsFacade !== undefined && typeof toolsFacade.register === "function") {
-    // 手写 definition，不 import @deepseek-ai/dsh-tools（原因见 tool-registrar.ts 顶部）。
-    toolState.current = registerMcpTools({
-      tools: { register: (definition) => toolsFacade.register!(definition) },
-      runtime,
-      logger,
-    });
-  } else {
-    toolState.error = "ctx.tools 不可用";
-    logger.error("ctx.tools 不可用，MCP 工具未注册（已降级，不影响 DSH）");
-  }
-  toolState.prompt = attachMcpPromptSection(hostCtx, runtime, logger);
-
-  // ---- 4. 会话桥（agent/created、agent/disposed、session/disposed、subagent/start|end、
-  //          workspace/session-stop + 不在册/已归档巡检） ----
-  // carrierKeyOf 是「加载完就用」的活引用：外壳启动是同步的，动态 import 只能异步补上；
-  // 还没加载好时返回 undefined，桥会退回其余来源（不会误判）。
-  let carrierKeyOfImpl: ((carrier: unknown) => unknown) | undefined;
-  void loadCarrierKeyOf().then(
-    (fn) => {
-      if (fn !== undefined) carrierKeyOfImpl = fn;
-    },
-    () => {
-      /* 永不抛：拿不到就少一个父会话来源 */
-    },
-  );
-  let bridge: SessionBridge | undefined;
-  try {
-    bridge = attachSessionBridge(
-      hostCtx,
-      {
-        sessionStarted: (info) => runtime.sessionStarted(info),
-        sessionEnded: (sessionId) => runtime.sessionEnded(sessionId),
-      },
-      logger,
-      {
-        carrierKeyOf: (carrier) => carrierKeyOfImpl?.(carrier),
-      },
-    );
-  } catch (error) {
-    logger.warn(`会话桥挂载失败（已降级）：${error instanceof Error ? error.message : error}`);
+    const runtime = runtimeModule.runtime;
+    detachAgentHook = attachAgentHook(hostCtx, runtime, logger);
+    try {
+      runtime.start();
+    } catch (error) {
+      state.notes.push("MCP 运行时启动失败：" + errorText(error));
+      logger.warn("MCP 运行时启动失败（MCP 服务器不会挂载，其余功能不受影响）：" + errorText(error));
+    }
+    // 首轮挂载结束后重写一次启动报告，记下每台服务器连上没有
+    void runtime.settle().then(() => writeBootReport());
   }
 
   // ---- 5. 路由注册（必须在模块加载之后：路由表是模块填的） ----
@@ -334,28 +262,20 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     void writeBootReport();
   };
 
-  // ---- 6. 启动报告（落盘到 <hubHome>/boot.json，覆盖写；工具清单变化时也重写）----
+  // ---- 6. 启动报告（落盘到 <hubHome>/boot.json，覆盖写）----
   // 为什么需要它：外壳的降级状态本来只暴露在 GET health 上，但「路由都没注册成功」时
   // health 根本不可达。落一份小 JSON 是唯一能自查启动结果的通道（DEV.md 有说明）。
-  const wiringSnapshot = (): WiringSnapshot => ({
-    runtimeSource: runtimeState.source,
-    ...(runtimeState.reason === undefined ? {} : { runtimeReason: runtimeState.reason }),
-    lockStashBound: state.lockStashBound,
-    runtimeStarted: state.runtimeStarted,
-    ...(state.runtimeStartError === undefined ? {} : { runtimeStartError: state.runtimeStartError }),
-    notes: [...state.notes],
-  });
+  // 只记关键信息；技能目录推导的详细诊断只在开发开关（devOverrides.enabled）下写。
   const snapshotOf = (): ShellSnapshot => ({
     routes: Object.keys(routes).sort(),
-    sdk: sdkState,
+    mcpClient: mcpClientView(),
     modules: registry.statuses(),
-    tools: toolsOf(),
-    sessionEventCount: bridge?.events().length ?? 0,
+    mcpServers: mcpServers(),
     registeredPaths: registration?.paths ?? [],
     ...(registrationError === undefined ? {} : { registrationError }),
     wiring: wiringSnapshot(),
   });
-  /** 启动报告的写入排队进行：描述变化与路由注册可能同时触发，不能让两次覆盖写交错。 */
+  /** 启动报告的写入排队进行：路由注册与首轮挂载可能同时触发，不能让两次覆盖写交错。 */
   let bootWrite: Promise<void> = Promise.resolve();
   const writeBootReport = (): Promise<void> => {
     bootWrite = bootWrite.then(writeBootReportNow, writeBootReportNow);
@@ -365,24 +285,25 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     try {
       const bootPath = join(ctx.hubHome, "boot.json");
       await mkdir(dirname(bootPath), { recursive: true });
+      const detail =
+        config.devOverrides?.enabled === true
+          ? {
+              services: probeServices(hostCtx),
+              skillSources: skillSourceDiagnostics(hostCtx, scanSkillRoots(hostCtx)),
+            }
+          : {};
       await writeFile(
         bootPath,
         JSON.stringify(
           {
             plugin: "dsh-capability-hub",
-            packageRoot,
+            version: HUB_VERSION,
             profileName: ctx.profileName,
-            homeDir: ctx.homeDir,
-            dshHome: ctx.dshHome,
-            hubHome: ctx.hubHome,
             pid: process.pid,
-            nodeVersion: process.version,
             startedAt,
             writtenAt: new Date().toISOString(),
-            services: probeServices(hostCtx),
-            skillSources: skillSourceDiagnostics(hostCtx, scanSkillRoots(hostCtx)),
-            hasInjectApi: typeof (hostCtx as { inject?: unknown })?.inject === "function",
             ...snapshotOf(),
+            ...detail,
           },
           null,
           2,
@@ -412,15 +333,6 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     }
   }
   await writeBootReport();
-  // 工具清单随配置与缓存变化（新增服务器、探测拉到清单……）：启动报告跟着重写，
-  // 免得 boot.json 里的工具清单停在启动那一刻、被误当成当前状态（writtenAt 是重写时间）。
-  let unsubscribeBootReport: (() => void) | undefined;
-  try {
-    // 先让注册器同步（它订阅得更早），再写报告
-    unsubscribeBootReport = runtime.onToolsChange(() => void writeBootReport());
-  } catch (error) {
-    logger.warn(`订阅工具变化失败（启动报告不再跟随更新）：${errorText(error)}`);
-  }
 
   return {
     ctx,
@@ -434,16 +346,11 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
     },
     snapshot: snapshotOf,
     async dispose(): Promise<void> {
-      // 顺序刻意与装载相反：先摘路由（不再接受新请求），再拆工具与会话桥，
-      // 然后按模块装载的**逆序** dispose（mcp-runtime 最先 → runtime.dispose() 结束全部子进程），
-      // 最后才收桩 runtime。
+      // 顺序与装载相反：先摘路由（不再接受新请求），再摘 agent 事件，
+      // 然后按模块装载的逆序 dispose（mcp-runtime 最先 → 卸下全部官方插件实例）。
       registration?.dispose();
-      bridge?.dispose();
-      unsubscribeBootReport?.();
-      toolState.prompt?.dispose();
-      toolState.current?.dispose();
+      detachAgentHook?.();
       await registry.disposeAll();
-      if (runtimeState.source === "stub") await runtime.dispose();
     },
   };
 }

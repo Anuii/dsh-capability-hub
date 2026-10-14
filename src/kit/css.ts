@@ -5,7 +5,7 @@
  *   export const toolbarSheet = kitSheet(["toolbar", "segment"], [".chk_toolbar{…}", ".chk_segment{…}"]);
  *
  * 约定（UI-DESIGN §1）：
- *   - 每张样式有自己的类名前缀：kit = chk_，外壳 = ch_，技能页 = chsk_，MCP 页 = chmcp_，「运行中」= chrt_；
+ *   - 每张样式有自己的类名前缀：kit = chk_，外壳 = ch_，技能页 = chsk_，MCP 页 = chmcp_；
  *   - 颜色只用主题变量（kit 的 --chk-* token 在 tokens.styles.ts 里映射到 DSH 的 --dsw-*），绝不写死颜色；
  *   - 规则里直接写完整类名（.chk_toolbar），方便全文搜索；单测检查每个声明的类名都有规则。
  */

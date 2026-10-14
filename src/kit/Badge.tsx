@@ -9,7 +9,10 @@ import { kit } from "./styles.ts";
 /** 标记的语义色调：neutral（灰）/ accent（强调）/ warn（琥珀）/ danger（红）。 */
 export type BadgeTone = "neutral" | "accent" | "warn" | "danger";
 
-/** 状态点的语义色调：idle（灰）/ active（强调）/ failed（红）/ cooling（琥珀）。 */
+/**
+ * 状态点的语义色调：idle（灰）/ active（强调）/ failed（红）/ cooling（琥珀）。
+ * cooling 是历史名字：MCP 用它表示「连接中」（自研运行时的失败退避已删，标识符保留不改）。
+ */
 export type StatusTone = "idle" | "active" | "failed" | "cooling";
 
 /** 小号描边胶囊。 */

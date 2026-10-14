@@ -9,18 +9,10 @@
 import { badRequest, conflict, notFound, validation } from "../../shared/errors.ts";
 import { asRecord, optionalString, requireString, requireBoolean, requireStringArray } from "../../shared/request.ts";
 import { checkCommand, type CheckCommandOptions } from "./check-command.ts";
-import {
-  listImportSources,
-  listPresets,
-  mapServerFields,
-  parseMcpJson,
-  readImportSource,
-  type ImportContext,
-} from "./intake.ts";
+import { mapServerFields, parseMcpJson } from "./intake.ts";
 import { HIDDEN_PLACEHOLDER_MESSAGE, findHiddenPlaceholders, maskRawServer, mergeHiddenSecrets } from "./mask.ts";
 import { serverView } from "./schema.ts";
 import { parseServerInput } from "../rules/server.ts";
-import { parseSettingsInput } from "../rules/settings.ts";
 import { createMcpStore, type McpStore, type McpStoreOptions } from "./store.ts";
 import type { McpConfigModule } from "./types.ts";
 import type { EffectiveServer, ServerView } from "../contract/config.ts";
@@ -45,7 +37,6 @@ export interface McpConfigModuleExports extends McpConfigModule {
 
 export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOptions = {}): McpConfigModuleExports {
   const store: McpStore = createMcpStore(ctx.hubHome, ctx.logger, opts.store);
-  const importCtx: ImportContext = { homeDir: ctx.homeDir, logger: ctx.logger };
 
   /** 当前生效服务器的明文（内部使用，绝不直接返回给调用方）。 */
   function rawServerOf(name: string): EffectiveServer | undefined {
@@ -82,8 +73,6 @@ export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOpti
       const raw = store.getRaw();
       const byName = new Map(raw.servers.map((server) => [server.serverName as string, server]));
       return {
-        settings: config.settings,
-        settingsSet: Object.keys(raw.settings ?? {}),
         servers: config.servers.map((server) =>
           serverView(maskEffective(server), maskRawServer(byName.get(server.serverName))),
         ),
@@ -217,18 +206,6 @@ export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOpti
       return { server: serverView(effective, rawStoredOf(name)) };
     },
 
-    "POST mcp/settings/update": async (req) => {
-      const body = asRecord(req.body);
-      const parsed = parseSettingsInput(body.settings);
-      if (parsed.errors.length > 0) throw validation("全局设置校验未通过。", parsed.errors);
-      const next = await store.save((draft) => {
-        draft.settings = parsed.settings;
-      });
-      void next;
-      const config = store.get();
-      return { settings: config.settings, settingsSet: Object.keys(store.getRaw().settings ?? {}) };
-    },
-
     "POST mcp/parse-json": async (req) => {
       const body = asRecord(req.body);
       if (typeof body.text !== "string") throw badRequest("参数 text 必须是字符串。");
@@ -251,107 +228,6 @@ export function createMcpConfigModule(ctx: HubContext, opts: McpConfigModuleOpti
         }),
       );
       return { servers: result.servers, warnings: [...result.warnings, ...commandWarnings] };
-    },
-
-    "GET mcp/presets": async () => {
-      const presets = listPresets();
-      const annotated = await Promise.all(
-        presets.map(async (preset) => {
-          if (preset.server.transport !== "stdio" || typeof preset.server.command !== "string") {
-            return { ...preset, commandFound: true };
-          }
-          const check = await checkCommand(preset.server.command, opts.commandCheck ?? {});
-          return { ...preset, commandFound: check.found, resolvedPath: check.resolvedPath };
-        }),
-      );
-      return { presets: annotated };
-    },
-
-    "GET mcp/import/sources": async () => {
-      const sources = await listImportSources(importCtx);
-      return { sources };
-    },
-
-    "POST mcp/import/apply": async (req) => {
-      const body = asRecord(req.body);
-      const sourceId = requireString(body.sourceId, "sourceId");
-      if (sourceId !== "claude-code" && sourceId !== "codex") {
-        throw badRequest("参数 sourceId 只能是 claude-code 或 codex。");
-      }
-      const names = requireStringArray(body.names, "names");
-
-      const { label, plain } = await readImportSource(importCtx, sourceId);
-      if (!plain.found) throw notFound("没有找到 " + label + " 的配置文件：" + plain.path + "。");
-      const source = {
-        label,
-        path: plain.path,
-        warnings: plain.warnings,
-        servers: plain.servers.map((server) => maskRawServer(server) as Record<string, unknown>),
-        plainServers: plain.servers as unknown as Record<string, unknown>[],
-      };
-
-      const imported: string[] = [];
-      const skipped: { name: string; reason: string }[] = [];
-      const views: ServerView[] = [];
-
-      for (const name of names) {
-        const candidate = source.servers.find((server) => server.serverName === name);
-        if (candidate === undefined) {
-          skipped.push({ name, reason: "来源里没有这个服务器。" });
-          continue;
-        }
-        // 同名跳过（D-C2：导入不覆盖已有配置）
-        if (store.get().servers.some((server) => server.serverName === name)) {
-          skipped.push({ name, reason: "同名服务器已存在，已跳过（导入不会覆盖现有配置）。" });
-          continue;
-        }
-        // 遮罩值配上明文副本，避免把导入的密钥丢掉
-        const plain =
-          source.plainServers.find((item) => item.serverName === name) ??
-          (candidate as unknown as Record<string, unknown>);
-        const merged: Record<string, unknown> = { ...plain };
-        for (const field of ["env", "headers"] as const) {
-          const rawValue = (candidate as Record<string, unknown>)[field];
-          if (rawValue === undefined || rawValue === null || typeof rawValue !== "object") continue;
-          merged[field] = mergeHiddenSecrets(
-            rawValue as Record<string, string>,
-            (plain as Record<string, unknown>)[field] as Record<string, string> | undefined,
-          );
-        }
-
-        const parsed = parseServerInput(merged, { existingNames: store.get().servers.map((s) => s.serverName) });
-        if (parsed.errors.length > 0) {
-          skipped.push({
-            name,
-            reason:
-              "校验未通过：" +
-              parsed.errors
-                .slice(0, 3)
-                .map((e) => e.path + " " + e.message)
-                .join("；"),
-          });
-          continue;
-        }
-        try {
-          await store.save((draft) => {
-            if (draft.servers.some((s) => s.serverName === parsed.server.serverName)) {
-              throw conflict("服务器名称「" + parsed.server.serverName + "」已存在。");
-            }
-            draft.servers.push(parsed.server);
-          });
-        } catch (error) {
-          const hub = error as { code?: string; message?: string };
-          skipped.push({
-            name,
-            reason: hub.code === "CONFLICT" ? "同名服务器已存在，已跳过。" : (hub.message ?? "导入失败。"),
-          });
-          continue;
-        }
-        imported.push(name);
-        views.push(toView(name));
-      }
-
-      return { imported, skipped, servers: views, warnings: source.warnings };
     },
 
     "POST mcp/check-command": async (req) => {

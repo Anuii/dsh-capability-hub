@@ -32,34 +32,6 @@ export function ChevronGlyph({ className }: { className?: string }): React.React
 }
 
 /**
- * 刷新（环形箭头）。
- *
- * 运行态页原本在自己目录里手画了一份一模一样的 SVG（RefreshGlyph）——
- * UI-C 收到「把运行态里手写的刷新 SVG 换成 kit 的」这条意见后收到这里，
- * 两个地方（工具栏的「刷新」按钮、以后任何要刷新的地方）共用同一个字形。
- */
-export function RefreshIcon({ className }: { className?: string }): React.ReactElement {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 16 16"
-      width={14}
-      height={14}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75" />
-      <path d="M13.4 1.9v3.2H10.2" />
-    </svg>
-  );
-}
-
-/**
  * 折叠折角（chevron）。
  *
  * 用 12px 的 SVG 而不是「▸」字形：字形在不同字体下大小与基线都不一致，

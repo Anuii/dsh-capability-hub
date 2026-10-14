@@ -45,7 +45,7 @@ export const listSurfaceSheet = kitSheet(
     ".chk_groupSpacer{flex:1}",
     ".chk_groupCount{font-size:var(--chk-fs-badge);color:var(--chk-fg-caption);font-variant-numeric:tabular-nums;white-space:nowrap}",
     ".chk_groupBadges{display:flex;align-items:center;gap:var(--chk-sp1)}",
-    // 可折叠的分组标题行（技能的层级 / 来源仓库、MCP 的「运行中」）：整条是一个按钮。
+    // 可折叠的分组标题行（技能的层级 / 来源仓库）：整条是一个按钮。
     ".chk_groupHeadWrap{position:relative;display:flex;align-items:stretch}",
     ".chk_groupHeadWrap>.chk_groupHead{flex:1;min-width:0}",
     ".chk_groupHead[data-fold]{cursor:pointer;width:100%;border:none;border-bottom:1px solid var(--chk-line-weak);font:inherit;text-align:left;color:inherit}",
@@ -60,8 +60,8 @@ export const listSurfaceSheet = kitSheet(
     ".chk_nested>.chk_group[data-depth='1']:first-child{border-top:none}",
     // 缩进规则：子级内容与父级标题文字对齐（折叠箭头 12px + 间距 8px = 20px 一级）。
     //   一级可折叠分组（技能的层级）：标题文字在 16+20，直接挂在它下面的行也缩到 16+20；
-    //   二级分组（来源仓库 / 会话）：标题行缩到 16+20；可折叠的二级分组标题文字在 16+40，它的行缩到 16+40，
-    //   不可折叠的二级分组（「运行中」的会话）没有箭头，行与标题文字同在 16+20。
+    //   二级分组（来源仓库）：标题行缩到 16+20；可折叠的二级分组标题文字在 16+40，它的行缩到 16+40，
+    //   不可折叠的二级分组没有箭头，行与标题文字同在 16+20。
     ".chk_group[data-depth='1']>.chk_groupHead,.chk_group[data-depth='1']>.chk_groupHeadWrap>.chk_groupHead{background:var(--chk-surface);padding-left:calc(var(--chk-sp4) + 20px);min-height:30px}",
     ".chk_group[data-foldable]:not([data-depth])>.chk_rows>.chk_row{padding-left:calc(var(--chk-sp4) + 20px)}",
     ".chk_group[data-depth='1'][data-foldable]>.chk_rows>.chk_row{padding-left:calc(var(--chk-sp4) + 40px)}",

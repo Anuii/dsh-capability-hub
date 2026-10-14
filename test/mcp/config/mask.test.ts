@@ -35,10 +35,13 @@ describe("mask: 遮罩", () => {
   });
 
   it("生效服务器的 env / headers 值被替换，键名保留", () => {
-    const effective = toEffectiveServer(
-      { serverName: "a", transport: "stdio", command: "node", env: { A: "1", B: "2" }, headers: { H: "v" } },
-      10,
-    );
+    const effective = toEffectiveServer({
+      serverName: "a",
+      transport: "stdio",
+      command: "node",
+      env: { A: "1", B: "2" },
+      headers: { H: "v" },
+    });
     const masked = maskEffectiveServer(effective);
     assert.deepEqual(Object.keys(masked.env), ["A", "B"]);
     assert.deepEqual(masked.env, { A: HIDDEN, B: HIDDEN });

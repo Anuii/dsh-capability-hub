@@ -1,29 +1,47 @@
 /**
  * 落盘文件 → 生效配置的归一化，以及给界面的服务器视图。
  * 字段白名单、默认值与校验在 ../rules/（宿主与界面共用，ADR-0008）。
+ *
+ * 旧配置兼容：0.7.0 废弃的字段（lifecycle、idleTimeout、debug、includeTools、excludeTools、searchKeywords、
+ * meta.tags、meta.homepage）与全局 settings 读到时直接丢掉——之后任何一次保存写回的文件里就不再有它们。
  */
 
 import {
   DEFAULT_ENV_FROM_TIMEOUT_MS,
   DEFAULT_TOOL_CALL_TIMEOUT_MS,
-  LIFECYCLES,
+  DEPRECATED_FIELDS,
+  DEPRECATED_META_FIELDS,
   SERVER_FIELDS,
-  serverDefaultsHint,
 } from "../rules/server.ts";
-import { effectiveSettings } from "../rules/settings.ts";
 import { isNatural, isPlainObject } from "../rules/values.ts";
 import type {
   EffectiveMcpConfig,
   EffectiveServer,
-  Lifecycle,
-  McpServerMeta,
   RawMcpConfigFile,
   RawMcpServer,
   ServerView,
 } from "../contract/config.ts";
 
+/** 去掉落盘服务器里的废弃字段（不做校验）。 */
+export function withoutDeprecated(raw: Record<string, unknown>): RawMcpServer {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key in DEPRECATED_FIELDS) continue;
+    if (key === "meta" && isPlainObject(value)) {
+      const meta: Record<string, unknown> = {};
+      for (const [metaKey, metaValue] of Object.entries(value)) {
+        if (!(metaKey in DEPRECATED_META_FIELDS)) meta[metaKey] = metaValue;
+      }
+      if (Object.keys(meta).length > 0) out.meta = meta;
+      continue;
+    }
+    out[key] = value;
+  }
+  return out as RawMcpServer;
+}
+
 /** 归一化落盘文件里的服务器（不做校验，只做形状修正）。 */
-export function toEffectiveServer(raw: RawMcpServer, globalIdleTimeoutMin: number): EffectiveServer {
+export function toEffectiveServer(raw: RawMcpServer): EffectiveServer {
   return {
     serverName: typeof raw.serverName === "string" ? raw.serverName : "",
     transport: raw.transport === "streamable-http" ? "streamable-http" : "stdio",
@@ -40,27 +58,22 @@ export function toEffectiveServer(raw: RawMcpServer, globalIdleTimeoutMin: numbe
       typeof raw.toolCallTimeoutMs === "number" && Number.isFinite(raw.toolCallTimeoutMs)
         ? raw.toolCallTimeoutMs
         : DEFAULT_TOOL_CALL_TIMEOUT_MS,
-    lifecycle: (LIFECYCLES as string[]).includes(raw.lifecycle as string) ? (raw.lifecycle as Lifecycle) : "lazy",
-    idleTimeoutMin: isNatural(raw.idleTimeout) ? raw.idleTimeout : globalIdleTimeoutMin,
-    includeTools: Array.isArray(raw.includeTools) ? [...raw.includeTools] : undefined,
-    excludeTools: Array.isArray(raw.excludeTools) ? [...raw.excludeTools] : undefined,
-    searchKeywords: isPlainObject(raw.searchKeywords) ? { ...(raw.searchKeywords as Record<string, string[]>) } : {},
+    scope: raw.scope === "session" ? "session" : "global",
     disabled: raw.disabled === true,
-    debug: raw.debug === true,
-    meta: isPlainObject(raw.meta) ? { ...(raw.meta as McpServerMeta) } : {},
+    meta:
+      isPlainObject(raw.meta) && typeof raw.meta.description === "string" ? { description: raw.meta.description } : {},
   };
 }
 
 /** 落盘文件 → 生效配置。 */
 export function toEffectiveConfig(file: RawMcpConfigFile): EffectiveMcpConfig {
-  const settings = effectiveSettings(file.settings);
   const servers = (Array.isArray(file.servers) ? file.servers : [])
     .filter((s) => isPlainObject(s))
-    .map((s) => toEffectiveServer(s as RawMcpServer, settings.idleTimeoutMin));
-  return { settings, servers };
+    .map((s) => toEffectiveServer(s));
+  return { servers };
 }
 
-/** 服务器上「显式设置过」的字段名（界面用来区分默认值与用户值）。 */
+/** 服务器上「显式设置过」的字段名（JSON 编辑只列这些）。 */
 export function setFieldsOf(raw: RawMcpServer | undefined): string[] {
   if (!isPlainObject(raw)) return [];
   return SERVER_FIELDS.filter((field) => (raw as Record<string, unknown>)[field] !== undefined);
@@ -68,14 +81,10 @@ export function setFieldsOf(raw: RawMcpServer | undefined): string[] {
 
 /** 生成界面视图（server 已由调用方遮罩）。 */
 export function serverView(effective: EffectiveServer, raw: RawMcpServer | undefined): ServerView {
-  return {
-    ...effective,
-    setFields: setFieldsOf(raw),
-    defaults: serverDefaultsHint(),
-  };
+  return { ...effective, setFields: setFieldsOf(raw) };
 }
 
 /** 空配置。 */
 export function emptyRawConfig(): RawMcpConfigFile {
-  return { version: 1, settings: {}, servers: [] };
+  return { version: 1, servers: [] };
 }

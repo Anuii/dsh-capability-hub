@@ -127,7 +127,7 @@ export function JsonPasteView(props: JsonPasteViewProps): React.ReactElement {
       setSaving(false);
       setSelected((current) => current.filter((index) => collected[index] === undefined));
       if (okNames.length > 0) {
-        // 汇总提示（含「去运行态看缓存」动作）由外壳出，避免这里再叠一条 Toast
+        // 汇总提示由外壳出，避免这里再叠一条 Toast
         props.onSaved(okNames);
       } else {
         props.showToast(t("mcp.paste.savedNone"));

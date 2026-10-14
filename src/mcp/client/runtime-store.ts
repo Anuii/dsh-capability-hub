@@ -1,27 +1,24 @@
 /**
  * MCP 页的运行状态仓库（ADR-0005）：GET mcp/runtime 的唯一读取处。
  *
- * 服务器行的状态点与工具数、详情抽屉的工具缓存与实例数、底部「运行中」区域、「MCP」标签旁的红点
- * 都读同一份快照；刷新缓存、断开实例之后它自己重读，调用方不必再互相通知。
+ * 服务器行的状态点与工具数、详情抽屉的状态与工具清单、「MCP」标签旁的红点都读同一份快照；
+ * 重新连接之后它自己重读，调用方不必再互相通知。
  *
  *   const store = createRuntimeStore(runtimeApi);      // data.ts 的 HTTP adapter
  *   const stop = store.startPolling();                 // 每 5 秒一次，页面不可见时跳过
  *   const { status, error, pollError } = useStoreState(store.state);
  *
- * 数据访问经 RuntimeAdapter：正式运行是 HTTP（data.ts 的 runtimeApi），开发预览是
- * previewAdapter（「运行中」用示例会话），单测是内存 fake。本文件不 import React、不发请求。
+ * 数据访问经 RuntimeAdapter：正式运行是 HTTP（data.ts 的 runtimeApi），单测是内存 fake。本文件不 import React、不发请求。
  */
 
 import { createStore, type Store } from "../../kit/store.ts";
-import type { RuntimeDisconnectResult, RuntimeRefreshResult, RuntimeStatus } from "../contract/runtime.ts";
+import type { RuntimeServerView, RuntimeStatus } from "../contract/runtime.ts";
 import { errorText } from "../../shared/error-text.ts";
 
 /** 访问宿主运行时的 seam。 */
 export interface RuntimeAdapter {
   status(): Promise<RuntimeStatus>;
-  refresh(name: string): Promise<RuntimeRefreshResult>;
-  /** 省略 sessionId = 该服务器在全部会话里的实例 */
-  disconnect(name: string, sessionId?: string): Promise<RuntimeDisconnectResult>;
+  reconnect(name: string): Promise<RuntimeServerView>;
 }
 
 export interface RuntimeSnapshot {
@@ -42,20 +39,18 @@ export interface RuntimeTimers {
 }
 
 export const POLL_INTERVAL_MS = 5000;
-/** 保存后等后台探测把工具数写进缓存（D-C6）：每 1.5 秒看一次，最多 6 次。 */
-export const PROBE_INTERVAL_MS = 1500;
-export const PROBE_ATTEMPTS = 6;
+/** 保存后等连接结果：每 1 秒看一次，最多 15 次。 */
+export const SETTLE_INTERVAL_MS = 1000;
+export const SETTLE_ATTEMPTS = 15;
 
 export interface RuntimeStore {
   readonly state: Store<RuntimeSnapshot>;
   /** 立即读一次。silent：失败时若已有数据只记 pollError（自动刷新与操作之后的重读用）。 */
   reload(silent?: boolean): Promise<void>;
-  /** 刷新某个服务器的工具缓存，然后重读。失败原样抛出。 */
-  refresh(name: string): Promise<RuntimeRefreshResult>;
-  /** 断开实例，然后重读。失败原样抛出。 */
-  disconnect(name: string, sessionId?: string): Promise<RuntimeDisconnectResult>;
-  /** 等某个服务器的工具缓存出现：返回工具数；超时（或一直读失败）返回 undefined。 */
-  waitForTools(name: string): Promise<number | undefined>;
+  /** 重新连接某个服务器，然后重读。失败原样抛出。 */
+  reconnect(name: string): Promise<RuntimeServerView>;
+  /** 等某个服务器不再是「连接中」：返回那一行；超时（或一直读失败）返回 undefined。 */
+  waitSettled(name: string): Promise<RuntimeServerView | undefined>;
   /** 开始轮询；返回停止函数。多处同时调用只共用一个计时器。 */
   startPolling(): () => void;
 }
@@ -89,26 +84,21 @@ export function createRuntimeStore(adapter: RuntimeAdapter, timers: RuntimeTimer
   return {
     state,
     reload,
-    async refresh(name) {
-      const result = await adapter.refresh(name);
+    async reconnect(name) {
+      const result = await adapter.reconnect(name);
       await reload(true);
       return result;
     },
-    async disconnect(name, sessionId) {
-      const result = await adapter.disconnect(name, sessionId);
-      await reload(true);
-      return result;
-    },
-    async waitForTools(name) {
-      for (let attempt = 0; attempt < PROBE_ATTEMPTS; attempt += 1) {
-        await timers.sleep(PROBE_INTERVAL_MS);
+    async waitSettled(name) {
+      for (let attempt = 0; attempt < SETTLE_ATTEMPTS; attempt += 1) {
+        await timers.sleep(SETTLE_INTERVAL_MS);
         try {
           const status = await adapter.status();
           state.set({ status });
-          const cache = status.servers.find((server) => server.name === name)?.cache;
-          if (cache !== undefined) return cache.toolCount;
+          const row = status.servers.find((server) => server.name === name);
+          if (row !== undefined && row.state !== "connecting") return row;
         } catch {
-          // 后台探测期间读失败不算结束，下一轮再看
+          // 连接期间读失败不算结束，下一轮再看
         }
       }
       return undefined;
@@ -134,35 +124,16 @@ export function createRuntimeStore(adapter: RuntimeAdapter, timers: RuntimeTimer
   };
 }
 
-/** 把接口返回补成安全形状（缺字段给默认值、丢掉坏的实例条目）。 */
+/** 把接口返回补成安全形状（缺字段给默认值、丢掉坏的条目）。 */
 export function normalizeRuntimeStatus(data: Partial<RuntimeStatus> | undefined): RuntimeStatus {
+  const servers = Array.isArray(data?.servers) ? data.servers : [];
   return {
-    servers: Array.isArray(data?.servers) ? data.servers : [],
-    sessions: Array.isArray(data?.sessions)
-      ? data.sessions.map((session) => ({
-          ...session,
-          sessionId: typeof session?.sessionId === "string" ? session.sessionId : "",
-          instances: Array.isArray(session?.instances)
-            ? session.instances.filter(
-                (instance) => instance !== null && typeof instance === "object" && typeof instance.server === "string",
-              )
-            : [],
-        }))
-      : [],
-  };
-}
-
-/**
- * 开发预览（URL 带 ?hubPreviewRunning=1）：服务器状态照常读，会话换成示例数据（走查不允许新建会话，
- * 测试 profile 里没有实例）；断开不调用接口。
- */
-export function previewAdapter(base: RuntimeAdapter, sample: (now: number) => RuntimeStatus): RuntimeAdapter {
-  return {
-    async status() {
-      const real = await base.status().catch((): RuntimeStatus => ({ servers: [], sessions: [] }));
-      return { servers: real.servers, sessions: sample(Date.now()).sessions };
-    },
-    refresh: (name) => base.refresh(name),
-    disconnect: async () => ({ closed: 0 }),
+    servers: servers
+      .filter((server) => server !== null && typeof server === "object" && typeof server.name === "string")
+      .map((server) => ({
+        ...server,
+        tools: Array.isArray(server.tools) ? server.tools.filter((tool) => typeof tool?.name === "string") : [],
+        sessions: typeof server.sessions === "number" ? server.sessions : 0,
+      })),
   };
 }

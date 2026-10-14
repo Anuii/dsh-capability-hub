@@ -1,10 +1,9 @@
 /**
- * JSON 编辑模式（D-C3：每个服务器可切换 JSON，保存前同样校验）。
+ * 单服务器 JSON 编辑（D-C3；0.7.0 起修改服务器的唯一方式）。
  *
- * 与表单共用同一份「落盘形态」：只列显式设置过的字段（默认值不落盘），
- * 敏感值是遮罩后的 ***hidden***，原样提交即由服务端保留原值。
- * 未知字段因此在文本里可见。保存前先用与宿主同一份规则校验（ADR-0008，不发请求）；
- * 宿主再把关一次（例如名字刚被别人占用），VALIDATION 的逐条错误同样列出来。
+ * 只列显式设置过的字段（默认值不落盘），敏感值是遮罩后的 ***hidden***，原样提交即由服务端保留原值。
+ * 保存前先用与宿主同一份规则校验（ADR-0008，不发请求）；宿主再把关一次（例如名字刚被别人占用），
+ * VALIDATION 的逐条错误同样列出来。
  */
 
 import * as React from "react";
@@ -12,7 +11,7 @@ import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Banner } from "../../kit/index.ts";
 import { upsertServer } from "./data.ts";
 import { parseServerInput } from "../rules/server.ts";
-import { parseJsonServer } from "./draft.ts";
+import { parseJsonServer } from "./json-model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import type { FieldError, ServerView } from "../contract/config.ts";
@@ -25,7 +24,6 @@ export interface JsonEditorProps {
   initialText: string;
   onSaved(server: ServerView, warnings: readonly string[]): void;
   onCancel(): void;
-  onSwitchToForm(values: Record<string, unknown>): void;
 }
 
 export function JsonEditor(props: JsonEditorProps): React.ReactElement {
@@ -83,7 +81,6 @@ export function JsonEditor(props: JsonEditorProps): React.ReactElement {
     <div className={styles.json} data-testid="mcp-json">
       <React.Fragment>
         <p className={styles.note}>{t("mcp.json.hint")}</p>
-        {props.originalName === undefined ? <p className={styles.note}>{t("mcp.json.hiddenWarning")}</p> : null}
         <textarea
           className={styles.jsonTextarea}
           value={text}
@@ -120,20 +117,6 @@ export function JsonEditor(props: JsonEditorProps): React.ReactElement {
           </Button>
           <Button data-testid="mcp-json-format" onClick={format}>
             {t("mcp.json.format")}
-          </Button>
-          <Button
-            data-testid="mcp-json-to-form"
-            onClick={() => {
-              const result = parseJsonServer(text);
-              if (result.values === undefined) {
-                setParseError(result.error ?? "");
-                return;
-              }
-              setParseError(undefined);
-              props.onSwitchToForm(result.values);
-            }}
-          >
-            {t("mcp.json.toForm")}
           </Button>
           <Button data-testid="mcp-json-cancel" onClick={props.onCancel}>
             {t("mcp.cancel")}

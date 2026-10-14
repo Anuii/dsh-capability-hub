@@ -129,14 +129,12 @@ export function useSessionsSnapshot(): SessionsSnapshot {
 export type SessionsHook = (selector: (state: SessionsSnapshot) => unknown) => unknown;
 
 /**
- * 当前会话的 { workspace, sessionId }；拿不到就是空对象。
+ * 当前会话的 { workspace }；拿不到就是空对象。
  *
- * 阶段 B 起，标签页拿到的 props 就是它算出来的（见 tab-props.ts）：
- *   - workspace → 技能页的项目级根 / MCP 页的项目级导入；
- *   - sessionId → 运行态页按会话过滤实例。
+ * 标签页拿到的 props 就是它算出来的（见 tab-props.ts）：workspace → 技能页的项目级根。
  * @param useSessions slot 标准 prop（可选；没有时退回 ctx 服务源）
  */
-export function useCurrentSession(useSessions?: SessionsHook): { workspace?: string; sessionId?: string } {
+export function useCurrentSession(useSessions?: SessionsHook): { workspace?: string } {
   // 本地订阅总是调用，保证 hook 调用顺序稳定。
   const local = useSessionsSnapshot();
   let fromProps: SessionsSnapshot | undefined;
@@ -149,11 +147,7 @@ export function useCurrentSession(useSessions?: SessionsHook): { workspace?: str
   }
   const row = pickCurrentSession(fromProps ?? local);
   const cwd = row?.cwd;
-  const id = row?.id;
-  return {
-    ...(typeof cwd === "string" && cwd !== "" ? { workspace: cwd } : {}),
-    ...(typeof id === "string" && id !== "" ? { sessionId: id } : {}),
-  };
+  return typeof cwd === "string" && cwd !== "" ? { workspace: cwd } : {};
 }
 
 /**

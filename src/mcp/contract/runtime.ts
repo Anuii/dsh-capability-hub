@@ -1,127 +1,71 @@
 /**
  * MCP 运行时（mcp-runtime）的契约（ADR-0002）：只有类型。
  *
- * 用在两条 seam 上：
- *   - HTTP：GET mcp/runtime、POST mcp/runtime/refresh · disconnect 的响应形状，客户端直接用；
- *   - 进程内：外壳把 McpSdk 注入运行时模块，再把运行时给出的每个 MCP 工具直接注册成 DSH 工具（D-D1），
- *     把服务器说明放进系统提示词，并转发会话事件。
+ * 0.7.0 起运行时不再自己连 MCP 服务器，而是把配置里的服务器挂载成 DSH 官方
+ * @deepseek-ai/dsh-mcp-client 的插件实例（ADR-0010）。用在两条 seam 上：
+ *   - HTTP：GET mcp/runtime（每台服务器的挂载状态与已注册的工具）、POST mcp/runtime/reconnect；
+ *   - 进程内：外壳把官方插件模块、插件根作用域与工具注册表交给运行时，并在 agent 创建时转告它。
  */
+
+/** 官方 dsh-mcp-client 模块（外壳动态 import 后注入）：Config 校验并补齐配置，整个模块作为插件挂载。 */
+export interface McpClientPlugin {
+  Config(input: Record<string, unknown>): unknown;
+}
 
 /**
- * 外壳从 DSH 自带的 @modelcontextprotocol/client 与 /stdio 加载后注入。
- * getDefaultEnvironment 未注入时，运行时用内置的同名白名单实现。
+ * 能挂插件的作用域：插件根 ctx（全局一份）或 agent.ctx（按会话）。
+ * plugin() 返回 cordis 的 Fiber：可以 await（激活完成；官方插件激活失败时 reject），可以 dispose()。
  */
-export interface McpSdk {
-  // SDK 没有可用的类型声明（宿主外置），运行时按构造函数使用。
-  // deno-lint-ignore no-explicit-any
-  Client: any;
-  // deno-lint-ignore no-explicit-any
-  StdioClientTransport: any;
-  // deno-lint-ignore no-explicit-any
-  StreamableHTTPClientTransport: any;
-  getDefaultEnvironment?: () => Record<string, string>;
+export interface PluginScope {
+  plugin(plugin: unknown, config: unknown): unknown;
 }
 
-/** 一次工具调用的执行上下文。 */
-export interface McpCallContext {
-  sessionId: string;
-  parentSessionId?: string;
-  signal: AbortSignal;
-}
-
-/** 会话开始信息。 */
-export interface McpSessionInfo {
-  sessionId: string;
-  parentSessionId?: string;
-  title?: string;
-}
-
-/** 一个直接注册给模型的 MCP 工具（D-D1）。 */
-export interface McpToolSpec {
-  /** 模型看到的名字：mcp__<服务器>__<工具>（有不合规字符或超过 64 字时规范化并加哈希，与 DSH 官方 MCP 客户端同一算法） */
+/** 工具注册表里的一项（只取界面要的字段）。 */
+export interface RegisteredTool {
   name: string;
-  server: string;
-  /** MCP 服务器上的原名（调用时用它） */
-  tool: string;
-  description: string;
-  /** 转换成 DSH 子集之后的 inputSchema（根是 type: "object"） */
-  parameters: unknown;
+  description?: string;
 }
 
-/** 运行时模块的进程内接口。 */
-export interface McpRuntime {
-  /**
-   * 现在应当注册的工具：已启用服务器的、按 includeTools / excludeTools 过滤后的、来自工具缓存的工具。
-   * 顺序稳定（服务器按配置顺序，工具按名字），内容不变时逐字节相同。
-   */
-  tools(): McpToolSpec[];
-  /** 工具集合或某个定义变了时回调（内容相同不通知）；返回解绑函数。 */
-  onToolsChange(cb: () => void): () => void;
-  /** 系统提示词里「MCP 服务器」一段的文字（服务器说明 + 服务器自带的用法说明）；没有可用服务器时为空串。 */
-  promptText(): string;
-  /** 调用一个已注册的工具；失败时抛错，message 是给模型看的说明或服务器原文。 */
-  call(name: string, args: unknown, call: McpCallContext): Promise<string>;
-  /** 不得阻塞。 */
-  sessionStarted(info: McpSessionInfo): void;
-  sessionEnded(sessionId: string): Promise<void>;
-  dispose(): Promise<void>;
-}
-
-/** 连接池里的一个实例（state：ready / connecting / failed / closing / closed）。 */
-export interface RuntimeInstanceView {
-  server: string;
-  state: string;
-  startedAt: number;
-  lastUsedAt: number;
-  pid?: number;
-}
-
-export interface RuntimeSessionView {
-  sessionId: string;
-  parentSessionId?: string;
-  title?: string;
-  instances: RuntimeInstanceView[];
-}
+export type ServerScope = "global" | "session";
 
 /**
- * 工具缓存。tools 已按 includeTools / excludeTools 过滤、按名称排序，description 只取第一行且最多 160 字，
- * 不含 inputSchema；toolCount 与 tools.length 恒等。
+ * 一台服务器的状态：
+ *   connecting 正在连接；connected 已连接且有工具；disconnected 挂着但当前没有工具（断线重连中，或重连已放弃）；
+ *   failed 连接失败（error 是原因）；disabled 已停用；session 按会话挂载（sessions = 当前挂着的 agent 数）。
  */
-export interface RuntimeCacheView {
-  toolCount: number;
-  updatedAt: number;
-  /** 缓存过期或与当前配置不匹配 */
-  stale: boolean;
-  /** exposedAs = 模型看到的工具名（mcp__<服务器>__<工具>） */
-  tools: { name: string; description?: string; exposedAs?: string }[];
-}
-
-/** 最近一次失败；cooldownUntil 只在冷却未结束时出现。 */
-export interface RuntimeFailureView {
-  message: string;
-  at: number;
-  cooldownUntil?: number;
-}
+export type ServerState = "connecting" | "connected" | "disconnected" | "failed" | "disabled" | "session";
 
 export interface RuntimeServerView {
   name: string;
-  disabled: boolean;
-  cache?: RuntimeCacheView;
-  lastFailure?: RuntimeFailureView;
+  scope: ServerScope;
+  state: ServerState;
+  /** 模型看到的工具（全局服务器才有；按名字排序，描述只取第一行） */
+  tools: RegisteredTool[];
+  /** 按会话的服务器：当前挂着它的 agent 数 */
+  sessions: number;
+  error?: string;
+  /** 进入当前状态的时间（毫秒时间戳） */
+  since?: number;
 }
 
 /** GET mcp/runtime 的 data。 */
 export interface RuntimeStatus {
   servers: RuntimeServerView[];
-  sessions: RuntimeSessionView[];
 }
 
-/** POST mcp/runtime/refresh 的 data。 */
-export interface RuntimeRefreshResult {
-  toolCount: number;
+/** POST mcp/runtime/reconnect 的 data。 */
+export interface ReconnectResult {
+  server: RuntimeServerView;
 }
 
-/** POST mcp/runtime/disconnect 的 data。 */
-export interface RuntimeDisconnectResult {
-  closed: number;
+/** 运行时模块的进程内接口（外壳用）。 */
+export interface McpRuntime {
+  /** 挂载全部已启用的全局服务器（后台进行，不阻塞）。 */
+  start(): void;
+  /** 一个 agent（会话或子代理）创建了：把按会话的服务器挂到它的作用域上。不得阻塞。 */
+  agentCreated(sessionId: string, scope: PluginScope): void;
+  /** agent 释放了（它作用域里的挂载由 DSH 一起回收，这里只记账）。 */
+  agentDisposed(sessionId: string): void;
+  status(): RuntimeStatus;
+  dispose(): Promise<void>;
 }

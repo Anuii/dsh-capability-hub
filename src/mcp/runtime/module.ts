@@ -1,81 +1,31 @@
 /**
- * mcp-runtime 模块入口（PLAN §3.6 / §3.7）。
+ * mcp-runtime 模块入口（ADR-0010）：把配置里的服务器挂载成官方 dsh-mcp-client 插件实例。
  *
- * 工厂签名与契约一致：
- *   createMcpRuntimeModule(ctx: HubContext, deps: { config: McpConfigSource; sdk: McpSdk })
- *     => HubModule & { runtime: McpRuntime }
- *
- * 路由（PLAN §3.7「MCP·运行态」）：
- *   GET  mcp/runtime               → { servers, sessions }
- *   POST mcp/runtime/refresh       { name }              → { toolCount }（未知 404、已停用 409、连不上 502）
- *   POST mcp/runtime/disconnect    { name, sessionId? }  → { closed }（未知 404）
- *
- * start() 是平台层在注册工具后调用的（T0 负责接线）：它只做后台工作
- * （配置监听、空闲巡检、启动探测），即使它抛错也不该影响插件加载 ——
- * 调用方按永不失败外壳的约定自行 catch；这里尽量把错误降级为日志。
+ * 路由：
+ *   GET  mcp/runtime              → { servers }（每台服务器的挂载状态与已注册的工具）
+ *   POST mcp/runtime/reconnect    { name } → { server }（未知 404、已停用 409）
  */
-import { createMcpRuntime } from "./runtime.ts";
-import type { McpRuntimeInternal } from "./runtime.ts";
-import { badRequest } from "../../shared/errors.ts";
-import type { McpConfigSource } from "../contract/config.ts";
-import type { McpSdk } from "../contract/runtime.ts";
-import type { HubContext, HubModule, RouteRequest } from "../../platform/contract/host.ts";
+import { createMcpRuntime, type McpRuntimeInternal, type McpRuntimeOptions } from "./runtime.ts";
+import { asRecord, requireString } from "../../shared/request.ts";
+import type { HubContext, HubModule } from "../../platform/contract/host.ts";
 
-export interface McpRuntimeModuleDeps {
-  config: McpConfigSource;
-  sdk: McpSdk;
-}
+export type McpRuntimeModuleDeps = Omit<McpRuntimeOptions, "logger">;
 
 export interface McpRuntimeModule extends HubModule {
   runtime: McpRuntimeInternal;
-  /** 启动后台工作；返回 Promise 便于平台层在 dev 环境下 await，生产环境可 fire-and-forget。 */
-  start(): Promise<void>;
-}
-
-function readBody(req: RouteRequest): Record<string, unknown> {
-  const body = req.body;
-  if (body === undefined || body === null) return {};
-  if (typeof body !== "object" || Array.isArray(body)) throw badRequest("请求体必须是一个 JSON 对象");
-  return body as Record<string, unknown>;
-}
-
-function requireName(body: Record<string, unknown>): string {
-  const name = body.name;
-  if (typeof name !== "string" || name.trim().length === 0) throw badRequest("缺少必填字段 name（MCP 服务器名）");
-  return name;
 }
 
 export function createMcpRuntimeModule(ctx: HubContext, deps: McpRuntimeModuleDeps): McpRuntimeModule {
-  const runtime = createMcpRuntime({ ctx, config: deps.config, sdk: deps.sdk });
-
+  const runtime = createMcpRuntime({ ...deps, logger: ctx.logger });
   const routes: HubModule["routes"] = {
     "GET mcp/runtime": async () => runtime.status(),
-
-    "POST mcp/runtime/refresh": async (req) => {
-      const body = readBody(req);
-      const name = requireName(body);
-      return await runtime.refresh(name);
-    },
-
-    "POST mcp/runtime/disconnect": async (req) => {
-      const body = readBody(req);
-      const name = requireName(body);
-      const sessionIdRaw = body.sessionId;
-      if (sessionIdRaw !== undefined && typeof sessionIdRaw !== "string") {
-        throw badRequest("sessionId 必须是字符串（省略 = 断开所有会话）");
-      }
-      return await runtime.disconnect(name, sessionIdRaw as string | undefined);
+    "POST mcp/runtime/reconnect": async (req) => {
+      const name = requireString(asRecord(req.body).name, "name");
+      return { server: await runtime.reconnect(name) };
     },
   };
-
-  return {
-    routes,
-    runtime,
-    start: () => runtime.start(),
-    dispose: () => runtime.dispose(),
-  };
+  return { routes, runtime, dispose: () => runtime.dispose() };
 }
 
 export { createMcpRuntime } from "./runtime.ts";
-export { probeSessionId } from "./runtime.ts";
-export type { McpRuntimeInternal, McpRuntimeOptions, ProbeReason, SessionRef } from "./runtime.ts";
+export type { McpRuntimeInternal, McpRuntimeOptions } from "./runtime.ts";

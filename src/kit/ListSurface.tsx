@@ -173,7 +173,7 @@ export interface ListRowProps {
   subtitleMono?: boolean;
   /** 副标题的悬停提示（副标题是缩写时给完整内容）；省略时用副标题本身。 */
   subtitleTitle?: string;
-  /** 副标题的语义色（默认次要色；失败用红、冷却用琥珀）。 */
+  /** 副标题的语义色（默认次要色；失败用红、连接中 / 警告用琥珀）。 */
   subtitleTone?: "default" | "danger" | "warn";
   /** 行首：StatusTone 时渲染状态点，ReactNode 时原样渲染。 */
   leading?: StatusTone | React.ReactNode;

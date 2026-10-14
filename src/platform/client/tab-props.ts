@@ -13,7 +13,7 @@
  *     要么经自己功能的 data.ts 调 `./api.ts`（见 docs/CLIENT-GUIDE.md 第 3、5 节）。
  */
 
-/** 标签 id（顺序即界面上从左到右的顺序）。0.3.0 起运行态并入 MCP 页（D-A2），只剩两个。 */
+/** 标签 id（顺序即界面上从左到右的顺序）。 */
 export type PanelTab = "skills" | "mcp";
 
 /** 标签页组件收到的 props（panel.tsx 传给它引入的每一个标签组件）。 */
@@ -21,14 +21,11 @@ export interface TabProps {
   /**
    * 当前会话的工作区绝对路径；取不到时 undefined。
    *
-   * 用途：技能页要拿它找项目级技能根（project-dsh / project-agents），
-   * MCP 页的项目级导入、运行态页的会话过滤也用它。
+   * 用途：技能页要拿它找项目级技能根（project-dsh / project-agents）。
    */
   workspace: string | undefined;
-  /** 当前会话 id；取不到时 undefined（运行态页按会话过滤实例时用）。 */
-  sessionId?: string;
   /**
-   * 切换到另一个标签页（标签之间互相跳转用，例如「保存成功后去看运行态」）。
+   * 切换到另一个标签页（标签之间互相跳转用）。
    * 外壳保证这个回调稳定可调用，且在任意标签里都能用。
    */
   openTab(tab: PanelTab): void;

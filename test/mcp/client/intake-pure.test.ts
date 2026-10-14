@@ -10,13 +10,11 @@ import {
   blockedRows,
   defaultSelection,
   hiddenKeys,
-  importableNames,
   planPasteRows,
   placeholderNames,
   rawSummary,
   rawToSubmit,
   renameRow,
-  secretSummary,
   suggestAvailableName,
   toggleSelection,
 } from "../../../src/mcp/client/intake/pure.ts";
@@ -110,7 +108,7 @@ test("rawToSubmit：不把 undefined 写进去（默认值不落盘）", () => {
   assert.deepEqual(submit, { serverName: "a", transport: "stdio", command: "node" });
 });
 
-test("hiddenKeys / placeholderNames / secretSummary：只认遮罩占位符与键数", () => {
+test("hiddenKeys / placeholderNames：只认遮罩占位符", () => {
   const withHidden: ParsedServer = {
     serverName: "a",
     transport: "stdio",
@@ -121,15 +119,26 @@ test("hiddenKeys / placeholderNames / secretSummary：只认遮罩占位符与�
   assert.deepEqual(hiddenKeys(withHidden).sort(), ["env.TOKEN", "headers.Authorization"]);
   assert.deepEqual(hiddenKeys(plain), []);
   assert.deepEqual(placeholderNames([withHidden, plain]), ["a"]);
-  assert.equal(secretSummary(withHidden), "env 1 项（值已遮罩） · headers 1 项（值已遮罩）");
-  assert.equal(secretSummary(plain), "env 1 项（值已遮罩）");
-  assert.equal(secretSummary({ serverName: "c", transport: "stdio" }), "");
 });
 
-test("importableNames：默认只勾选当前配置里没有的服务器", () => {
-  const servers = [stdio("a"), stdio("b")];
-  assert.deepEqual(importableNames(servers, ["b"]), ["a"]);
-  assert.deepEqual(importableNames(servers, []), ["a", "b"]);
+test("rawToSubmit：本插件自己的字段（envFrom、scope、meta……）照样带上，白名单外的不带", () => {
+  const submit = rawToSubmit({
+    serverName: "a",
+    transport: "stdio",
+    command: "node",
+    envFrom: { TOKEN: "gh auth token" },
+    scope: "session",
+    meta: { description: "说明" },
+    ...({ lifecycle: "eager", bogus: 1 } as object),
+  });
+  assert.deepEqual(submit, {
+    serverName: "a",
+    transport: "stdio",
+    command: "node",
+    envFrom: { TOKEN: "gh auth token" },
+    scope: "session",
+    meta: { description: "说明" },
+  });
 });
 
 test("rawToSubmit：只带认识的字段，名字用改名后的", () => {

@@ -1,46 +1,40 @@
 /**
- * 健康检查模块：GET health 把外壳的实测状态（各模块是否降级、SDK 与 yaml 是否加载、mcp 工具是否注册、
- * 路由与会话桥）一次给出来。界面的降级横幅、版本不一致提示、ⓘ 诊断都读它。
+ * 健康检查模块：GET health 把外壳的实测状态（各模块是否降级、官方 MCP 插件与 yaml 是否加载、
+ * 各 MCP 服务器挂载情况、路由注册）一次给出来。界面的降级横幅、版本不一致提示、ⓘ 诊断都读它。
  */
 import type { PlatformContext } from "./types.ts";
 import type { HubModule, RouteHandler } from "../contract/host.ts";
-import type { SdkLoadState } from "./sdk-loader.ts";
+import type { McpClientLoadState } from "./mcp-client-loader.ts";
 import type { YamlLoadState } from "./yaml-loader.ts";
 import type { ModuleStatus } from "./modules.ts";
+
+/** health 里每台 MCP 服务器的摘要。 */
+export interface McpServerHealth {
+  name: string;
+  scope: string;
+  state: string;
+  toolCount: number;
+  sessions: number;
+  error?: string;
+}
 
 /** 健康检查需要的环境（由外壳注入，避免模块之间 import）。 */
 export interface HealthDeps {
   ctx: PlatformContext;
-  sdk: SdkLoadState;
+  /** DSH 官方 MCP 插件（ADR-0010）。 */
+  mcpClient: McpClientLoadState;
   /** DSH 自带的 yaml 库（技能模块解析 frontmatter 用）。 */
   yaml: YamlLoadState;
   /** 模块状态快照（含降级）。 */
   modules(): ModuleStatus[];
-  /** 会话桥事件快照（V5）。 */
-  sessionEvents(): unknown[];
-  /** MCP 工具的注册状态：已注册的工具名、被 DSH 拒绝的工具、服务器说明是否挂进了提示词；error = ctx.tools 不可用。 */
-  tools(): McpToolsState;
+  /** MCP 服务器的挂载摘要（mcp-runtime 不可用时为空数组）。 */
+  mcpServers(): McpServerHealth[];
   /** 宿主标题（DSH 版本等）。 */
   host(): { dshVersion?: string; pid: number; nodeVersion: string; startedAt: string };
-  /** 已鉴权路由的注册结果（V3）。 */
+  /** 已鉴权路由的注册结果。 */
   registration(): { registered: string[]; error?: string };
-  /** 阶段 B 的接线摘要（4 个真实模块的装载与降级情况）。 */
-  wiring(): {
-    runtimeSource: "real" | "stub";
-    runtimeReason?: string;
-    lockStashBound: boolean;
-    runtimeStarted: boolean;
-    runtimeStartError?: string;
-    notes: string[];
-  };
-}
-
-/** health 里的 tools 字段。 */
-export interface McpToolsState {
-  registered: string[];
-  failed: { name: string; error: string }[];
-  prompt: boolean;
-  error?: string;
+  /** 接线摘要。 */
+  wiring(): { lockStashBound: boolean; notes: string[] };
 }
 
 export function createHealthModule(deps: HealthDeps): HubModule {
@@ -55,10 +49,10 @@ export function createHealthModule(deps: HealthDeps): HubModule {
     packageRoot: deps.ctx.packageRoot,
     customSkillDirs: deps.ctx.customSkillDirs,
     bundledSkillDir: deps.ctx.bundledSkillDir ?? null,
-    sdk:
-      deps.sdk.status === "loaded"
-        ? { status: "loaded", ...deps.sdk.info }
-        : { status: "failed", message: deps.sdk.message },
+    mcpClient:
+      deps.mcpClient.status === "loaded"
+        ? { status: "loaded", ...(deps.mcpClient.version === undefined ? {} : { version: deps.mcpClient.version }) }
+        : { status: "failed", message: deps.mcpClient.message },
     yaml:
       deps.yaml.status === "loaded"
         ? {
@@ -74,11 +68,10 @@ export function createHealthModule(deps: HealthDeps): HubModule {
       ...(entry.message === undefined ? {} : { message: entry.message }),
       ...(entry.loadMs === undefined ? {} : { loadMs: entry.loadMs }),
     })),
-    tools: deps.tools(),
+    mcpServers: deps.mcpServers(),
     registration: deps.registration(),
     wiring: deps.wiring(),
     host: deps.host(),
-    sessionEvents: deps.sessionEvents().slice(-20),
     serverTime: new Date().toISOString(),
   });
   return { routes: { "GET health": health } };

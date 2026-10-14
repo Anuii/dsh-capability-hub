@@ -23,7 +23,6 @@ import { searchFlag } from "./pure.ts";
 /** 预览用的假数据（刻意覆盖每一种视觉形态）。 */
 const MORE_ITEMS: MenuItem[] = [
   { id: "check-all", label: "检查全部更新" },
-  { id: "infer", label: "为无来源技能推测来源" },
   { id: "trash", label: "回收站", hint: "2", separatorBefore: true },
   { id: "github", label: "GitHub：已连接 · 剩余配额 42", info: true, separatorBefore: true },
 ];
@@ -167,11 +166,11 @@ export function KitPreview(): React.ReactElement {
       <ListRow
         testId="kit-row-8"
         title="slow-index"
-        subtitle="上一次失败：ETIMEDOUT · 冷却 47s"
+        subtitle="npx -y slow-server · 正在连接"
         leading="cooling"
         badges={[
           <Badge tone="warn" key="w">
-            冷却 47s
+            警告
           </Badge>,
         ]}
         trailing={<Switch checked label="启用 slow-index" onChange={() => undefined} />}

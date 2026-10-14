@@ -41,7 +41,7 @@ export type { FilterItem, KeyDecision } from "./pure.ts";
 export { Badge, StatusDot } from "./Badge.tsx";
 export type { BadgeTone, StatusTone } from "./Badge.tsx";
 
-export { ChevronGlyph, GripIcon, RefreshIcon, SectionChevron } from "./icons.tsx";
+export { ChevronGlyph, GripIcon, SectionChevron } from "./icons.tsx";
 
 export { MoreMenu, PrimaryMenuButton, menuChildren } from "./menu.tsx";
 export type { MenuItem } from "./menu.tsx";

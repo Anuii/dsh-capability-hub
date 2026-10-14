@@ -1,6 +1,8 @@
 /**
  * store.ts：加载、原子写、默认值不落盘、外部修改、写前合并、损坏恢复、onChange、并发。
  * 全部落在 os.tmpdir() 的临时目录。
+ *
+ * 0.7.0（ADR-0010）：落盘文件里不再有全局 settings；废弃字段读到即丢、下次写回就没了。
  */
 
 import assert from "node:assert/strict";
@@ -23,14 +25,7 @@ describe("store: 加载", () => {
     try {
       const { store, logger } = open(join(dir.path, "hub"));
       await store.ready();
-      assert.deepEqual(store.get(), {
-        settings: {
-          idleTimeoutMin: 10,
-          outputGuard: { enabled: true, maxBytes: 51200, maxLines: 2000 },
-          failureBackoffMs: 60000,
-        },
-        servers: [],
-      });
+      assert.deepEqual(store.get(), { servers: [] });
       assert.deepEqual(store.warnings, []);
       assert.equal(logger.text(), "");
       assert.equal(store.path, join(dir.path, "hub", "mcp", "config.json"));
@@ -40,7 +35,40 @@ describe("store: 加载", () => {
     }
   });
 
-  it("读回已有配置并解析默认值与全局 idleTimeout", async () => {
+  it("读回已有配置并补齐生效默认值", async () => {
+    const dir = await makeTempDir();
+    try {
+      const hub = join(dir.path, "hub");
+      await fs.mkdir(join(hub, "mcp"), { recursive: true });
+      await fs.writeFile(
+        join(hub, "mcp", "config.json"),
+        JSON.stringify({
+          version: 1,
+          servers: [
+            { serverName: "a", transport: "stdio", command: "node" },
+            { serverName: "b", transport: "stdio", command: "node", scope: "session" },
+          ],
+        }),
+        "utf8",
+      );
+      const { store } = open(hub);
+      await store.ready();
+      assert.deepEqual(
+        store.get().servers.map((s) => [s.serverName, s.scope, s.disabled, s.args]),
+        [
+          ["a", "global", false, []],
+          ["b", "session", false, []],
+        ],
+      );
+      assert.equal(store.get().servers[0].envFromTimeoutMs, 10000);
+      assert.equal(store.get().servers[0].toolCallTimeoutMs, 60000);
+      store.dispose();
+    } finally {
+      await dir.cleanup();
+    }
+  });
+
+  it("旧文件里的 settings 与废弃字段读到即丢", async () => {
     const dir = await makeTempDir();
     try {
       const hub = join(dir.path, "hub");
@@ -51,18 +79,50 @@ describe("store: 加载", () => {
           version: 1,
           settings: { idleTimeout: 3, outputGuard: { maxLines: 5 } },
           servers: [
-            { serverName: "a", transport: "stdio", command: "node" },
-            { serverName: "b", transport: "stdio", command: "node", idleTimeout: 9 },
+            {
+              serverName: "a",
+              transport: "stdio",
+              command: "node",
+              lifecycle: "eager",
+              idleTimeout: 9,
+              debug: true,
+              includeTools: ["x"],
+              excludeTools: ["y"],
+              searchKeywords: { t: ["k"] },
+              meta: { description: "留着", tags: ["t"], homepage: "https://example.com" },
+            },
           ],
         }),
         "utf8",
       );
       const { store } = open(hub);
       await store.ready();
-      assert.equal(store.get().settings.idleTimeoutMin, 3);
-      assert.deepEqual(store.get().settings.outputGuard, { enabled: true, maxBytes: 51200, maxLines: 5 });
-      assert.equal(store.get().servers[0].idleTimeoutMin, 3);
-      assert.equal(store.get().servers[1].idleTimeoutMin, 9);
+      const raw = store.getRaw();
+      assert.equal("settings" in raw, false, "settings 不该出现在内存里的落盘形态");
+      assert.deepEqual(raw.servers[0], {
+        serverName: "a",
+        transport: "stdio",
+        command: "node",
+        meta: { description: "留着" },
+      });
+      assert.deepEqual(store.get().servers[0].meta, { description: "留着" });
+      // 写回后磁盘上也不再有它们
+      await store.save(() => undefined);
+      const text = await fs.readFile(store.path, "utf8");
+      for (const key of [
+        "settings",
+        "lifecycle",
+        "idleTimeout",
+        "debug",
+        "includeTools",
+        "excludeTools",
+        "searchKeywords",
+        "tags",
+        "homepage",
+      ]) {
+        assert.equal(text.includes('"' + key + '"'), false, key + " 不该写回磁盘");
+      }
+      assert.match(text, /"description": "留着"/);
       store.dispose();
     } finally {
       await dir.cleanup();
@@ -79,11 +139,10 @@ describe("store: 写入与默认值不落盘", () => {
       await store.ready();
       await store.save((draft) => {
         draft.servers.push({ serverName: "demo", transport: "stdio", command: "node" });
-        draft.settings = {};
       });
-      const onDisk = (await readJson(store.path)) as { version: number; settings: unknown; servers: unknown[] };
+      const onDisk = (await readJson(store.path)) as { version: number; settings?: unknown; servers: unknown[] };
       assert.equal(onDisk.version, 1);
-      assert.deepEqual(onDisk.settings, {});
+      assert.equal("settings" in onDisk, false);
       assert.deepEqual(onDisk.servers, [{ serverName: "demo", transport: "stdio", command: "node" }]);
       const text = await fs.readFile(store.path, "utf8");
       for (const key of [
@@ -91,10 +150,10 @@ describe("store: 写入与默认值不落盘", () => {
         "envFrom",
         "envFromTimeoutMs",
         "toolCallTimeoutMs",
-        "lifecycle",
+        "scope",
         "disabled",
-        "debug",
-        "searchKeywords",
+        "meta",
+        "lifecycle",
       ]) {
         assert.equal(text.includes('"' + key + '"'), false, key + " 是默认值，不应落盘");
       }
@@ -226,7 +285,6 @@ describe("store: 外部修改", () => {
         join(hub, "mcp", "config.json"),
         JSON.stringify({
           version: 1,
-          settings: {},
           servers: [{ serverName: "external", transport: "stdio", command: "node" }],
         }),
         "utf8",
@@ -243,7 +301,7 @@ describe("store: 外部修改", () => {
     }
   });
 
-  it("写前发现外部修改：先重新加载再应用本次变更", async () => {
+  it("写前发现外部修改：先重新加载再应用本次变更，外部改动不被覆盖", async () => {
     const dir = await makeTempDir();
     try {
       const hub = join(dir.path, "hub");
@@ -251,15 +309,14 @@ describe("store: 外部修改", () => {
       await store.ready();
       await store.save((draft) => draft.servers.push({ serverName: "mine", transport: "stdio", command: "node" }));
 
-      // 外部进程追加了一个服务器，并改了全局设置
+      // 外部进程追加了一个服务器
       await fs.writeFile(
         store.path,
         JSON.stringify({
           version: 1,
-          settings: { idleTimeout: 1 },
           servers: [
             { serverName: "mine", transport: "stdio", command: "node" },
-            { serverName: "theirs", transport: "stdio", command: "node" },
+            { serverName: "theirs", transport: "stdio", command: "node", scope: "session" },
           ],
         }),
         "utf8",
@@ -273,9 +330,9 @@ describe("store: 外部修改", () => {
         store.get().servers.map((s) => s.serverName),
         ["mine", "theirs", "added-by-me"],
       );
-      assert.equal(store.get().settings.idleTimeoutMin, 1);
-      const onDisk = (await readJson(store.path)) as { settings: { idleTimeout?: number } };
-      assert.equal(onDisk.settings.idleTimeout, 1, "外部改动不能被本次写入覆盖");
+      assert.equal(store.get().servers[1].scope, "session", "外部改动不能被本次写入覆盖");
+      const onDisk = (await readJson(store.path)) as { servers: { serverName: string; scope?: string }[] };
+      assert.equal(onDisk.servers[1].scope, "session");
       store.dispose();
     } finally {
       await dir.cleanup();
@@ -294,7 +351,6 @@ describe("store: 外部修改", () => {
         join(hub, "mcp", "config.json"),
         JSON.stringify({
           version: 1,
-          settings: {},
           servers: [{ serverName: "x", transport: "stdio", command: "node" }],
         }),
         "utf8",

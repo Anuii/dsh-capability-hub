@@ -233,15 +233,6 @@ test("菜单项的 data-testid 挂在包文字的 span 上（宿主 MenuItemButt
   assert.equal(/<MenuItemButton[^>]*data-testid/s.test(menu), false);
 });
 
-test("刷新字形收进 kit，运行态不再自己画一份", () => {
-  const icons = fs.readFileSync(path.join(kitDir, "icons.tsx"), "utf8");
-  assert.ok(icons.includes("export function RefreshIcon"));
-  const runtime = fs.readFileSync(path.join(srcDir, "mcp", "client", "running", "index.tsx"), "utf8");
-  assert.ok(runtime.includes("RefreshIcon"));
-  assert.equal(runtime.includes("RefreshGlyph"), false, "运行态手写的刷新 SVG 应当删掉");
-  assert.equal(/<svg\b/.test(runtime), false, "运行态里不该再有手写 SVG");
-});
-
 test("抽屉副标题单行截断（完整内容走 title 提示）", () => {
   const rule = KIT_CSS.split("}").find((part) => part.startsWith("." + kit.drawerSub + "{"));
   assert.ok(rule !== undefined, "要有 .chk_drawerSub 规则");

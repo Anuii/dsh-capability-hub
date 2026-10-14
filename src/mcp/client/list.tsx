@@ -1,9 +1,8 @@
 /**
  * MCP 服务器列表（UI-DESIGN §5）：一片 Surface + 若干行，行与行之间只有 1px 分隔线。
  *
- * 一行只说两件事：**这是什么**（状态点 + 名称 + 等宽的启动摘要）与**开没开**（行尾开关）。
- * 其他信息（工具缓存、最近失败、环境变量…）全在详情抽屉里。
- * 标记只在有事时出现：连接失败（红）、冷却中（琥珀），每行最多 2 个。
+ * 一行只说两件事：**这是什么**（状态点 + 名称 + 等宽的启动摘要与工具数）与**开没开**（行尾开关）。
+ * 其他信息（工具清单、环境变量、失败原因…）全在详情抽屉里。标记只在有事时出现：连接失败 / 未连接（红）。
  *
  * 排序：悬停时行首出现拖动把手，HTML5 拖放（dragstart / dragover / drop 都冒泡到容器上，
  * 所以这里用事件委托，不需要 kit 暴露额外的 props）。**没有上移 / 下移按钮**。
@@ -12,32 +11,19 @@
 import * as React from "react";
 import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, GripIcon, ListGroup, ListRow, ListSurface, StatusDot, kit } from "../../kit/index.ts";
-import {
-  activeInstanceCount,
-  cooldownRemainingMs,
-  rowSubtitleText,
-  rowSubtitleTitle,
-  serverStatusTone,
-  statusTitle,
-} from "./view-model.ts";
+import { rowSubtitleText, rowSubtitleTitle, serverStatusTone, statusTitle } from "./view-model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { RuntimeServerView, RuntimeStatus } from "../contract/runtime.ts";
+import type { RuntimeServerView } from "../contract/runtime.ts";
 import type { ServerView } from "../contract/config.ts";
 
 export interface ServerListProps {
   servers: readonly ServerView[];
-  runtime: RuntimeStatus | undefined;
+  rows: ReadonlyMap<string, RuntimeServerView>;
   busy: ReadonlySet<string>;
-  /** 冷却倒计时用的当前时间（由外壳每秒推进一次）。 */
-  now: number;
   onToggle(view: ServerView, disabled: boolean): void;
   onOpen(view: ServerView): void;
   onReorder(from: number, to: number): void;
-}
-
-function runtimeOf(runtime: RuntimeStatus | undefined, name: string): RuntimeServerView | undefined {
-  return runtime?.servers.find((item) => item.name === name);
 }
 
 /** 拖动把手的节点（交给 kit 的行首插槽；只有它是 draggable，行本身不拖）。 */
@@ -52,31 +38,30 @@ function dragHandle(name: string): React.ReactElement {
 function ServerRow(props: {
   view: ServerView;
   row: RuntimeServerView | undefined;
-  instances: number;
   busy: boolean;
-  now: number;
   onToggle(view: ServerView, disabled: boolean): void;
   onOpen(view: ServerView): void;
 }): React.ReactElement {
   const view = props.view;
   const name = view.serverName;
   const row = props.row;
-  const tone = serverStatusTone(row, props.instances, props.now);
-  const cooling = cooldownRemainingMs(row?.lastFailure, props.now) > 0;
+  const tone = serverStatusTone(view, row);
   const badges =
-    row?.lastFailure === undefined
+    view.disabled || row === undefined
       ? []
-      : [
-          cooling ? (
-            <Badge key="cooling" tone="warn" testId={"mcp-badge-cooling-" + name}>
-              {t("mcp.row.badgeCooling")}
-            </Badge>
-          ) : (
+      : row.state === "failed"
+        ? [
             <Badge key="failed" tone="danger" testId={"mcp-badge-failed-" + name}>
               {t("mcp.row.badgeFailed")}
-            </Badge>
-          ),
-        ];
+            </Badge>,
+          ]
+        : row.state === "disconnected"
+          ? [
+              <Badge key="disconnected" tone="danger" testId={"mcp-badge-disconnected-" + name}>
+                {t("mcp.row.badgeDisconnected")}
+              </Badge>,
+            ]
+          : [];
   const dotTitle = statusTitle(tone);
   return (
     <ListRow
@@ -157,18 +142,15 @@ export function ServerList(props: ServerListProps): React.ReactElement {
       }}
       onDragEnd={clearDragging}
     >
-      {/* 只有一组服务器时**不显示分组标题**：UI-C 起 ListGroup 的 title 可选，不传就只留面板外观 */}
-      {/* （圆角 / 边框 / 底色仍由 kit 给）。之前这里手写了一份 .chmcp_panel，已删掉。 */}
+      {/* 只有一组服务器时不显示分组标题：ListGroup 的 title 不传就只留面板外观。 */}
       <ListSurface testId="mcp-list">
         <ListGroup testId="mcp-group">
           {props.servers.map((view) => (
             <ServerRow
               key={view.serverName}
               view={view}
-              row={runtimeOf(props.runtime, view.serverName)}
-              instances={activeInstanceCount(props.runtime, view.serverName)}
+              row={props.rows.get(view.serverName)}
               busy={props.busy.has(view.serverName)}
-              now={props.now}
               onToggle={props.onToggle}
               onOpen={props.onOpen}
             />
