@@ -18,7 +18,11 @@
  *   - path 必须在 "/api/" 之下，且每一段都匹配 [A-Za-z0-9_$.-]+（不能有尾斜杠/空段）；
  *   - methods 非空且不重复；
  *   - fetch(request) 返回 Response（Web Fetch，而不是 node:http 的 req/res）。
- * 匹配是**精确 pathname**（fetchRoutes 是 Map，按 pathname 直接 get），所以一条接口 = 一条路由。
+ * 匹配是**精确 pathname**（fetchRoutes 是 Map，按 pathname 直接 get，:626-636），而 Map 的键就是
+ * path：**同一路径只能注册一条路由**，第二条会抛
+ * 「connection: exact Fetch route "<path>" is already registered」。因此路由表里同一路径的多个方法
+ * （如 GET / POST skills/settings）必须合成一条 FetchRoute，由 fetch 按 request.method 分发 ——
+ * 否则第二条注册抛错，registerRoutes 把已注册的全部回滚，整个插件的接口一起 404（v071 实测）。
  */
 
 import type { RouteTable } from "../contract/host.ts";
@@ -138,20 +142,45 @@ export function routePath(key: string): string | undefined {
  * @param logger 日志面（非法键只警告并跳过，不影响其他接口）
  */
 export function createFetchRoutes(table: RouteTable, logger: RouterLogger): FetchRoute[] {
-  const routes: FetchRoute[] = [];
+  /** 同一绝对路径下的全部方法（键 = 绝对路径，插入顺序 = 该路径第一次出现的顺序）。 */
+  const groups = new Map<string, { relative: string; methods: string[]; handlers: Map<string, RouteHandler> }>();
   for (const [key, handler] of Object.entries(table)) {
     const parsed = parseRouteKey(key);
     if (parsed === undefined) {
       logger.warn("[capability-hub] 忽略非法路由键：" + JSON.stringify(key));
       continue;
     }
-    const method = parsed.method;
-    const relative = parsed.relative;
+    const path = ROUTE_PREFIX + "/" + parsed.relative;
+    let group = groups.get(path);
+    if (group === undefined) {
+      group = { relative: parsed.relative, methods: [], handlers: new Map() };
+      groups.set(path, group);
+    }
+    // 同一个键在表里只可能出现一次（对象键唯一），这里去重只是为了 methods 一定满足 DSH 的
+    // assertFetchRoute（非空且不重复）。
+    if (!group.methods.includes(parsed.method)) group.methods.push(parsed.method);
+    group.handlers.set(parsed.method, handler);
+  }
+
+  const routes: FetchRoute[] = [];
+  for (const [path, group] of groups) {
+    const relative = group.relative;
+    // 排序让 methods 稳定（GET 在 POST 前），便于测试与排查。
+    const methods = [...group.methods].sort();
     routes.push({
-      path: ROUTE_PREFIX + "/" + relative,
-      methods: [method],
+      path,
+      methods,
       requestBody: "buffered",
       async fetch(request: Request): Promise<Response> {
+        // DSH 已经按 methods 过滤过，这里再防一手：方法不在表里就 405，绝不落到别的处理器上。
+        const method = request.method.toUpperCase();
+        const handler = group.handlers.get(method);
+        if (handler === undefined) {
+          return json(405, {
+            ok: false,
+            error: { code: "METHOD_NOT_ALLOWED", message: "不支持的请求方法：" + method },
+          });
+        }
         try {
           const body = method === "POST" ? await readBody(request) : undefined;
           const routeRequest: RouteRequest = {
@@ -188,7 +217,7 @@ export function createFetchRoutes(table: RouteTable, logger: RouterLogger): Fetc
  * @param connection ctx.connection（或 ctx.get("connection")）
  * @param table 路由键表
  * @param logger 日志面
- * @returns 已注册路径与解绑函数
+ * @returns 已注册路径（**每条路径一次**；同一路径的多个方法共用一条 FetchRoute）与解绑函数
  */
 export function registerRoutes(
   connection: ConnectionFace,
