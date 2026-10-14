@@ -15,11 +15,13 @@
  * dsh.client.inject 在 boot 图里先加载。
  *
  * 用法：
- *   node build.mjs                              # 构建到 lib/
+ *   node build.mjs                              # 构建到 lib/（正式构建：不含开发用代码）
+ *   node build.mjs --dev                        # 开发构建：含组件预览（?hubKitPreview=1）与失败演示
  *   node build.mjs --also-out <目录>            # 同时把 index.js / client.js 写进另一个 lib 目录（可重复）
  *   node build.mjs --watch [--also-out <目录>]  # 监听源码，变化后增量重建并写出
  *
- * --also-out 给开发期的 link 暂存目录用（见 docs/DEV.md 第 4 节、scripts/dev-link.ps1）。
+ * --also-out 给开发期的 link 暂存目录用（见 docs/DEV.md 第 4 节、scripts/dev-link.ps1，它总用 --dev）。
+ * 正式构建里开发用模块（DEV_ONLY）被换成空壳：安装包里没有组件预览面板与失败演示。
  * 产物内容没变时不重写文件：宿主 HMR 按文件元数据判断变化，避免无意义的重载。
  */
 import { build, context } from "esbuild";
@@ -61,6 +63,7 @@ const CLIENT_EXTERNALS = [...SEED_MODULES, ...INJECTED_CLIENT_MODULES];
 // ---- 参数 -------------------------------------------------------------------
 const argv = process.argv.slice(2);
 const watch = argv.includes("--watch");
+const dev = argv.includes("--dev");
 const libDir = join(root, "lib");
 const alsoOut = [];
 for (let i = 0; i < argv.length; i++) {
@@ -110,6 +113,31 @@ function report(name, written) {
   else console.log(`[build ${stamp()}] ${name} → ${written.map((dir) => (dir === libDir ? "lib" : dir)).join("、")}`);
 }
 
+// ---- 开发用模块 -------------------------------------------------------------
+/** 只给开发与截图用的模块：正式构建时换成这里的空壳（同样的导出名，什么都不做）。 */
+const DEV_ONLY = {
+  [join(root, "src/kit/preview.tsx")]: "export function KitPreview() { return null; }\n",
+  [join(root, "src/platform/host/failure-demo.ts")]: [
+    'const off = () => { throw new Error("失败演示只在开发构建里有"); };',
+    "export const createThrowingModule = off;",
+    "export const createRejectingModule = off;",
+    "",
+  ].join("\n"),
+};
+
+/** esbuild 插件：正式构建时把 DEV_ONLY 里的文件换成空壳。 */
+const stripDevOnly = {
+  name: "strip-dev-only",
+  setup(b) {
+    if (dev) return;
+    b.onLoad({ filter: /[\\/](preview\.tsx|failure-demo\.ts)$/ }, (args) => {
+      const stub = DEV_ONLY[args.path];
+      if (stub === undefined) return undefined;
+      return { contents: stub, loader: args.path.endsWith(".tsx") ? "tsx" : "ts" };
+    });
+  },
+};
+
 // ---- 构建选项 ---------------------------------------------------------------
 const hostOptions = {
   entryPoints: [join(root, "src/platform/host/index.ts")],
@@ -122,7 +150,8 @@ const hostOptions = {
   legalComments: "none",
   external: HOST_EXTERNALS,
   define: { __HUB_VERSION__: JSON.stringify(pkg.version) },
-  banner: { js: `// ${pkg.name} ${pkg.version} — 宿主半（ESM）\n` },
+  banner: { js: `// ${pkg.name} ${pkg.version}${dev ? " (dev)" : ""} — 宿主半（ESM）\n` },
+  plugins: [stripDevOnly],
   logLevel: "info",
   write: false,
 };
@@ -141,6 +170,7 @@ const clientOptions = {
   legalComments: "none",
   external: CLIENT_EXTERNALS,
   define: { __HUB_VERSION__: JSON.stringify(pkg.version) },
+  plugins: [stripDevOnly],
   logLevel: "info",
   write: false,
 };
@@ -171,8 +201,8 @@ function emitter(onSuccess) {
 }
 
 if (watch) {
-  const host = await context({ ...hostOptions, plugins: [emitter(emitHost)] });
-  const client = await context({ ...clientOptions, plugins: [emitter(emitClient)] });
+  const host = await context({ ...hostOptions, plugins: [stripDevOnly, emitter(emitHost)] });
+  const client = await context({ ...clientOptions, plugins: [stripDevOnly, emitter(emitClient)] });
   await Promise.all([host.watch(), client.watch()]);
   console.log(`[build] 监听中（Ctrl+C 结束）：${outDirs.join("、")}`);
   console.log("[build] 客户端改动：刷新页面即可；宿主改动：需要重启 profile。");
@@ -181,5 +211,5 @@ if (watch) {
   await rm(libDir, { recursive: true, force: true });
   await emitHost(await build(hostOptions));
   await emitClient(await build(clientOptions));
-  console.log(`[build] ${PACKAGE_ID}：lib/index.js 与 lib/client.js 已生成`);
+  console.log(`[build] ${PACKAGE_ID}：lib/index.js 与 lib/client.js 已生成${dev ? "（开发构建）" : ""}`);
 }

@@ -170,7 +170,7 @@ function Sync-Stage {
     $node = Get-NodeExe
     Push-Location $PackageRoot
     try {
-      & $node 'build.mjs' '--also-out' (Join-Path $Stage 'lib')
+      & $node 'build.mjs' '--dev' '--also-out' (Join-Path $Stage 'lib')
       if ($LASTEXITCODE -ne 0) { throw "build.mjs 失败（exit $LASTEXITCODE）" }
     } finally { Pop-Location }
   }
@@ -214,7 +214,7 @@ switch ($Action) {
     Sync-Stage
     $node = Get-NodeExe
     Push-Location $PackageRoot
-    try { & $node 'build.mjs' '--watch' '--also-out' (Join-Path $Stage 'lib') } finally { Pop-Location }
+    try { & $node 'build.mjs' '--watch' '--dev' '--also-out' (Join-Path $Stage 'lib') } finally { Pop-Location }
   }
   'enable' {
     $state = Get-InstallState
