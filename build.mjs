@@ -7,8 +7,8 @@
  *
  * 宿主半 external：
  *   - @deepseek-ai/*            由 DSH 的模块解析拦截层从安装目录提供（不得打包）
- *   - @modelcontextprotocol/*   同上：必须是 peerDependency，打包会造成双实例（F1 风险 1）
- * 其余（含 smol-toml）全部打包进产物，安装后零运行时依赖。
+ *   - @modelcontextprotocol/*   同上：DSH 自带的 MCP 客户端，运行时从宿主解析
+ * 其余全部打包进产物，安装后零运行时依赖。
  *
  * 客户端半 external：平台种子表的 9 个键必须外置（否则会出现两份 React）；
  * 另外把用到但不在种子表里的宿主客户端包也外置，它们按 package.json 的
@@ -19,6 +19,9 @@
  *   node build.mjs --dev                        # 开发构建：含组件预览（?hubKitPreview=1）与失败演示
  *   node build.mjs --also-out <目录>            # 同时把 index.js / client.js 写进另一个 lib 目录（可重复）
  *   node build.mjs --watch [--also-out <目录>]  # 监听源码，变化后增量重建并写出
+ *
+ * 包名只在 package.json 里写一次：构建时以 define 注入 __HUB_PACKAGE__（宿主与客户端两份产物），
+ * 客户端的 keyed slot key（"<包名>#<行 id>"）由它拼出来，见 src/platform/client/config-button.tsx。
  *
  * --also-out 给开发期的 link 暂存目录用（见 docs/DEV.md 第 4 节、scripts/dev-link.ps1，它总用 --dev）。
  * 正式构建里开发用模块（DEV_ONLY）被换成空壳：安装包里没有组件预览面板与失败演示。
@@ -149,7 +152,7 @@ const hostOptions = {
   sourcemap: false,
   legalComments: "none",
   external: HOST_EXTERNALS,
-  define: { __HUB_VERSION__: JSON.stringify(pkg.version) },
+  define: { __HUB_VERSION__: JSON.stringify(pkg.version), __HUB_PACKAGE__: JSON.stringify(pkg.name) },
   banner: { js: `// ${pkg.name} ${pkg.version}${dev ? " (dev)" : ""} — 宿主半（ESM）\n` },
   plugins: [stripDevOnly],
   logLevel: "info",
@@ -169,7 +172,7 @@ const clientOptions = {
   sourcemap: false,
   legalComments: "none",
   external: CLIENT_EXTERNALS,
-  define: { __HUB_VERSION__: JSON.stringify(pkg.version) },
+  define: { __HUB_VERSION__: JSON.stringify(pkg.version), __HUB_PACKAGE__: JSON.stringify(pkg.name) },
   plugins: [stripDevOnly],
   logLevel: "info",
   write: false,

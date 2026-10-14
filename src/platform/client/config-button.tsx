@@ -2,8 +2,8 @@
  * 插件管理页「配置」按钮（keyed slot plugins.row.config，D-A2）。
  *
  * 契约（@deepseek-ai/dsh-cordis-client-runner/lib/client.js:4205-4236）：
- *   - kind=keyed，scope=root，key = "<包名>#<行 id>"，测试 profile 里即
- *     "dsh-capability-hub#capability-hub"（行 id 按本包 cordis.patch.yml 声明）。
+ *   - kind=keyed，scope=root，key = "<包名>#<行 id>"，即
+ *     "<package.json 的 name>#capability-hub"（行 id 按本包 cordis.patch.yml 声明）。
  *   - owner 渲染两次：view="summary"（列表行摘要，仅在缺包描述时用）与
  *     view="page"（行自己的页面，带保存控件）。
  *   - 只有某个条目点名这一行时，该行的配置页才存在；因此注册要包在 ctx.slots.inject 里。
@@ -11,12 +11,13 @@
  * 本按钮的行为：把面板切到「MCP 服务器」标签并打开能力中心。
  */
 import * as React from "react";
+import { HUB_PACKAGE } from "../../version.ts";
 import { t as tt } from "./strings.ts";
 import { openCapabilityHub, type LayoutFace, type SlotsFace } from "./page.tsx";
 import { styles } from "./styles.ts";
 
-/** 本包名（= package.json 的 name，也是 slot key 的前半）。 */
-export const PACKAGE_NAME = "dsh-capability-hub";
+/** 本包名（= package.json 的 name，也是 slot key 的前半）。构建时由 build.mjs 注入。 */
+export const PACKAGE_NAME = HUB_PACKAGE;
 /** cordis 行 id（= cordis.patch.yml 里 insert 的 id）。 */
 export const ROW_ID = "capability-hub";
 /** keyed slot 的 key。 */
