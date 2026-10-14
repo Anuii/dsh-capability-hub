@@ -1,6 +1,6 @@
 # CLIENT-GUIDE — 怎么写一个能力中心的标签页
 
-面向「拿到任务就要写技能页 / MCP 页（含底部「运行中」区域）」的人。读完这份就能动手，不用翻 DSH 源码。
+面向「拿到任务就要写技能页 / MCP 页」的人。读完这份就能动手，不用翻 DSH 源码。
 （文中用「」标注代码标识符。）
 
 ---
@@ -40,7 +40,7 @@
     src\platform\client\api.ts         API 客户端（信封、错误、鉴权说明）——标签页可以用
     src\platform\client\tab-props.ts   标签页 props（TabProps）——标签页可以用
     src\skills\client\                 技能页与「添加技能」（仓库视图）
-    src\mcp\client\                    MCP 页；running\ 是页面底部的「运行中」区域
+    src\mcp\client\                    MCP 页（列表、详情抽屉、JSON 编辑、粘贴 JSON 添加）
     src\kit\                            界面组件、样式写法（css.ts）、折叠（fold.ts）、状态仓库（store.ts）
     src\<功能>\contract\               宿主与客户端共用的接口类型（只能 import type）
 
@@ -108,7 +108,6 @@
     }
 
 - `workspace` 来自 slot 标准 prop `useSessions`（见第 4 节），技能页拿它找项目级技能目录；
-- `sessionId`：「运行中」区域的「只看当前会话」用它过滤实例；
 - `reportAttention`：MCP 页在「有错误」数从 0 变非 0（或反过来）时调用，外壳据此在「MCP」标签旁画红点。
 
 panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab` 与 `mcp/client/index.tsx` 的 `McpTab`；
@@ -166,7 +165,7 @@ panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab` 与 `mcp/client
       export const styles = sheet.classes;
       export function injectSkillsStyles(): void { injectStyleTag("dsh-capability-hub/skills-styles", sheet.css); }
 
-  前缀：kit = chk_，外壳 = ch_，技能页 = chsk_，MCP 页 = chmcp_，「运行中」= chrt_。
+  前缀：kit = chk_，外壳 = ch_，技能页 = chsk_，MCP 页 = chmcp_。
   颜色只用主题变量（kit 的 `--chk-*` token 或 `--dsw-*`），写死颜色会被单测拦下。
   页面根节点带 data-dsh-capability-hub-view 属性，方便写作用域选择器。
 
@@ -250,8 +249,7 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles` 把各组件
                 { id: "enabled", label: "已启用", count: servers.filter((s) => s.enabled).length },
               ],
             }}
-            primary={{ label: "添加服务器", menu: [{ id: "json", label: "粘贴 JSON", onClick: openJson }] }}
-            more={[{ id: "settings", label: "全局设置", onClick: openSettings }]}
+            primary={{ label: "添加服务器", onClick: openPaste }}
           />
           <ListSurface>
             <ListGroup>
@@ -313,9 +311,9 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles` 把各组件
 
 - **可折叠**：给了 `onToggle`，整条标题行就是一个按钮（前面有旋转的「›」，Tab 聚焦、Enter / Space 切换、`aria-expanded`），
   折叠时不渲染内容；展开状态由调用方用 `expanded` 持有（缺省视为展开）。折叠按钮的 testid 是 `<testId>-toggle`；
-- `end`：标题行最右侧的控件（例如「运行中」的「只看当前会话」与刷新），点它不会触发折叠；
+- `end`：标题行最右侧的控件（例如一个刷新按钮），点它不会触发折叠；
 - **嵌套**：`nested: true` 表示 children 是若干子分组而不是行；子分组传 `depth: 1`（无外框、标题行缩进、底色更浅）。
-  技能页的「层级 → 来源仓库」与「运行中」的会话分组都这样拼。
+  技能页的「层级 → 来源仓库」就这样拼。
 
 - **`title` 可选**：不传时整条标题行都不渲染，只留面板外观（圆角 / 边框 / 底色）——
   只有一组时用这个（MCP 页）；
@@ -347,12 +345,12 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles` 把各组件
 | `attrs` | `Record<string,string>`? | 透传到行元素的额外属性；**只放行 `data-*` 与 `aria-*`**，其余键忽略（见 `passthroughAttrs`） |
 
 **`Badge({ children, tone?, title?, testId? })`**：小号描边胶囊，11/500。
-`tone` = `neutral`（灰，默认）/ `accent`（强调，「可更新」）/ `warn`（琥珀，冷却）/
+`tone` = `neutral`（灰，默认）/ `accent`（强调，「可更新」）/ `warn`（琥珀，警告）/
 `danger`（红，不可加载）。`title` 写悬停解释（例如「被 X 遮蔽」）。
 
 **`StatusDot({ tone, title?, testId? })`**：直径 7px 的圆点。
-`tone` = `idle`（灰，默认）/ `active`（强调色，有活跃实例）/ `failed`（红，最近失败）/
-`cooling`（琥珀，冷却中）。**只在 MCP 页（含「运行中」区域）用**。
+`tone` = `idle`（灰，默认）/ `active`（强调色，已连接）/ `failed`（红，连接失败或未连接）/
+`cooling`（琥珀，正在连接）。**只在 MCP 页用**。
 
 **原生控件的 kit 样式**：`kit.select`（安静的下拉，与分段同高；`data-active` 表示筛选生效）、
 `kit.check`（行首勾选框，中性色；宿主 `Checkbox` 的 label 是可见文字，放在行首会与标题重复，所以列表行里用原生勾选框 + `aria-label`）。
@@ -391,8 +389,6 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles` 把各组件
 > **菜单项的 `data-testid`**：宿主 `MenuItemButton` 不透传未知 props，所以 kit 把菜单项文字包了一层
 > `<span data-testid=...>`，testid 挂在 **span** 上（点它等于点菜单项）。走查脚本按 `testId ?? id` 找它。
 
-**`RefreshIcon({ className? })`**：刷新字形（环形箭头）。「运行中」区域的刷新按钮用它。
-
 **工具函数**
 `countByPredicates(items, predicates)` 算分段里的 `count`；
 `clampBadges(badges)`；`rowKeyDecision(key)` / `drawerKey(...)` 等键盘判定（单测覆盖）。
@@ -402,7 +398,7 @@ kit 的 CSS 由外壳的 `apply()` 统一注入（`injectKitStyles` 把各组件
 - **一处一事**：一行只说「这是什么、开没开」。其他信息全部放进抽屉。
 - **只在需要时出现**：标记、横幅、悬停操作只在有事时才出现；一切正常时画面上没有它们。
 - **一个强调色**：只有主按钮、「可更新」标记、活跃状态点用强调色。**不用绿色**；
-  红＝错误，琥珀＝冷却 / 警告。
+  红＝错误，琥珀＝连接中 / 警告。
 - **不套卡片**：列表行靠 1px 最弱分隔线分隔，不要给每行加边框 / 圆角 / 阴影。
 - **行高固定 52px**：有没有副标题都一样（内容垂直居中），否则一列排下来会参差。
 - **行副标题的颜色**：`--chk-fg-sub`（= `color-mix(in srgb, var(--dsw-alias-label-tertiary) 85%, var(--dsw-alias-label-primary))`）。
@@ -423,9 +419,9 @@ kit 的每一种形态都能一眼看全（截图审查用）：
 
     http://127.0.0.1:19411/?token=<令牌>&hubKitPreview=1
 
-带这个参数时，能力中心正文位置会换成 kit 预览面板（工具栏、两个分组含只读标记、
+（只在开发构建里有：`node build.mjs --dev`，测试 profile 用的 `dev-link.ps1` 默认就是。）带这个参数时，能力中心正文位置会换成 kit 预览面板（工具栏、两个分组含只读标记、
 10 行各种标记与状态点、悬停操作、打开的抽屉、空状态、骨架屏、横幅）。
-加 `hubKitDrawer=1` 可让抽屉默认关闭。**正式使用时永远看不到它。**
+加 `hubKitDrawer=1` 可让抽屉默认关闭。**正式构建（安装包）里没有它。**
 
 改完 UI 到新界面：`pwsh -NoProfile -File scripts\dev-link.ps1 watch` 跟随构建，刷新浏览器页面即可；
 改了宿主代码再 `scripts\dev-profile.ps1 restart`（见 docs\DEV.md）。

@@ -1,9 +1,9 @@
 # dsh-capability-hub（能力中心）
 
 A plugin for DeepSeek Harness (DSH) that manages agent skills and MCP servers
-in one place: browse/toggle/install/update skills, edit and validate `mcpServers` configuration,
-and register every tool of the configured MCP servers directly as a DSH tool (`mcp__<server>__<tool>`),
-with server processes started on first use.
+in one place: browse/toggle/install/update skills, and manage MCP server configuration as JSON
+(DSH's official `@deepseek-ai/dsh-mcp-client` plugin does the connecting and registers every tool as
+`mcp__<server>__<tool>`).
 The UI is Chinese-only. Runs locally; interfaces sit behind DSH's own `/api` authentication.
 Licensed under the MIT License.
 
@@ -16,12 +16,11 @@ Licensed under the MIT License.
 - **技能（Skills）**：按层级（DSH 内置 / 用户级 / 项目级）与来源仓库两级折叠浏览，
   按技能目录筛选；只读查看、启用/停用、删除（回收站）、体检、检查更新与更新；
   「添加技能」是仓库视图：维护仓库列表（可设分支与子目录），汇总发现所有仓库的技能后勾选安装；
-- **MCP 服务器**：粘贴 JSON / 表单 / 预置模板 / 从 Claude Code、Codex 只读导入，
-  保存前校验，敏感值打码；
-- **MCP 运行时**：每个服务器的每个工具直接注册成 DSH 工具 `mcp__<服务器>__<工具>`（PTC 模式下就是独立的类型化绑定），
-  参数 schema 自动转成 DSH 接受的格式；服务器说明进系统提示词；服务器进程第一次调用时才启动、空闲回收，按会话隔离；
-- **运行中**：MCP 页底部按会话列出活跃实例（子代理缩进），可断开；服务器详情里看工具缓存、
-  最近失败与退避冷却，可刷新缓存、断开该服务器的全部实例。
+- **MCP 服务器**：用 JSON 管理配置——粘贴 JSON 添加、单服务器 JSON 编辑修改，保存前校验，敏感值打码；
+- **MCP 连接**：由 DSH 官方的 MCP 插件（`@deepseek-ai/dsh-mcp-client`）连接服务器并注册工具
+  `mcp__<服务器>__<工具>`（PTC 模式下就是独立的类型化绑定）；每台服务器可选「全局一份」（默认）或「按会话」；
+- **连接状态**：MCP 页每行显示「已连接 · N 个工具 / 未连接」（「按会话」的显示已连接会话数），
+  详情抽屉可「重新连接」。
 
 插件是「永不失败外壳」：每个功能模块独立加载，任何一个出问题只降级并给出原因，
 不影响其余模块，也不会让 `dsh web` 启动失败。
@@ -55,7 +54,7 @@ Licensed under the MIT License.
 | `~/.agents/skills` | 用户级技能目录（默认安装目标） |
 | `~/.agents/.skill-lock.json` | 技能来源记录，与 `npx skills` v3 兼容（不改 version、保留他人条目与未知字段） |
 | `~/.dsh/skills` | DSH 自己的用户级技能目录 |
-| `~/.dsh/storages/dsh-capability-hub` | 插件自己的数据：MCP 配置、工具缓存、回收站、启动报告 `boot.json` |
+| `~/.dsh/storages/dsh-capability-hub` | 插件自己的数据：MCP 配置、回收站、启动报告 `boot.json` |
 | `<当前会话工作区>/.agents/skills`、`<当前会话工作区>/.dsh/skills` | 项目级技能目录（只显示当前会话的工作区） |
 
 MCP 配置存在插件数据目录下，所有 profile 共用一份；插件**不会**去改任何 profile 的
@@ -90,11 +89,11 @@ MCP 配置存在插件数据目录下，所有 profile 共用一份；插件**�
     cordis.patch.yml       插件交给 DSH 的装配声明（只 insert，不写 config）
     scripts/               打包、测试 profile 启停与 link 暂存、客户端热同步、接口冒烟、截图
     src/skills/            技能：local/（宿主·本地技能）、remote/（宿主·远程技能）、client/（技能页与仓库视图）、contract/
-    src/mcp/               MCP：config/、runtime/（宿主）、client/（MCP 页与「运行中」）、contract/
+    src/mcp/               MCP：config/、runtime/（宿主：挂载官方 MCP 插件）、client/（MCP 页）、contract/
     src/platform/          外壳：host/（组装模块、接 DSH）、client/（页头、标签、HTTP 客户端）、contract/
     src/kit/               界面组件、样式写法、折叠、状态仓库
     src/shared/            宿主与客户端共用的叶子工具（错误码、错误文字、请求参数）
-    test/                  与 src/ 同构的 node:test 单测 + 架构规则 + MCP 运行时集成测试 + 夹具
+    test/                  与 src/ 同构的 node:test 单测 + 架构规则 + 夹具
     docs/                  架构、开发指南、客户端指南、宿主 primitives 参考、产品决策、架构决策（adr/）、界面规范
 
 ## 许可证

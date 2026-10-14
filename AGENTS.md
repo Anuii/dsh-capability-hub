@@ -1,6 +1,6 @@
 # AGENTS.md
 
-DeepSeek Harness（DSH）插件「能力中心」：技能管理、MCP 服务器管理、把 MCP 工具直接注册给模型（`mcp__<服务器>__<工具>`，进程按需启动）。界面与文档以中文为主。
+DeepSeek Harness（DSH）插件「能力中心」：技能管理、MCP 服务器管理（用 JSON 管理 MCP 配置，由 DSH 官方 MCP 插件连接并注册工具）。界面与文档以中文为主。
 
 ## 先读
 - 如果存在 `.local/HANDOFF.md`（本地文件，不在版本库里），先读它：里面是当前进度和使用者本机的状态。
@@ -17,7 +17,7 @@ npm run format                                  # prettier 排版
 pwsh -NoProfile -File scripts\pack.ps1          # 打包到 dist\（被 .gitignore 忽略）
 pwsh -NoProfile -File scripts\dev-link.ps1 watch # 测试 profile 跟随源码：改客户端刷新页面，改宿主再 dev-profile.ps1 restart
 ```
-mcp-runtime 集成测试与 YAML 对拍要在 Electron-as-node 下运行，命令见 docs/DEV.md 第 2 节。
+YAML 对拍要在 Electron-as-node 下运行，命令见 docs/DEV.md 第 2 节；MCP 的真实连接在测试 profile 里用冒烟脚本与 `scripts/ui-walk-mcp.mjs` 验证。
 
 ## 硬规则
 1. **`link:` 只许指向暂存目录，绝不指向源码目录**：Windows 上 pnpm 移除 link 依赖时会顺着 junction 清空目标目录。测试 profile 只用 `scripts/dev-link.ps1` 建的 link（目标是 `<profile>\.dev-link\dsh-capability-hub`，里面只有可重建的构建产物）；其他 profile（包括 Desktop）一律装 `scripts/pack.ps1` 打出的 tgz。对任何 profile 做插件或 pnpm 操作之前，先确认 `git status --short` 为空，且该 profile 的 `node_modules\dsh-capability-hub` 要么是真实目录，要么是指向上述暂存目录的链接（`dev-link.ps1 status` 会检查）；指向别处立即停手。详见 docs/DEV.md 第 4 节。

@@ -23,7 +23,7 @@
 | 项 | 要求 |
 |---|---|
 | 操作系统 | Windows 10/11。宿主半用 Win32 进程树查询与 `taskkill /T /F` 收子进程，目前只有 Windows 实现 |
-| DSH | 0.2.x（已安装；集成测试与部分脚本会去安装目录里找 `app.asar`） |
+| DSH | 0.2.x（已安装；YAML 对拍与部分脚本会去安装目录里找 `app.asar`） |
 | Node.js | 24（自带 TypeScript 类型擦除，可以直接 `node --test "test/**/*.test.ts"`，不需要 precompile） |
 | PowerShell | 7+（`pwsh`），脚本都用 `-NoProfile` 跑 |
 | 可选 | Microsoft Edge（截图脚本用无头 Edge + CDP） |
@@ -78,19 +78,12 @@ CRLF 技能的启停只改一行）。快照不属于本仓库，指向你自己
 
 测试全程只读源目录：它先复制到 `os.tmpdir()` 下的临时目录，再在副本上操作。
 
-### 2.3 MCP 运行时集成测试（真 SDK + 真子进程）
+### 2.3 MCP 运行时的真实验证
 
-单测用内存假 SDK 验策略（时钟可推快、失败可注入）；集成测试用
-`@modelcontextprotocol/client` 的真身 + 真 stdio 子进程验「接得上、杀得掉、崩了会退避、超长会落盘」。
-SDK 只存在于 DSH 的 `app.asar` 内，本机 Node 解析不到，所以必须用 Electron-as-node：
-
-    $env:ELECTRON_RUN_AS_NODE='1'
-    & "$env:LOCALAPPDATA\Programs\DeepSeek Harness\DeepSeek Harness.exe" 'test/mcp/runtime/integration/run-integration.mjs'
-
-期望末行 `INTEGRATION-RESULT pass=37 fail=0 leftover-processes=0`。
-
-同一方式还能跑 `test/mcp/runtime/integration/schema-subset-check.mjs`：用 DSH 自带的校验器核对 MCP 工具参数 schema 的转换
-（样本库 + 本机工具缓存，只读），期望末行 `SCHEMA-SUBSET-RESULT pass=N fail=0`。
+0.7.0 起 MCP 服务器由 DSH 官方插件 `dsh-mcp-client` 连接（ADR-0010），它只能在 DSH 进程里挂载，
+所以自研运行时的 Electron-as-node 集成测试已删除。单测（`test/mcp/runtime/runtime.test.ts`）用假的插件作用域验挂载规则；
+真实连接由测试 profile 里的冒烟脚本（第 7 节）与 `scripts/ui-walk-mcp.mjs` 验证：
+夹具服务器 `test/mcp/runtime/fixtures/fake-mcp-server.mjs` 被官方插件连上、5 个工具（含参数写法复杂的 pick）全部注册。
 
 前提与覆盖：
 
@@ -318,7 +311,7 @@ HttpOnly + SameSite=Strict 的签名 cookie（绑定 Host 头的 authority）。
 
 依次跑 skills/list → skills/view → set-enabled 停用再启用（逐行 diff + SHA256 证明「除那一行外
 字节不变」）→ mcp/config → upsert 一个指向 `test\mcp\runtime\fixtures\fake-mcp-server.mjs` 的
-stdio 服务器 → 等自动探测把 `toolCount` 写进缓存 → mcp/runtime/refresh → health →
+stdio 服务器 → 等官方 MCP 插件连上、注册工具（state = connected）→ mcp/runtime/reconnect → health →
 skills/github-auth（**只打印 mode**）→ 删掉测试服务器恢复原状。
 失败以非零退出码结束，末行是 `SMOKE-STAGE-B-RESULT pass=N fail=0`。
 
@@ -336,8 +329,8 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 
 ### 接线状态怎么看
 
-`GET health` 里的 `wiring` 字段：`runtimeSource`（real/stub）、`runtimeReason`、
-`lockStashBound`、`runtimeStarted`、`runtimeStartError`、`notes`。启动报告
+`GET health` 里的 `mcpClient`（官方 MCP 插件加载情况）、`mcpServers`（每台服务器的挂载状态与工具数）、
+`wiring`（`lockStashBound`、`notes`）。开发开关（devOverrides.enabled）打开时，启动报告
 `<hubHome>/boot.json` 的 `skillSources` 记录技能目录是怎么来的：`skillProviders`（逐来源的贡献、
 预设表达式的推导过程 `presetResolve`）、`tree`（组合树结构快照）、`bundledEnv`。推导规则见 `src/platform/host/skill-roots.ts`。
 
@@ -351,14 +344,13 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 
 ## 8. 启动报告 boot.json
 
-外壳每次启动（以及之后注册的 MCP 工具清单每次变化时）会把一份小 JSON 覆盖写到 `<hubHome>/boot.json`（夹具下即
-`.dev\home\.dsh\storages\dsh-capability-hub\boot.json`），字段：
+外壳每次启动（以及路由注册、首轮 MCP 挂载结束时）会把一份小 JSON 覆盖写到 `<hubHome>/boot.json`（夹具下即
+`.dev\home\.dsh\storages\dsh-capability-hub\boot.json`），只记关键信息：
 
-    profileName / homeDir / dshHome / hubHome / pid / startedAt / writtenAt（最后一次重写的时间）
+    plugin / version / profileName / pid / startedAt / writtenAt（最后一次重写的时间）
     routes / registeredPaths / registrationError
-    sdk / modules / tools（registered = 已注册给模型的 MCP 工具名，failed = 被 DSH 拒绝的工具与原因，prompt = 服务器说明是否挂进了系统提示词）
-    services（逐项探测 connection、webServer、tools、loader、profileContext ... 是否可见）
-    skillSources（技能目录来源：skillProviders / tree / bundledEnv）
+    mcpClient / modules / mcpServers（每台服务器的 scope、state、toolCount、error）/ wiring
+    开发开关打开时另有：services（逐项探测 connection、webServer、tools ... 是否可见）、skillSources（技能目录来源）
 
 **为什么需要它**：降级状态本来只暴露在 `GET health` 上，但「路由都没注册成功」时 health
 根本不可达。`boot.json` 是唯一能自查启动结果的通道，排查插件激活问题先看它。
@@ -370,16 +362,15 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
     node scripts\ui-shot.mjs --out <仓库根>\.dev\shots
     node scripts\ui-shot-kit.mjs --out <仓库根>\.dev\shots\ui0
     node scripts\ui-shot-pages.mjs [--suffix v2]               # 真实页面的亮色 / 暗色验收截图（UI-DESIGN 第 5 节）
-    node scripts\ui-walk-mcp.mjs                               # MCP 页操作走查：添加、校验、保存与探测、启停、JSON、删除
+    node scripts\ui-walk-mcp.mjs                               # MCP 页操作走查：粘贴 JSON 添加、连上、重新连接、启停、JSON 编辑、删除
     node scripts\ui-walk-skills.mjs                            # 技能「来源」走查：手动登记、取消登记（不联网）
 
 脚本自己从启动日志里取令牌，用 Edge headless + CDP 打开页面：关掉「预览版说明」模态框 →
 点开侧栏「能力中心」→ 依次切两个标签（每步一张 PNG）→ 读取 DOM 事实写成 `facts.json`。
-`ui-shot-kit.mjs` 额外拍 kit 预览的亮色 / 暗色 / 悬停 / 抽屉态。
+`ui-shot-kit.mjs` 额外拍 kit 预览的亮色 / 暗色 / 悬停 / 抽屉态（kit 预览只在开发构建里有：`node build.mjs --dev`，`dev-link.ps1` 默认就是）。
 `ui-shot-pages.mjs` 拍技能页（默认 / 展开 DSH 内置并悬停）、仓库视图（默认 / 展开仓库列表并勾选）、
-MCP 页（含「运行中」区域的真实空状态，以及 `?hubPreviewRunning=1` 的示例实例）与服务器抽屉，
+MCP 页、「添加服务器」（粘贴 JSON）与服务器抽屉，
 亮色暗色各一张，并在 `pages-facts.json` 里统计每行未悬停时可见的控件数与彩色元素。
-测试 profile 里没有活跃实例（走查不新建会话），所以「运行中」有数据的样子只能看预览数据。
 
 `ui-walk-mcp.mjs` / `ui-walk-skills.mjs` 用真实点击走一遍 MCP 页 / 技能「来源」（期望末行 `UI-WALK-…-RESULT pass=N fail=0`），只改夹具数据，结束时撤销自己做的改动。
 无头浏览器的启动、登录、点击、给受控输入框写值在 `scripts/lib/hub-browser.mjs`，新的走查脚本复用它。
@@ -423,8 +414,8 @@ MCP 页（含「运行中」区域的真实空状态，以及 `?hubPreviewRunnin
       package.json           files 白名单 = 打包内容
       src/
         host/                宿主半：平台外壳 + skills-local / skills-remote / mcp-config / mcp-runtime
-        client/              客户端半：外壳、技能 / MCP 两个标签页（运行中区域在 runtime/）、共用 UI kit
-      test/                  node:test 单测 + 集成测试 + 夹具
+        client/              客户端半：外壳、技能 / MCP 两个标签页、共用 UI kit
+      test/                  node:test 单测 + 夹具
       scripts/               开发脚本：打包、测试 profile、link 暂存、热同步、冒烟、截图
       docs/                  开发文档、客户端指南、宿主 primitives 参考、设计决策
       lib/                   构建产物（不进版本库）

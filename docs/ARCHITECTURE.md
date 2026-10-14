@@ -15,9 +15,9 @@ src/
     contract/   local.ts、remote.ts（HTTP 形状与进程内接口）、yaml.ts（注入的 yaml 库）
   mcp/        MCP
     rules/      宿主与界面共用的纯规则：服务器字段、默认值、校验（ADR-0008）
-    config/     宿主·MCP 配置：落盘、遮罩、粘贴 JSON / 预设 / 只读导入
-    runtime/    宿主·MCP 运行时：core.ts（缓存、连接池、探测）、tool-specs.ts（要注册的工具与提示词文字）、actions/call.ts、status-view.ts
-    client/     MCP 页；running/ 是页面底部的「运行中」区域
+    config/     宿主·MCP 配置：落盘、遮罩、粘贴 JSON 识别、检查启动命令
+    runtime/    宿主·MCP 运行时：把服务器挂载成 DSH 官方 dsh-mcp-client 插件实例（runtime.ts，全局一份 / 按会话；envFrom 在 atoms/）
+    client/     MCP 页（列表、详情抽屉、单服务器 JSON 编辑、粘贴 JSON 添加）
     contract/   config.ts、runtime.ts
   kit/        界面组件、样式写法（css.ts）、折叠（fold.ts）、状态仓库（store.ts）
   shared/     宿主与客户端共用的叶子工具：错误码、错误文字、请求参数；node/ 是只给宿主用的文件读写（原子写只有这一份）
@@ -37,7 +37,7 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 
 ## 宿主半
 
-`platform/host/index.ts` 是入口：`shell.ts` 解析上下文、加载 DSH 自带的 MCP SDK 与 yaml（都不打包，ADR-0006 / D-A4），再按依赖顺序装载模块：**mcp-config → skills-local → skills-remote（与 skills-local 互相绑定 lock 条目）→ mcp-runtime**。每个模块独立 try/catch：任何一个失败只让它自己降级（health 里看得到原因），DSH 照常运行；mcp-runtime 给出要注册的工具清单，外壳逐个注册进 DSH（`tool-registrar.ts`，清单变化只增删变了的），服务器说明挂进系统提示词（`prompt-section.ts`）；mcp-runtime 不可用时退回桩，什么工具都不注册。
+`platform/host/index.ts` 是入口：`shell.ts` 解析上下文、加载 DSH 自带的官方 MCP 插件 `@deepseek-ai/dsh-mcp-client`（`mcp-client-loader.ts`）与 yaml（都不打包，ADR-0006 / ADR-0010），再按依赖顺序装载模块：**mcp-config → skills-local → skills-remote（与 skills-local 互相绑定 lock 条目）→ mcp-runtime**。每个模块独立 try/catch：任何一个失败只让它自己降级（health 里看得到原因），DSH 照常运行。之后外壳接上 agent 事件（`agent-hook.ts`：按会话的服务器挂到 `agent.ctx`），再让 mcp-runtime 把全局服务器挂到插件根作用域。连接、工具注册、图片、MCP 资源、断线重连、服务器用法说明进提示词都由官方插件负责（ADR-0010）。
 
 路由由各模块的 `routes` 汇总，统一挂在 `/api/dsh-capability-hub/` 下，响应是 `{ ok, data }` / `{ ok: false, error }` 信封；错误码与工厂在 `shared/errors.ts`。磁盘数据都在 `~/.dsh/storages/dsh-capability-hub`，另外读写 `~/.agents/.skill-lock.json`（与 `npx skills` 兼容）。
 
@@ -45,7 +45,7 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 
 `platform/client/index.tsx` 导出 `apply`：注入样式、注册侧栏行与中央面板。面板（`panel.tsx`）同时挂载技能页与 MCP 页，切换只改 `hidden`。每个页面分三层（ADR-0005）：
 
-- **规则**：视图模型（如 `skills/client/row.ts`「一行技能长什么样」、`mcp/client/view-model.ts`）与状态仓库（技能页 `skills-store.ts`、仓库视图 `remote/repo-view-store.ts`、来源 `remote/source-flow.ts`；MCP 页 `servers-store.ts`、服务器表单 `server-form-store.ts`、运行状态 `runtime-store.ts`），不碰 React，经数据 adapter 访问宿主，单测用内存 fake；
+- **规则**：视图模型（如 `skills/client/row.ts`「一行技能长什么样」、`mcp/client/view-model.ts`）与状态仓库（技能页 `skills-store.ts`、仓库视图 `remote/repo-view-store.ts`、来源 `remote/source-flow.ts`；MCP 页 `servers-store.ts`、运行状态 `runtime-store.ts`），不碰 React，经数据 adapter 访问宿主，单测用内存 fake；
 - **数据**：`data.ts` 调 `api.get / api.post`，补成安全形状，类型来自契约；接口错误的错误码与逐字段错误用 `api.ts` 的 `errorCodeOf` / `fieldErrorsOf` 解析；
 - **组件**：JSX（ADR-0003），只订阅仓库、渲染 kit 组件、转发用户操作。
 
@@ -59,12 +59,11 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 | 技能能不能加载、启停怎么改写 SKILL.md | `skills/local/frontmatter/`（规则在 rules.ts，改写在 toggle.ts） |
 | 技能列表一行显示什么 | `skills/client/row.ts`；分组在 `tree.ts`；折叠规则在 `kit/fold.ts` |
 | 仓库列表、发现、补扫规则 | 宿主 `skills/remote/repo-catalog.ts`；界面流程 `skills/client/remote/repo-view-store.ts` |
-| MCP 服务器能填哪些字段、怎么校验 | `mcp/rules/server.ts`（宿主与表单共用） |
-| 注册给模型的 MCP 工具（名字、描述、参数） | `mcp/runtime/tool-specs.ts`；参数 schema 转换在 `atoms/schema-subset.ts`；注册在 `platform/host/tool-registrar.ts` |
-| MCP 工具调用、冷却 | `mcp/runtime/actions/call.ts`；冷却规则在 `failures.ts` |
-| MCP 页的状态点、红点、「运行中」 | `mcp/client/runtime-store.ts`（唯一的运行状态读取处） |
-| MCP 页的启停、排序、删除、保存后的提示 | `mcp/client/servers-store.ts`；表单流程在 `server-form-store.ts`，草稿与校验在 `draft.ts` |
-| 技能「来源」的推测与登记 | `skills/client/remote/source-flow.ts` |
+| MCP 服务器能填哪些字段、怎么校验、哪些字段已废弃 | `mcp/rules/server.ts`（宿主与界面的 JSON 编辑共用）；旧配置里的废弃字段读到即丢在 `mcp/config/schema.ts` |
+| MCP 服务器挂在哪、什么时候挂、怎么判断连上没有 | `mcp/runtime/runtime.ts`；agent 事件在 `platform/host/agent-hook.ts` |
+| MCP 页的状态点、红点 | `mcp/client/runtime-store.ts`（唯一的运行状态读取处）；状态文字在 `view-model.ts` |
+| MCP 页的启停、排序、删除、重新连接、保存后的提示 | `mcp/client/servers-store.ts`；JSON 编辑在 `json.tsx` 与 `json-model.ts`，粘贴添加在 `intake/` |
+| 技能「来源」的手动登记 | `skills/client/remote/source-flow.ts` |
 | 新接口 | 宿主模块的 routes + `contract/` 里的形状 + 客户端 `data.ts` |
 
 决策：产品决策在 [DECISIONS.md](DECISIONS.md)，架构决策在 [adr/](adr/)。

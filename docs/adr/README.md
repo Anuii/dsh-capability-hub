@@ -10,6 +10,7 @@
 | [0004](0004-styles-next-to-components.md) | 样式写在组件旁边，用同一个 defineSheet 声明 |
 | [0005](0005-client-stores.md) | 客户端状态用「状态仓库 + 数据 adapter」，逻辑在组件之外测 |
 | [0006](0006-dsh-yaml.md) | frontmatter 用 DSH 自带的 yaml 库解析 |
-| [0007](0007-runtime-layout.md) | MCP 懒加载运行时按职责分文件，对外入口不变 |
+| [0007](0007-runtime-layout.md) | ~~MCP 懒加载运行时按职责分文件，对外入口不变~~ **已被 [0010](0010-official-mcp-client.md) 取代** |
 | [0008](0008-feature-rules.md) | 同一功能的宿主与界面共用一份纯规则（`src/<功能>/rules/`） |
-| [0009](0009-direct-mcp-tools.md) | 去掉懒加载网关：每个 MCP 工具直接注册成 DSH 工具 |
+| [0009](0009-direct-mcp-tools.md) | ~~去掉懒加载网关：每个 MCP 工具直接注册成 DSH 工具~~ **已被 [0010](0010-official-mcp-client.md) 取代** |
+| [0010](0010-official-mcp-client.md) | MCP 运行时改用官方 `@deepseek-ai/dsh-mcp-client`（全局一份 / 按会话挂载） |
