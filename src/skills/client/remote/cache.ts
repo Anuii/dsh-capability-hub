@@ -1,11 +1,11 @@
 /**
- * 来源表 / 凭据的加载与去重（一次会话里只拉一次，写操作后强制刷新）。
+ * 来源表的加载与去重（一次会话里只拉一次，写操作后强制刷新）。
  *
- * 组件只管调 ensureSources()/loadAuth()，不用关心并发：同一 workspace 的在途请求会被合并，
+ * 组件只管调 ensureSources()，不用关心并发：同一 workspace 的在途请求会被合并，
  * 换工作区或写操作后调 force=true 重新拉。
  */
 
-import { fetchGithubAuth, listSources, registerSource, unregisterSource } from "./data.ts";
+import { listSources, registerSource, unregisterSource } from "./data.ts";
 import { remoteStore } from "./store.ts";
 import type { SourceFlowAdapter } from "./source-flow.ts";
 import { errorText } from "../../../shared/error-text.ts";
@@ -43,16 +43,6 @@ export async function ensureSources(workspace: string | undefined, force = false
 /** 写操作后强制重拉。 */
 export function reloadSources(workspace: string | undefined): Promise<void> {
   return ensureSources(workspace, true);
-}
-
-/** 读一次 GitHub 凭据模式（只返回模式与剩余配额，绝不含令牌）。 */
-export async function loadAuth(): Promise<void> {
-  try {
-    const auth = await fetchGithubAuth();
-    remoteStore.setAuth(auth.mode, auth.rateLimitRemaining);
-  } catch {
-    // 凭据模式拿不到不影响主流程（界面上显示「未知」）
-  }
 }
 
 /** 「来源」一段的正式 adapter（source-flow.ts）：HTTP + 共享来源表。 */

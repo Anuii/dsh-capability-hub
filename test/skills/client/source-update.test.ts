@@ -2,7 +2,7 @@
  * 「来源与更新」一节的**结构**断言（UI-C 的收尾意见，没有浏览器时的第一道防线）：
  *
  *   1. 「未检查 / 无来源」这类状态只能有一个载体（之前「未检查」在标记、一句说明、KeyValue 里出现了三次）；
- *   2. GitHub 凭据与配额不再在每个技能的详情里重复（它们在工具栏「⋯」菜单里）；
+ *   2. GitHub 凭据与配额不在详情里、也不在工具栏「⋯」菜单里（那一项已删除，使用者决定）；
  *   3. 无来源时只给一句「无来源」+ 两个文字按钮；有来源时才渲染「更新」那一段。
  *
  * 用源码文本断言而不是渲染断言：仓库里没有 jsdom，组件渲染测试的性价比太低；
@@ -40,10 +40,23 @@ test("状态只有一个标记：Badge 只在 update.tsx 里出现一次，且�
   assert.equal(update.includes("KeyValue"), false, "更新那一段不再有 KeyValue（凭据 / 配额 / 状态都挪走了）");
 });
 
-test("GitHub 凭据与配额不在详情里重复出现", () => {
+test("GitHub 凭据与配额不在详情里出现", () => {
   assert.equal(update.includes("authModeLabel"), false);
   assert.equal(update.includes("quotaValue"), false);
   assert.equal(/authLabel|quotaLabel/.test(update), false);
+  assert.equal(/github-auth|loadAuth/.test(update), false, "更新那一段不再去问凭据");
+});
+
+test("「⋯」菜单里没有 GitHub 凭据项，只剩两个远程动作", () => {
+  const batch = fs.readFileSync(path.join(skillsDir, "remote", "batch.tsx"), "utf8");
+  const index = fs.readFileSync(path.join(skillsDir, "index.tsx"), "utf8");
+  // 菜单项由 batch.tsx 的 items 产出；id 集合必须正好是这两个
+  assert.deepEqual([...batch.matchAll(/id: "([a-z-]+)"/g)].map((m) => m[1]).sort(), ["check-all", "update-all"]);
+  assert.equal(/authItem/.test(batch + index), false, "只读信息项 authItem 已删除");
+  assert.equal(/github-auth|authModeLabel|loadAuth/.test(batch + index), false, "客户端不再为它取凭据");
+  assert.equal(/id: "github"/.test(batch + index), false);
+  // 「回收站」仍由 index.tsx 接在动作项后面
+  assert.ok(index.includes('id: "trash"'));
 });
 
 test("有来源时才渲染更新那一段", () => {

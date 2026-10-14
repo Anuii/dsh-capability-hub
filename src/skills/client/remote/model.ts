@@ -10,7 +10,6 @@ import { isFlatSkill } from "../format.ts";
 import { t } from "../strings.ts";
 import type { RootInfo, SkillSummary } from "../../contract/local.ts";
 import type {
-  AuthMode,
   InstallItemResult,
   InstallTarget,
   SourceEntry,
@@ -93,19 +92,6 @@ export function updateStatusTitle(item: UpdateCheckItem | undefined): string | u
       return t("skills.remote.update.noSourceHint");
     default:
       return undefined;
-  }
-}
-
-export function authModeLabel(mode: AuthMode | undefined): string {
-  switch (mode) {
-    case "env":
-      return t("skills.remote.auth.env");
-    case "gh":
-      return t("skills.remote.auth.gh");
-    case "anonymous":
-      return t("skills.remote.auth.anonymous");
-    default:
-      return t("skills.remote.auth.unknown");
   }
 }
 

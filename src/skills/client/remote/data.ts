@@ -13,7 +13,6 @@ import type {
   BrowseResult,
   DiscoveryView,
   DiscoveryRepoView,
-  GithubAuth,
   InstallItemResult,
   InstallTarget,
   RepoChange,
@@ -201,15 +200,6 @@ export async function installSkills(input: InstallInput, workspace: string | und
   if (input.ref !== undefined && input.ref.trim() !== "") body.ref = input.ref.trim();
   const data = await api.post<{ results?: InstallItemResult[] }>("skills/install", withWorkspace(body, workspace));
   return Array.isArray(data?.results) ? data.results : [];
-}
-
-/** GET skills/github-auth → { mode, rateLimitRemaining? }（只返回模式，绝不含令牌） */
-export async function fetchGithubAuth(): Promise<GithubAuth> {
-  const data = await api.get<Partial<GithubAuth>>("skills/github-auth");
-  return {
-    mode: (data?.mode ?? "anonymous") as GithubAuth["mode"],
-    ...(typeof data?.rateLimitRemaining === "number" ? { rateLimitRemaining: data.rateLimitRemaining } : {}),
-  };
 }
 
 /* ---------------- 仓库视图的 adapter ---------------- */

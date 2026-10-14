@@ -182,7 +182,6 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
     ...(typeof workspace === "string" && workspace.trim() !== ""
       ? []
       : [{ id: "workspace", label: t("skills.remote.menu.workspaceNone"), info: true } as MenuItem]),
-    remote.authItem,
   ];
 
   const toolbar = (

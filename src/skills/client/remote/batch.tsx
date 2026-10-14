@@ -1,32 +1,24 @@
 /**
- * 工具栏「⋯」里的远程动作（UI-DESIGN §4）：
- *   检查全部更新 / 全部更新（n）/ GitHub 凭据与剩余配额（只读信息项）
+ * 工具栏「⋯」里的远程动作（UI-DESIGN §4）：检查全部更新 / 全部更新（n）。
  *
  * 为什么做成 hook：菜单项是**数据**（Toolbar 的 more 收 MenuItem[]）；
  * hook 在标签页里被无条件调用一次，天然满足 hooks 规则。
  *
  * 「检查全部更新」的结果不再常驻成胶囊，而是走 Toast，并让有更新的行出现「可更新」标记。
+ * GitHub 凭据与剩余配额那一项已删除（使用者决定）：被限流时由宿主的错误文案说明，客户端照常显示在 Toast 里。
  */
 
 import * as React from "react";
 import { useStoreState } from "../../../kit/index.ts";
 import type { MenuItem } from "../../../kit/index.ts";
-import { ensureSources, loadAuth } from "./cache.ts";
+import { ensureSources } from "./cache.ts";
 import { applyUpdates, checkUpdates } from "./data.ts";
 
 import { remoteStore } from "./store.ts";
-import {
-  applySummaryText,
-  authModeLabel,
-  checkSummaryText,
-  summarizeApplies,
-  summarizeChecks,
-  updatableIds,
-} from "./model.ts";
+import { applySummaryText, checkSummaryText, summarizeApplies, summarizeChecks, updatableIds } from "./model.ts";
 
 import { t } from "../strings.ts";
 import type { SkillSummary } from "../../contract/local.ts";
-import type { AuthMode } from "../../contract/remote.ts";
 import { errorText } from "../../../shared/error-text.ts";
 
 export interface RemoteMenuProps {
@@ -44,8 +36,6 @@ export interface RemoteMenuProps {
 export interface RemoteMenu {
   /** 两个动作项（检查全部更新 / 全部更新）；调用方在后面接「回收站」等自己的项 */
   items: MenuItem[];
-  /** 只读信息项：GitHub 凭据模式与剩余配额（**绝不含令牌**，D-B9） */
-  authItem: MenuItem;
   dialogs: React.ReactNode;
   /** 当前标着「可更新」的技能 id（行标记与「需关注」筛选都用它） */
   updatable: ReadonlySet<string>;
@@ -60,7 +50,6 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
 
   React.useEffect(() => {
     void ensureSources(workspace);
-    void loadAuth();
   }, [workspace]);
 
   const ids = updatableIds(skills, state.checks);
@@ -69,13 +58,8 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
     setChecking(true);
     void checkUpdates(undefined, workspace).then(
       (payload) => {
-        remoteStore.setChecks(payload.results, {
-          mode: payload.auth,
-          ...(payload.rateLimitRemaining === undefined ? {} : { rateLimitRemaining: payload.rateLimitRemaining }),
-        });
+        remoteStore.setChecks(payload.results);
         notify(checkSummaryText(summarizeChecks(payload.results)));
-        // 宿主只有在调用过 api.github.com 之后才知道剩余配额；这次没带回就再问一次
-        if (payload.rateLimitRemaining === undefined) void loadAuth();
         setChecking(false);
       },
       (failure: unknown) => {
@@ -111,7 +95,6 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
     );
   };
 
-  const auth: AuthMode | undefined = state.auth;
   const items: MenuItem[] = [
     {
       id: "check-all",
@@ -129,16 +112,5 @@ export function useSkillsRemoteMenu(props: RemoteMenuProps): RemoteMenu {
     },
   ];
 
-  const authItem: MenuItem = {
-    id: "github",
-    label:
-      state.rateLimitRemaining === undefined
-        ? t("skills.remote.menu.authUnknown", { mode: authModeLabel(auth) })
-        : t("skills.remote.menu.auth", { mode: authModeLabel(auth), remaining: state.rateLimitRemaining }),
-    info: true,
-    separatorBefore: true,
-    testId: "skills-remote-auth",
-  };
-
-  return { items, authItem, dialogs: null, updatable };
+  return { items, dialogs: null, updatable };
 }

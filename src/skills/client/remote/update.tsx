@@ -1,16 +1,15 @@
 /**
  * 「来源与更新」里的**更新**一段（详情抽屉内联）。
  *
- * UI-C 之后这一段只在**有来源时**才渲染（没有来源时由 source.tsx 给一句「无来源」+ 两个文字按钮），
- * 并且不再重复 GitHub 凭据与配额 —— 那两条已经在工具栏「⋯」菜单里了（D-B9）。
+ * UI-C 之后这一段只在**有来源时**才渲染（没有来源时由 source.tsx 给一句「无来源」+ 两个文字按钮）。
  * 检查更新只在用户点击时发生；检查结果只用一个标记表达，不再有第三处状态文字。
+ * 被限流时宿主的错误文案会说明原因，这里照常把它显示在红字里。
  */
 
 import * as React from "react";
 import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { Badge, useStoreState } from "../../../kit/index.ts";
 import { applyUpdates, checkUpdates } from "./data.ts";
-import { loadAuth } from "./cache.ts";
 
 import { remoteStore } from "./store.ts";
 import {
@@ -58,11 +57,7 @@ export function SkillUpdateSection(props: SkillUpdateSectionProps): React.ReactE
     setError(undefined);
     void checkUpdates([skill.id], workspace).then(
       (payload) => {
-        remoteStore.setChecks(payload.results, {
-          mode: payload.auth,
-          ...(payload.rateLimitRemaining === undefined ? {} : { rateLimitRemaining: payload.rateLimitRemaining }),
-        });
-        if (payload.rateLimitRemaining === undefined) void loadAuth();
+        remoteStore.setChecks(payload.results);
         setChecking(false);
       },
       (failure: unknown) => {

@@ -16,7 +16,6 @@ test("初始快照：未加载、无来源、无检查结果", () => {
   assert.equal(snapshot.sourcesLoaded, false);
   assert.deepEqual(snapshot.sources, {});
   assert.deepEqual(snapshot.checks, {});
-  assert.equal(snapshot.auth, undefined);
   assert.equal(snapshot.checking, false);
   assert.equal(snapshot.applying, false);
 });
@@ -38,17 +37,17 @@ test("setSources 建索引并置已加载；upsert / remove 只动一条", () =>
   assert.equal(Object.keys(snapshot.sources).length, 2);
 });
 
-test("setChecks 合并结果并带上凭据模式与配额", () => {
+test("setChecks 合并结果（只动 checks，不再记凭据与配额）", () => {
   const store = createRemoteStore();
-  store.setChecks([{ skillId: "a", status: "up-to-date" }], { mode: "gh", rateLimitRemaining: 4999 });
-  assert.equal(store.state.get().auth, "gh");
-  assert.equal(store.state.get().rateLimitRemaining, 4999);
+  store.setChecks([{ skillId: "a", status: "up-to-date" }]);
+  assert.deepEqual(store.state.get().checks, { a: { skillId: "a", status: "up-to-date" } });
   store.setChecks([{ skillId: "b", status: "update-available" }]);
   const snapshot = store.state.get();
   assert.equal(snapshot.checks["a"]!.status, "up-to-date");
   assert.equal(snapshot.checks["b"]!.status, "update-available");
-  // 不带凭据时保留上一次的值
-  assert.equal(snapshot.auth, "gh");
+  // 快照里不再有凭据模式 / 剩余配额（使用者决定去掉「⋯」里的 GitHub 凭据项）
+  assert.equal("auth" in snapshot, false);
+  assert.equal("rateLimitRemaining" in snapshot, false);
 });
 
 test("订阅：变更会通知，取消订阅后不再通知，订阅者抛错不影响别人", () => {
@@ -72,8 +71,8 @@ test("订阅：变更会通知，取消订阅后不再通知，订阅者抛错�
 test("reset 回到初始态", () => {
   const store = createRemoteStore();
   store.setSources([entry("a")]);
-  store.setAuth("env", 12);
+  store.setChecks([{ skillId: "a", status: "up-to-date" }]);
   store.reset();
   assert.equal(store.state.get().sourcesLoaded, false);
-  assert.equal(store.state.get().auth, undefined);
+  assert.deepEqual(store.state.get().checks, {});
 });

@@ -274,16 +274,10 @@ export const zh = {
   "skills.remote.menu.applying": "正在更新…",
   "skills.remote.menu.trash": "回收站",
   "skills.remote.menu.trashCount": "回收站（{count}）",
-  "skills.remote.menu.auth": "GitHub：{mode} · 剩余配额 {remaining}",
-  "skills.remote.menu.authUnknown": "GitHub：{mode} · 剩余配额 未知",
   "skills.remote.menu.workspaceNone": "没有当前会话工作区，不显示项目级技能",
 
   "skills.remote.bar.checkSummary": "检查完成：有更新 {available} · 最新 {upToDate} · 无来源 {noSource} · 出错 {error}",
   "skills.remote.bar.updateSummary": "更新完成：成功 {ok} · 失败 {failed}",
-  "skills.remote.auth.env": "环境变量 GITHUB_TOKEN",
-  "skills.remote.auth.gh": "gh CLI 已登录",
-  "skills.remote.auth.anonymous": "匿名（未登录）",
-  "skills.remote.auth.unknown": "未知",
 
   /* ---- 操作反馈 ---- */
   "skills.toast.toggleOn": "已允许模型调用「{name}」",
