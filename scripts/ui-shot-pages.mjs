@@ -25,6 +25,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  newSessions,
+  pickViewTarget,
+  redactSession,
+  selectionSeedScript,
+  sessionsRoot,
+  snapshotSessions,
+} from "./lib/session-guard.mjs";
+
 const EDGE = process.env.DSH_EDGE || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 if (!existsSync(EDGE)) throw new Error("找不到 Edge：用 $env:DSH_EDGE 指定 msedge.exe 的路径。");
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -253,6 +262,16 @@ await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
 
+// 第一次 Page.navigate 之前：把 localStorage 的 dsh.sessions.current 指到一个已有的非空白会话上，
+// 网页端加载时读到它就只打开这个会话、不新建（会话存储与桌面版共用，AGENTS.md 硬规则 3）。
+const sessionsDir = sessionsRoot();
+const beforeSessions = snapshotSessions(sessionsDir);
+const viewSessionId = pickViewTarget(sessionsDir);
+if (viewSessionId === undefined) {
+  throw new Error("找不到可作为初始视图的已有会话：为了不新建会话，走查停止。");
+}
+await send("Page.addScriptToEvaluateOnNewDocument", { source: selectionSeedScript(viewSessionId) });
+
 /** 按可见文字点一个按钮 / 可点元素（在能力中心页面内）。 */
 async function clickText(text, within = "[data-testid=capability-hub-page]") {
   return evaluate(
@@ -440,6 +459,21 @@ await pair("p11", "mcp-drawer");
 await escape();
 
 FACTS.console = consoleLines.filter((line) => /capability-hub|error/i.test(line)).slice(0, 20);
+
+// 会话存储与桌面版共用：多出会话说明这次走查新建了会话，必须报失败（人工确认后再删）。
+const created = newSessions(beforeSessions, snapshotSessions(sessionsDir));
+FACTS.newSessions = created.length;
+if (created.length > 0) {
+  console.error(
+    "[FAIL] 走查期间出现了 " +
+      created.length +
+      " 个新会话：" +
+      created.map((key) => redactSession(key)).join("、") +
+      "（请人工确认后删除）",
+  );
+  process.exitCode = 1;
+}
+
 writeFileSync(
   join(outDir, suffix === "" ? "pages-facts.json" : "pages-facts-" + suffix + ".json"),
   JSON.stringify(FACTS, null, 2),

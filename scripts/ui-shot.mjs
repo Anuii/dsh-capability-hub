@@ -21,6 +21,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  newSessions,
+  pickViewTarget,
+  redactSession,
+  selectionSeedScript,
+  sessionsRoot,
+  snapshotSessions,
+} from "./lib/session-guard.mjs";
+
 const EDGE = process.env.DSH_EDGE || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 if (!existsSync(EDGE)) throw new Error("找不到 Edge：用 $env:DSH_EDGE 指定 msedge.exe 的路径。");
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -37,6 +46,8 @@ const port = Number(argOf("--port", "19411"));
 const outDir = resolve(argOf("--out", join(repoRoot, ".dev", "shots")));
 const debugPort = Number(argOf("--debug-port", "9333"));
 const keepOpen = process.argv.includes("--keep-open");
+// 默认不新建会话；确实需要时显式传 --new-session（那时不种初始会话，也不判「出现了新会话」）。
+const wantNewSession = process.argv.includes("--new-session");
 
 const text = readFileSync(outLog, "utf8");
 const match = /token=([A-Za-z0-9_\-]+)/.exec(text);
@@ -130,6 +141,20 @@ async function shot(name) {
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false });
+
+// 第一次 Page.navigate 之前：把 localStorage 的 dsh.sessions.current 指到一个已有的非空白会话上，
+// 网页端加载时读到它就只打开这个会话、不新建（会话存储与桌面版共用，AGENTS.md 硬规则 3）。
+// --new-session 是明确要求新建会话的开关，那时不种、也不判失败。
+const sessionsDir = sessionsRoot();
+const beforeSessions = snapshotSessions(sessionsDir);
+if (!wantNewSession) {
+  const viewSessionId = pickViewTarget(sessionsDir);
+  if (viewSessionId === undefined) {
+    throw new Error("找不到可作为初始视图的已有会话：为了不新建会话，走查停止。");
+  }
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: selectionSeedScript(viewSessionId) });
+}
+
 const url = "http://127.0.0.1:" + String(port) + "/?token=" + token;
 await send("Page.navigate", { url });
 for (let i = 0; i < 60 && !loaded; i++) await sleep(250);
@@ -191,7 +216,6 @@ await sleep(300);
 // 4. （可选）新建一个会话，再看「当前工作区」（useCurrentWorkspace 的来源是会话列表快照里的 cwd）
 // 【调度者 2026-10-04】默认不再新建会话：dev profile 与 desktop 共用 ~/.dsh 的会话存储，
 // 每跑一次就会在用户真实的会话列表里多一个会话。确实需要时显式传 --new-session。
-const wantNewSession = process.argv.includes("--new-session");
 facts.newSessionClicked = wantNewSession
   ? await evaluate(
       "(() => { const nodes = [...document.querySelectorAll('button')]; const hit = nodes.find((n) => (n.getAttribute('aria-label') || '') === '新建会话'); if (!hit) return false; hit.click(); return true; })()",
@@ -229,6 +253,22 @@ await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Es
 await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
 await sleep(500);
 facts.envCardGoneAfterClose = await evaluate("document.querySelector('[data-testid=capability-hub-env]') === null");
+
+if (!wantNewSession) {
+  // 会话存储与桌面版共用：多出会话说明这次截图新建了会话，必须报失败（人工确认后再删）。
+  const created = newSessions(beforeSessions, snapshotSessions(sessionsDir));
+  facts.newSessions = created.length;
+  if (created.length > 0) {
+    console.error(
+      "[FAIL] 走查期间出现了 " +
+        created.length +
+        " 个新会话：" +
+        created.map((key) => redactSession(key)).join("、") +
+        "（请人工确认后删除）",
+    );
+    process.exitCode = 1;
+  }
+}
 
 writeFileSync(join(outDir, "facts.json"), JSON.stringify(facts, null, 2), "utf8");
 console.log(JSON.stringify(facts, null, 2));

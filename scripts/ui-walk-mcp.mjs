@@ -11,6 +11,7 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchHubBrowser, sleep } from "./lib/hub-browser.mjs";
+import { redactSession } from "./lib/session-guard.mjs";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const NAME = "walk-probe";
@@ -19,6 +20,7 @@ const FIXTURE = join(packageRoot, "test", "mcp", "runtime", "fixtures", "fake-mc
 
 let pass = 0;
 let fail = 0;
+let created = [];
 const check = (ok, label, detail = "") => {
   if (ok) pass += 1;
   else fail += 1;
@@ -106,7 +108,8 @@ try {
   } catch {
     // 页面已经不在了
   }
-  hub.close();
+  created = hub.close();
 }
+check(created.length === 0, "走查没有新建会话", created.map(redactSession).join("、"));
 console.log("UI-WALK-MCP-RESULT pass=" + pass + " fail=" + fail);
 process.exit(fail === 0 ? 0 : 1);

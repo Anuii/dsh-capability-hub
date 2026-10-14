@@ -8,9 +8,11 @@
  * 只动测试 profile 的夹具数据；登记过的来源结束时一定取消掉；不新建会话。
  */
 import { launchHubBrowser, sleep } from "./lib/hub-browser.mjs";
+import { redactSession } from "./lib/session-guard.mjs";
 
 let pass = 0;
 let fail = 0;
+let created = [];
 const check = (ok, label, detail = "") => {
   if (ok) pass += 1;
   else fail += 1;
@@ -88,7 +90,8 @@ try {
       // 页面已经不在了
     }
   }
-  hub.close();
+  created = hub.close();
 }
+check(created.length === 0, "走查没有新建会话", created.map(redactSession).join("、"));
 console.log("UI-WALK-SKILLS-RESULT pass=" + pass + " fail=" + fail);
 process.exit(fail === 0 ? 0 : 1);

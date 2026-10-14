@@ -7,12 +7,26 @@
  *   ...
  *   hub.close();
  *
- * 不新建会话（AGENTS.md 硬规则 3）。退出时只收掉本脚本起的那一棵 Edge（按 pid 与调试端口，绝不按镜像名）。
+ * 不新建会话（AGENTS.md 硬规则 3）：起 Edge 之后、第一次 Page.navigate 之前，先挑一个已存在的
+ * 非空白会话，用 Page.addScriptToEvaluateOnNewDocument 把 localStorage 的 `dsh.sessions.current`
+ * 指到它上面；找不到就抛错停下。close() / newSessions() 比较走查前后的会话存储，
+ * 一旦多出会话就打印 [FAIL] 并把退出码置为 1（会话存储与桌面版共用，需人工确认后删除）。
+ *
+ * 退出时只收掉本脚本起的那一棵 Edge（按 pid 与调试端口，绝不按镜像名）。
  */
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import {
+  newSessions as diffSessions,
+  pickViewTarget,
+  redactSession,
+  selectionSeedScript,
+  sessionsRoot,
+  snapshotSessions,
+} from "./session-guard.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -43,7 +57,8 @@ export async function launchHubBrowser(options = {}) {
   );
   const killEdge = () => {
     try {
-      if (edge.pid !== undefined) execFileSync("taskkill.exe", ["/PID", String(edge.pid), "/T", "/F"], { stdio: "ignore" });
+      if (edge.pid !== undefined)
+        execFileSync("taskkill.exe", ["/PID", String(edge.pid), "/T", "/F"], { stdio: "ignore" });
     } catch {
       // 已经退了
     }
@@ -119,12 +134,23 @@ export async function launchHubBrowser(options = {}) {
   };
   const evaluate = async (expression) => {
     const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
-    if (result.exceptionDetails !== undefined) throw new Error("页面脚本异常：" + JSON.stringify(result.exceptionDetails));
+    if (result.exceptionDetails !== undefined)
+      throw new Error("页面脚本异常：" + JSON.stringify(result.exceptionDetails));
     return result.result.value;
   };
   await send("Page.enable");
   await send("Runtime.enable");
   await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+
+  // 第一次 Page.navigate 之前：记下当前会话，挑一个能安全打开的，把它种进页面的 localStorage。
+  // 网页端加载时读到 `dsh.sessions.current` 指向的会话存在且非空白，就只打开它、不新建。
+  const sessionsDir = sessionsRoot();
+  const before = snapshotSessions(sessionsDir);
+  const viewSessionId = pickViewTarget(sessionsDir);
+  if (viewSessionId === undefined) {
+    throw new Error("找不到可作为初始视图的已有会话：为了不新建会话，走查停止。");
+  }
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: selectionSeedScript(viewSessionId) });
 
   const base = "http://127.0.0.1:" + String(port) + "/";
   const hub = {
@@ -149,7 +175,11 @@ export async function launchHubBrowser(options = {}) {
       return clicked;
     },
     clickTestId: (id) =>
-      evaluate("(() => { const n = document.querySelector('[data-testid=" + JSON.stringify(id) + "]'); if (!n) return false; n.click(); return true; })()"),
+      evaluate(
+        "(() => { const n = document.querySelector('[data-testid=" +
+          JSON.stringify(id) +
+          "]'); if (!n) return false; n.click(); return true; })()",
+      ),
     clickText: (text, within = "[data-testid=capability-hub-page]") =>
       evaluate(
         "(() => { const root = document.querySelector(" +
@@ -183,13 +213,27 @@ export async function launchHubBrowser(options = {}) {
       writeFileSync(file, Buffer.from(result.data, "base64"));
       return file;
     },
+    /** 走查开始之后新出现的会话键（只比较，不关闭）。 */
+    newSessions: () => diffSessions(before, snapshotSessions(sessionsDir)),
     close() {
+      const created = diffSessions(before, snapshotSessions(sessionsDir));
+      if (created.length > 0) {
+        console.error(
+          "[FAIL] 走查期间出现了 " +
+            created.length +
+            " 个新会话：" +
+            created.map((key) => redactSession(key)).join("、") +
+            "（请人工确认后删除）",
+        );
+        process.exitCode = 1;
+      }
       try {
         socket.close();
       } catch {
         // 已经断了
       }
       killEdge();
+      return created;
     },
   };
   return hub;

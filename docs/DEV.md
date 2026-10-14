@@ -385,8 +385,19 @@ MCP 页、「添加服务器」（粘贴 JSON）与服务器抽屉，
 `[data-testid=capability-hub-env]`），读它的脚本必须先点开。两个标签是**同时挂载**的
 （切换只改 `hidden`），判断可见性请读 `hidden` 属性。
 
-默认不新建会话（要新建传 `--new-session`）：profile 与桌面版可能共用 `~/.dsh` 的会话存储，
-每跑一次都会在会话列表里多一条。
+### 不新建会话
+
+DSH 网页端每次加载都会读 localStorage 的 `dsh.sessions.current`：指向的会话**存在且非空白**
+（日志里出现过 `turn/start`）就只打开它；没有记录、会话已不存在、或指向空白会话时，会退回「最近使用的工作区」
+复用那里的空白会话，没有可复用的就**新建一个**。会话存储（`<DSH_HOME 或 ~/.dsh>/sessions`）与桌面版共用，
+新建的会话会出现在使用者真实的会话列表里（AGENTS.md 硬规则 3）。
+
+所以走查与截图脚本起 Edge 之后、第一次导航之前，先从会话存储里挑一个满足「depth 0 + 有 turn/start + 最后修改早于
+30 分钟」的已有会话（`scripts/lib/session-guard.mjs` 的 `pickViewTarget`），用
+`Page.addScriptToEvaluateOnNewDocument` 把 `dsh.sessions.current` 指到它上面；挑不到就抛错停下。
+结束时比较会话存储，多出会话就打印 `[FAIL] 走查期间出现了 N 个新会话：…` 并把退出码置为 1 ——
+这说明确实新建了会话，**需要人工确认后删除**（`redactSession` 只打印 id 前 8 位与工作区目录名的头尾）。
+`ui-shot.mjs --new-session` 是明确要求新建会话的开关：传了它就不种初始会话、也不判失败。
 
 ---
 
