@@ -9,8 +9,8 @@
  *   p01/p02  技能标签（默认折叠状态）
  *   p03/p04  技能标签：展开 DSH 内置、悬停一行
  *   p05/p06  「添加技能」仓库视图
- *   p07/p08  MCP 标签（滚到底，含「运行中」区域的真实空状态）
- *   p09/p10  MCP 标签，?hubPreviewRunning=1 的示例实例（预览数据，不新建会话）
+ *   p07/p08  MCP 标签
+ *   p09/p10  「添加服务器」：粘贴 JSON 的模态框（0.7.0 起唯一的添加方式）
  *   p11/p12  MCP 服务器详情抽屉
  *   p13/p14  仓库视图：展开仓库列表、勾选两项（底部出现安装区）
  *   p15      仓库视图：skills.sh 搜索结果（固定高度滚动框；会联网）
@@ -412,35 +412,18 @@ await escape();
 // ---- MCP --------------------------------------------------------------------
 await clickTestId("capability-hub-tab-mcp");
 await sleep(1200);
-await evaluate(
-  "(() => { const p = document.querySelector('[data-testid=capability-hub-panel-mcp]'); if (p) p.scrollIntoView({ block: 'end' }); const s = [...document.querySelectorAll('*')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); if (s) s.scrollIntoView({ block: 'center' }); return true; })()",
-);
-await sleep(400);
 FACTS.mcpAudit = await evaluate(AUDIT);
-FACTS.runningQuiet = await evaluate(
-  "(() => { const n = document.querySelector('[data-testid=running-quiet]'); return n ? n.textContent : null; })()",
-);
 FACTS.mcpTabDot = await evaluate("!!document.querySelector('[data-testid=capability-hub-tab-dot-mcp]')");
 FACTS.mcpRowSubtitle = await evaluate(
   "(() => { const n = document.querySelector('[data-testid^=mcp-row-] .chk_rowSub'); return n ? [n.textContent, n.title] : null; })()",
 );
-FACTS.runningHeader = await evaluate(
-  "(() => { const s = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] *')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); return s ? s.textContent.trim() : null; })()",
-);
 await pair("p07", "mcp");
 
-await open("&hubPreviewRunning=1");
-await openHub();
-await clickTestId("capability-hub-tab-mcp");
-await sleep(1500);
-await evaluate(
-  "(() => { const s = [...document.querySelectorAll('[data-testid=capability-hub-panel-mcp] *')].find((n) => n.children.length === 0 && /^运行中/.test((n.textContent || '').trim())); if (s) s.scrollIntoView({ block: 'start' }); return true; })()",
-);
-await sleep(400);
-FACTS.previewRunningText = await evaluate(
-  "(() => { const p = document.querySelector('[data-testid=capability-hub-panel-mcp]'); return p ? p.innerText.slice(-600) : null; })()",
-);
-await pair("p09", "mcp-running-preview");
+await clickTestId("mcp-add");
+await sleep(800);
+FACTS.pasteDialog = await evaluate("!!document.querySelector('[data-testid=mcp-paste-textarea]')");
+await pair("p09", "mcp-add-json");
+await escape();
 
 await open("");
 await openHub();

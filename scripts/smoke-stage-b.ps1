@@ -10,9 +10,9 @@
     3  POST skills/set-enabled   停用再启用（archify），证明「除那一行外字节不变」
     4  GET  mcp/config           → 加服务器之前的配置
     5  POST mcp/servers/upsert   加一个指向夹具 fake-mcp-server.mjs 的 stdio 服务器
-    6  GET  mcp/runtime          轮询到自动探测把 toolCount 写进缓存（> 0）
-    7  POST mcp/runtime/refresh  手动刷新一次
-    8  GET  health               4 个真实模块 ok；测试服务器的每个工具都以 mcp__<服务器>__<工具> 注册进 DSH（含 anyOf schema 的 pick）
+    6  GET  mcp/runtime          轮询到 DSH 官方 MCP 插件连上、注册了工具（state = connected）
+    7  POST mcp/runtime/reconnect 重新连接一次
+    8  GET  health               4 个真实模块 ok；官方 MCP 插件已加载；测试服务器已连接
     9  GET  skills/github-auth   只看 mode（绝不打印令牌）
    10  POST mcp/servers/delete   收尾：删掉测试服务器，恢复原状；它的工具随之从 DSH 注销
 
@@ -143,7 +143,8 @@ Check ($config.ok -eq $true) "ok=true"
 # 夹具里可能本来就有别的服务器，收尾时只要求「回到运行前的数量」。
 # （判据不写死 0，否则夹具里常驻的服务器会让收尾误报失败。）
 $serverCountBefore = @($config.data.servers).Count
-Say ("  servers: " + $serverCountBefore + "（运行前基线）| settings: " + ($config.data.settings | ConvertTo-Json -Compress))
+Say ("  servers: " + $serverCountBefore + "（运行前基线）")
+Check ($null -eq $config.data.settings) "0.7.0 起没有全局设置"
 
 # ---- 5. upsert 测试服务器 ----
 Step "POST mcp/servers/upsert（夹具 fake-mcp-server.mjs）"
@@ -154,30 +155,32 @@ $upsert = Envelope (Invoke-Hub POST 'mcp/servers/upsert' @{
     command    = $NodeExe
     args       = @($Fixture)
     env        = @{ FAKE_MCP_NO_GRANDCHILD = '1' }
-    meta       = @{ description = '冒烟用的假 MCP 服务器（跑完即删）'; tags = @('smoke') }
+    meta       = @{ description = '冒烟用的假 MCP 服务器（跑完即删）' }
   }
 })
 Check ($upsert.ok -eq $true -and $upsert.data.server.serverName -eq $ServerName) "upsert 成功"
 Say ("  warnings: " + (($upsert.data.warnings) -join ' | '))
 
-# ---- 6. 等自动探测 ----
-Step "等自动探测写缓存（GET mcp/runtime）"
+# ---- 6. 等官方 MCP 插件连上 ----
+Step "等 DSH 官方 MCP 插件连上（GET mcp/runtime）"
 $toolCount = 0
 for ($i = 0; $i -lt 40; $i++) {
   Start-Sleep -Milliseconds 500
   $runtime = Envelope (Invoke-Hub GET 'mcp/runtime')
   $server = @($runtime.data.servers) | Where-Object { $_.name -eq $ServerName } | Select-Object -First 1
-  if ($null -ne $server -and $null -ne $server.cache -and $server.cache.toolCount -gt 0) { $toolCount = $server.cache.toolCount; break }
+  if ($null -ne $server -and $server.state -eq 'connected' -and @($server.tools).Count -gt 0) { $toolCount = @($server.tools).Count; break }
 }
-Check ($toolCount -gt 0) "自动探测后 toolCount = $toolCount（> 0）"
+Check ($toolCount -gt 0) "连上后注册了 $toolCount 个工具（> 0）"
 $runtime = Envelope (Invoke-Hub GET 'mcp/runtime')
 $server = @($runtime.data.servers) | Where-Object { $_.name -eq $ServerName } | Select-Object -First 1
-Say ("  runtime: " + ($server | ConvertTo-Json -Compress))
+$names = @($server.tools | ForEach-Object { $_.name })
+Check (@($names | Where-Object { $_ -notlike "mcp__$($ServerName)__*" }).Count -eq 0) "工具名都是 mcp__<服务器>__<工具>：$($names -join ', ')"
+Check ($names -contains "mcp__$($ServerName)__pick") "参数写法复杂的 pick（anyOf / 元组 / `$ref）也注册了"
 
-# ---- 7. refresh ----
-Step "POST mcp/runtime/refresh"
-$refresh = Envelope (Invoke-Hub POST 'mcp/runtime/refresh' @{ name = $ServerName })
-Check ($refresh.ok -eq $true -and $refresh.data.toolCount -gt 0) "refresh 返回 toolCount = $($refresh.data.toolCount)"
+# ---- 7. reconnect ----
+Step "POST mcp/runtime/reconnect"
+$reconnect = Envelope (Invoke-Hub POST 'mcp/runtime/reconnect' @{ name = $ServerName })
+Check ($reconnect.ok -eq $true -and $reconnect.data.server.state -eq 'connected' -and @($reconnect.data.server.tools).Count -gt 0) "重新连接后 state = $($reconnect.data.server.state)，$(@($reconnect.data.server.tools).Count) 个工具"
 
 # ---- 8. health ----
 Step "GET health"
@@ -188,14 +191,10 @@ foreach ($name in @('mcp-config', 'skills-local', 'skills-remote', 'mcp-runtime'
   $entry = @($health.data.modules) | Where-Object { $_.name -eq $name } | Select-Object -First 1
   Check ($null -ne $entry -and $entry.status -eq 'ok') "模块 $name ok"
 }
-$registered = @($health.data.tools.registered)
-$mine = @($registered | Where-Object { $_ -like "mcp__$($ServerName)__*" })
-Check ($null -eq $health.data.tools.error) "DSH 工具注册表可用"
-Check ($mine.Count -eq $toolCount) "测试服务器的 $toolCount 个工具都已注册进 DSH（实际 $($mine.Count) 个：$($mine -join ', ')）"
-Check ($mine -contains "mcp__$($ServerName)__pick") "带 anyOf / 元组 / `$ref 的 pick 也被 DSH 接受"
-Check (@($health.data.tools.failed).Count -eq 0) ("没有被 DSH 拒绝的工具" + $(if (@($health.data.tools.failed).Count -gt 0) { "：" + ($health.data.tools.failed | ConvertTo-Json -Compress) } else { "" }))
-Check ($health.data.tools.prompt -eq $true) "服务器说明已挂进系统提示词"
-Say ("  已注册的 MCP 工具（共 " + $registered.Count + " 个）：" + ($registered -join ', '))
+Check ($health.data.mcpClient.status -eq 'loaded') "DSH 官方 MCP 插件已加载（v$($health.data.mcpClient.version)）"
+$entry = @($health.data.mcpServers) | Where-Object { $_.name -eq $ServerName } | Select-Object -First 1
+Check ($null -ne $entry -and $entry.state -eq 'connected' -and $entry.toolCount -eq $toolCount) "health 里测试服务器已连接、$toolCount 个工具"
+Say ("  mcpServers: " + (@($health.data.mcpServers) | ConvertTo-Json -Compress))
 Say ("  wiring: " + ($health.data.wiring | ConvertTo-Json -Compress))
 Say ("  已注册路由数：" + (@($health.data.registration.registered).Count))
 
@@ -214,10 +213,10 @@ Check (@($config2.data.servers).Count -eq $serverCountBefore) "已无本次新�
 $gone = $false
 for ($i = 0; $i -lt 20 -and -not $gone; $i++) {
   $health2 = Envelope (Invoke-Hub GET 'health')
-  $gone = @(@($health2.data.tools.registered) | Where-Object { $_ -like "mcp__$($ServerName)__*" }).Count -eq 0
+  $gone = @(@($health2.data.mcpServers) | Where-Object { $_.name -eq $ServerName }).Count -eq 0
   if (-not $gone) { Start-Sleep -Milliseconds 500 }
 }
-Check $gone "删除后它的工具已从 DSH 注销"
+Check $gone "删除后它已从 MCP 运行时卸下"
 
 Say ""
 if ($script:Failures -eq 0) { Say "SMOKE-STAGE-B-RESULT pass=$($script:Step) fail=0" }
