@@ -24,8 +24,8 @@ export const zh = {
   "skills.searchPlaceholder": "搜索技能",
   "skills.filterLabel": "筛选",
   "skills.filter.all": "全部",
-  "skills.filter.enabled": "已启用",
-  "skills.filter.disabled": "已停用",
+  "skills.filter.enabled": "模型可调用",
+  "skills.filter.disabled": "模型不可调用",
   "skills.filter.attention": "需关注",
   "skills.addSkill": "添加技能",
 
@@ -51,9 +51,9 @@ export const zh = {
   "skills.tag.shadowedTitle": "被更高优先级的 {id} 遮蔽",
   "skills.tag.noName": "无名称",
   "skills.name.hint": "frontmatter 里没有 name，这里显示目录名",
-  "skills.toggle.enable": "启用「{name}」",
-  "skills.toggle.disable": "停用「{name}」",
-  "skills.toggle.blockedReadonly": "只读根，不能启停",
+  "skills.toggle.enable": "允许模型调用「{name}」",
+  "skills.toggle.disable": "禁止模型调用「{name}」",
+  "skills.toggle.blockedReadonly": "只读根，不能修改模型调用",
   "skills.toggle.blockedUnsafe": "文件格式不支持安全改写（只能手工改）",
 
   /* ---- 空状态 ---- */
@@ -289,8 +289,8 @@ export const zh = {
   "skills.remote.auth.unknown": "未知",
 
   /* ---- 操作反馈 ---- */
-  "skills.toast.toggleOn": "已启用「{name}」",
-  "skills.toast.toggleOff": "已停用「{name}」",
+  "skills.toast.toggleOn": "已允许模型调用「{name}」",
+  "skills.toast.toggleOff": "已禁止模型调用「{name}」",
   "skills.toast.failed": "操作失败：{message}",
 } as const;
 

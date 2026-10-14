@@ -134,7 +134,7 @@ test("搜索：命中名称 / 目录名 / id / 描述，空串不过滤", () => 
   assert.equal(matchesQuery(skill, "不存在的东西"), false);
 });
 
-test("四段筛选（UI-DESIGN §4）：全部 / 已启用 / 已停用 / 需关注", () => {
+test("四段筛选（UI-DESIGN §4）：全部 / 模型可调用 / 模型不可调用 / 需关注", () => {
   const visible = makeSkill({ id: "a:visible", name: "visible" });
   const disabled = makeSkill({
     id: "a:disabled",
@@ -152,8 +152,11 @@ test("四段筛选（UI-DESIGN §4）：全部 / 已启用 / 已停用 / 需关�
     all.filter((skill) => matchesFilter(skill, filter, context)).map((skill) => skill.id);
 
   assert.deepEqual(FILTERS, ["all", "enabled", "disabled", "attention"]);
-  assert.equal(filterLabel("enabled"), "已启用");
-  assert.equal(filterLabel("attention"), "需关注");
+  // 后两段筛的就是 disable-model-invocation（行右侧开关管的那件事），名字必须对得上
+  assert.deepEqual(
+    FILTERS.map((id) => filterLabel(id)),
+    ["全部", "模型可调用", "模型不可调用", "需关注"],
+  );
   assert.deepEqual(ids("all"), ["a:visible", "a:disabled", "a:broken", "a:shadowed", "a:updatable"]);
   assert.deepEqual(ids("enabled"), ["a:visible", "a:broken", "a:shadowed", "a:updatable"]);
   assert.deepEqual(ids("disabled"), ["a:disabled"]);

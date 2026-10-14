@@ -27,12 +27,15 @@ test("整行：标题、副标题、目录标签、标记", () => {
 
 test("开关（D-B3）：只读技能没有开关；不能安全改写时禁用并给原因；在途时禁用", () => {
   const ok = skillToggle(makeSkill({ id: "a:on", name: "on" }), false);
-  assert.deepEqual(ok, { checked: true, disabled: false, label: "停用「on」" });
+  assert.deepEqual(ok, { checked: true, disabled: false, label: "禁止模型调用「on」" });
   assert.equal(
     skillToggle(makeSkill({ id: "a:off", name: "off", modelInvocationDisabled: true }), false)?.label,
-    "启用「off」",
+    "允许模型调用「off」",
   );
-  assert.equal(skillToggle(makeSkill({ id: "a:noname", dirName: "dir-only" }), false)?.label, "停用「dir-only」");
+  assert.equal(
+    skillToggle(makeSkill({ id: "a:noname", dirName: "dir-only" }), false)?.label,
+    "禁止模型调用「dir-only」",
+  );
   assert.equal(skillToggle(makeSkill({ id: "a:on", name: "on" }), true)?.disabled, true, "启停在途");
 
   const readonly = makeSkill({ id: "custom-0:ro", rootId: "custom-0", writable: false });
@@ -47,7 +50,7 @@ test("开关（D-B3）：只读技能没有开关；不能安全改写时禁用�
   assert.deepEqual(skillToggle(unsafe, false), {
     checked: true,
     disabled: true,
-    label: "停用「bom」",
+    label: "禁止模型调用「bom」",
     title: "文件格式不支持安全改写（只能手工改）：文件以 UTF-8 BOM 开头。",
   });
   const unsafeNoDiag = makeSkill({ id: "user-agents:x", format: { eol: "mixed", bom: false, safeToToggle: false } });
