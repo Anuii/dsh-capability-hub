@@ -1,7 +1,7 @@
 {
   "name": "dsh-capability-hub",
-  "description": "DSH 能力中心：技能管理与 MCP 服务器管理（MCP 工具直接注册、进程按需启动）",
-  "version": "0.6.0",
+  "description": "DSH 能力中心：技能管理与 MCP 服务器管理（用 JSON 管理配置，由 DSH 官方 MCP 插件连接并注册工具）",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "files": [
