@@ -16,6 +16,8 @@
  *   p15      仓库视图：skills.sh 搜索结果（固定高度滚动框；会联网）
  *   p17      技能页「模型可调用」筛选下折叠用户级里的第一个来源仓库（筛选中也能折叠）
  *   p16      仓库视图：从搜索结果「浏览」某个仓库后（结果出现在输入区下方并自动滚到可见）
+ *   p19/p20  提示词标签（全局 / 当前工作区两组）
+ *   p21/p22  提示词详情抽屉（等宽文本框；只读打开，不改任何文件）
  *   pages-facts.json  每一步的 DOM 事实（标签、彩色元素统计、每行可见控件数）
  *
  * 不新建会话：会话存储与桌面版共用（AGENTS.md 硬规则 3）。
@@ -456,6 +458,33 @@ FACTS.serverDrawerText = await evaluate(
   "(() => { const d = document.querySelector('[data-testid=kit-drawer]') || document.querySelector('[role=dialog]'); return d ? d.innerText.slice(0, 800) : null; })()",
 );
 await pair("p11", "mcp-drawer");
+await escape();
+
+// ---- 提示词 ------------------------------------------------------------------
+// 只切标签、打开抽屉（纯读）：绝不在这里编辑 / 新建 / 启停任何提示词文件。
+await clickTestId("capability-hub-tab-prompts");
+await sleep(1200);
+FACTS.promptsAudit = await evaluate(AUDIT);
+FACTS.promptsGroups = await evaluate(
+  "[...document.querySelectorAll('[data-testid^=prompts-group-]')].map((n) => n.getAttribute('data-testid'))",
+);
+FACTS.promptsRows = await evaluate(
+  "[...document.querySelectorAll('[data-testid^=prompts-row-]')].map((n) => n.getAttribute('data-testid'))",
+);
+FACTS.promptsBudget = await evaluate(
+  "(() => { const n = document.querySelector('[data-testid=prompts-budget]'); return n ? [n.textContent, n.title] : null; })()",
+);
+await pair("p19", "prompts");
+
+FACTS.promptsRowOpened = await evaluate(
+  "(() => { const n = document.querySelector('[data-testid^=prompts-row-global-]'); if (!n) return false; n.click(); return true; })()",
+);
+await sleep(1200);
+FACTS.promptsDrawer = await evaluate("!!document.querySelector('[data-testid=prompts-drawer]')");
+FACTS.promptsEditorLength = await evaluate(
+  "(() => { const n = document.querySelector('[data-testid=prompts-editor]'); return n ? n.value.length : null; })()",
+);
+await pair("p21", "prompts-drawer");
 await escape();
 
 FACTS.console = consoleLines.filter((line) => /capability-hub|error/i.test(line)).slice(0, 20);
