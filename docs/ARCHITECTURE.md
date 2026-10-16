@@ -5,7 +5,7 @@
 ```
 src/
   platform/   外壳
-    host/       组装四个宿主模块、接 DSH（路由、MCP 工具注册与提示词段落、会话事件、加载 DSH 自带的 MCP SDK 与 yaml）
+    host/       组装五个宿主模块、接 DSH（路由、MCP 工具注册、会话事件、读组合配置、加载 DSH 自带的 MCP SDK 与 yaml）
     client/     页头、两个标签、HTTP 客户端 api.ts、标签契约 tab-props.ts
     contract/   外壳 ↔ 宿主模块：HubContext、HubModule、RouteTable、HubError、FieldError
   skills/     技能
@@ -19,6 +19,12 @@ src/
     runtime/    宿主·MCP 运行时：把服务器挂载成 DSH 官方 dsh-mcp-client 插件实例（runtime.ts，全局一份 / 按会话；envFrom 在 atoms/）
     client/     MCP 页（列表、详情抽屉、单服务器 JSON 编辑、粘贴 JSON 添加）
     contract/   config.ts、runtime.ts
+  prompts/    提示词（DSH 会加载的 AGENTS.md / CLAUDE.md）
+    rules/      宿主与界面共用的纯规则：候选文件名与项目根标记、同层重复判定、预算估算（ADR-0008）
+    files/      宿主·提示词：发现（全局层 + 项目根到工作区各层）、查看、保存（版本冲突检测）、
+                新建、停用启用、回收站；「读 DSH 的组合配置」由外壳 prompt-settings.ts 注入
+    client/     提示词页（待建）
+    contract/   prompts.ts（HTTP 形状）
   kit/        界面组件、样式写法（css.ts）、折叠（fold.ts）、状态仓库（store.ts）
   shared/     宿主与客户端共用的叶子工具：错误码、错误文字、请求参数；node/ 是只给宿主用的文件读写（原子写只有这一份）
 test/         与 src/ 同构；test/architecture/ 守 import 规则
@@ -28,7 +34,7 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 
 由 `test/architecture/imports.test.ts` 强制，违反即单测失败：
 
-1. 四个宿主模块（skills/local、skills/remote、mcp/config、mcp/runtime）互不 import，只通过外壳注入的接口协作（例如外壳把本地技能的 `SkillsLocalApi` 交给远程技能，把配置模块的 `McpConfigSource` 交给运行时）；
+1. 五个宿主模块（skills/local、skills/remote、mcp/config、mcp/runtime、prompts/files）互不 import，只通过外壳注入的接口协作（例如外壳把本地技能的 `SkillsLocalApi` 交给远程技能，把配置模块的 `McpConfigSource` 交给运行时，把读好的提示词设置 `PromptSettings` 交给提示词模块）；
 2. 宿主外壳不引用客户端；客户端（功能、外壳、kit）不引用宿主代码；
 3. 客户端功能之间互不 import，只用客户端外壳公开的 `api.ts` 与 `tab-props.ts`；kit 只引用 kit；
 4. 契约只放类型，只引用契约，别人只能 `import type` 它（构建时擦除，浏览器产物里没有宿主代码，ADR-0002）；
@@ -37,7 +43,7 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 
 ## 宿主半
 
-`platform/host/index.ts` 是入口：`shell.ts` 解析上下文、加载 DSH 自带的官方 MCP 插件 `@deepseek-ai/dsh-mcp-client`（`mcp-client-loader.ts`）与 yaml（都不打包，ADR-0006 / ADR-0010），再按依赖顺序装载模块：**mcp-config → skills-local → skills-remote（与 skills-local 互相绑定 lock 条目）→ mcp-runtime**。每个模块独立 try/catch：任何一个失败只让它自己降级（health 里看得到原因），DSH 照常运行。之后外壳接上 agent 事件（`agent-hook.ts`：按会话的服务器挂到 `agent.ctx`），再让 mcp-runtime 把全局服务器挂到插件根作用域。连接、工具注册、图片、MCP 资源、断线重连、服务器用法说明进提示词都由官方插件负责（ADR-0010）。
+`platform/host/index.ts` 是入口：`shell.ts` 解析上下文、加载 DSH 自带的官方 MCP 插件 `@deepseek-ai/dsh-mcp-client`（`mcp-client-loader.ts`）与 yaml（都不打包，ADR-0006 / ADR-0010），再按依赖顺序装载模块：**mcp-config → skills-local → skills-remote（与 skills-local 互相绑定 lock 条目）→ mcp-runtime → prompts-files**（prompts-files 不依赖任何其他功能模块，排在最后只是为了不改前面的顺序）。每个模块独立 try/catch：任何一个失败只让它自己降级（health 里看得到原因），DSH 照常运行。之后外壳接上 agent 事件（`agent-hook.ts`：按会话的服务器挂到 `agent.ctx`），再让 mcp-runtime 把全局服务器挂到插件根作用域。连接、工具注册、图片、MCP 资源、断线重连、服务器用法说明进提示词都由官方插件负责（ADR-0010）。
 
 路由由各模块的 `routes` 汇总，统一挂在 `/api/dsh-capability-hub/` 下，响应是 `{ ok, data }` / `{ ok: false, error }` 信封；错误码与工厂在 `shared/errors.ts`。磁盘数据都在 `~/.dsh/storages/dsh-capability-hub`，另外读写 `~/.agents/.skill-lock.json`（与 `npx skills` 兼容）。
 
@@ -66,6 +72,7 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 | 技能「来源」的手动登记                           | `skills/client/remote/source-flow.ts`                                                                                               |
 | 检查更新怎么判断「有没有更新」                   | `skills/remote/updates.ts`（比目录指纹）+ `skills/remote/skilltree.ts`（trees + raw，回退 tar.gz）+ `skills/remote/fingerprints.ts` |
 | GitHub 镜像（前缀式，只用于下载）                | `skills/remote/settings.ts`（校验与落盘）+ `skills/remote/github.ts`（applyMirror / downloadRequest）                               |
+| DSH 会加载哪些提示词、提示词怎么编辑/启停         | 宿主 `prompts/files/`（发现在 `discover.ts`，读写在 `api.ts`）；候选名与预算规则在 `prompts/rules/`；读 DSH 组合配置在 `platform/host/prompt-settings.ts` |
 | 新接口                                           | 宿主模块的 routes + `contract/` 里的形状 + 客户端 `data.ts`                                                                         |
 
 决策：产品决策在 [DECISIONS.md](DECISIONS.md)，架构决策在 [adr/](adr/)。
