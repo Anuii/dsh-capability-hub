@@ -30,8 +30,15 @@
  * 任何别的路径一律 400/404，绝不读写。
  */
 
-/** DSH 认的四个文件名（加载顺序即此顺序）。新建只允许 AGENTS.md。 */
-export type PromptFileName = "AGENTS.md" | "CLAUDE.md" | "AGENTS.local.md" | "CLAUDE.local.md";
+/**
+ * DSH 认的提示词文件名。
+ *
+ * **0.8.0 起不再写死**：名字来自 DSH 的组合配置（agent-instructions 条目的
+ * instructionFileCandidates 与 localInstructionFileCandidates），本插件与 DSH 用同一份配置；
+ * 配置读不到时用 DSH 的默认值 AGENTS.md、CLAUDE.md、AGENTS.local.md、CLAUDE.local.md。
+ * 全局层例外：DSH 写死只读 <dshHome>/AGENTS.md。新建只允许 AGENTS.md。
+ */
+export type PromptFileName = string;
 
 /** 一个提示词文件。 */
 export interface PromptFile {
@@ -67,7 +74,10 @@ export interface PromptLayer {
   isWorkspace: boolean;
   /** 按加载顺序（四个文件名的顺序） */
   files: PromptFile[];
-  /** 这一层能否新建 AGENTS.md（目录存在，且 AGENTS.md 与 AGENTS.md.disabled 都不存在；只有全局、项目根、工作区三层可能为 true） */
+  /**
+   * 这一层能否新建 AGENTS.md（目录存在，AGENTS.md 在当前候选文件名里，且 AGENTS.md 与
+   * AGENTS.md.disabled 都不存在；只有全局、项目根、工作区三层可能为 true）
+   */
   canCreate: boolean;
 }
 
@@ -77,7 +87,7 @@ export interface PromptsListResult {
   layers: PromptLayer[];
   /** 项目根绝对路径（有工作区时） */
   projectRoot?: string;
-  /** 项目根下有 .git（停用、启用会让 git 显示改名） */
+  /** 项目根由 projectRootMarkers 命中（默认 .git；停用、启用会让 git 显示改名） */
   inGit: boolean;
   budget: {
     /** DSH 的提示词预算（字节） */
