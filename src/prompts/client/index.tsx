@@ -151,9 +151,10 @@ function PromptsTabInner(props: TabProps): React.ReactElement {
     });
   };
 
-  const save = (content: string): void => {
+  /** 保存当前草稿（草稿在状态仓库里，这里只管「保存中」这一个界面状态）。 */
+  const save = (): void => {
     setSaving(true);
-    void store.save(content).finally(() => setSaving(false));
+    void store.save().finally(() => setSaving(false));
   };
 
   const trashCount = trash?.length ?? 0;
@@ -203,9 +204,10 @@ function PromptsTabInner(props: TabProps): React.ReactElement {
       )}
       <PromptDetailDrawer
         doc={doc}
-        busy={doc === undefined ? false : busyIds.has(doc.file.id)}
         saving={saving}
-        onSave={save}
+        onDraft={(text: string) => store.setDraft(text)}
+        onRevert={() => store.revert()}
+        onSave={() => save()}
         onReload={() => void store.reloadDoc()}
         onClose={() => store.closeDoc()}
       />

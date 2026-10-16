@@ -30,11 +30,23 @@ export interface PromptsAdapter {
   purge(trashId: string | undefined): Promise<number>;
 }
 
-/** 详情抽屉里正在看的那一份（内容、版本与冲突状态）。 */
+/**
+ * 详情抽屉里正在看的那一份（磁盘原文、编辑草稿、版本与冲突状态）。
+ *
+ * 草稿**放在这里**而不是组件里：组件只把用户输入转进来（setDraft），
+ * 「有没有改动 / 能不能保存」由下面的 docDirty / docCanSave 算，组件只渲染。
+ */
 export interface PromptDoc {
   file: PromptFile;
-  /** 打开（或最近一次保存 / 重新加载）时的内容，界面据此判断「有没有改动」 */
+  /** 磁盘上的原文（打开、重新加载、保存成功之后都是它），界面据此判断「有没有改动」 */
   content: string;
+  /** 编辑框里的草稿；打开、重新加载、保存成功、恢复之后都等于宿主给的原文 */
+  draft: string;
+  /**
+   * 原文已经读到。读取失败时是 false：这时绝不能允许保存 ——
+   * 否则会用（没读到的）空内容覆盖掉磁盘上的文件。
+   */
+  loaded: boolean;
   /** 保存时做冲突检测的内容版本 */
   version: string;
   loading: boolean;
@@ -91,8 +103,12 @@ export interface PromptsStore {
   /** 保存冲突时「重新加载」：重读原文与版本 */
   reloadDoc(): Promise<void>;
   closeDoc(): void;
-  /** 保存当前文档 */
-  save(content: string): Promise<ActionResult>;
+  /** 改草稿（编辑框的每一次输入） */
+  setDraft(text: string): void;
+  /** 还原：丢掉未保存的改动，草稿换回磁盘原文 */
+  revert(): void;
+  /** 保存当前草稿 */
+  save(): Promise<ActionResult>;
   create(location: PromptCreateLocation): Promise<ActionResult>;
   setEnabled(file: PromptFile, enabled: boolean): Promise<ActionResult>;
   restore(item: PromptTrashItem): Promise<ActionResult>;
@@ -126,6 +142,26 @@ export function replaceFile(list: PromptsListResult, file: PromptFile): PromptsL
     index === at ? { ...layer, files: layer.files.map((item) => (item.id === file.id ? file : item)) } : layer,
   );
   return { ...list, layers };
+}
+
+/** 草稿相对磁盘原文有没有改动。 */
+export function docDirty(doc: PromptDoc): boolean {
+  return doc.draft !== doc.content;
+}
+
+/**
+ * 「保存」能不能点：有改动、原文已经读到（读取失败时不许保存）、没有未解决的冲突、也不在保存中。
+ *
+ * 原文还没读到（loading）时 dirty 本来就是 false，这里再显式要求 loaded，
+ * 是为了把「读失败了但用户照样输入」这条路径也堵死。
+ */
+export function docCanSave(doc: PromptDoc, saving: boolean): boolean {
+  return docDirty(doc) && doc.loaded && !doc.conflict && !saving;
+}
+
+/** 「还原」能不能点：有改动、且不在保存中（它只是把草稿换回原文，不发请求）。 */
+export function docCanRevert(doc: PromptDoc, saving: boolean): boolean {
+  return docDirty(doc) && !saving;
 }
 
 export function createPromptsStore(adapter: PromptsAdapter): PromptsStore {
@@ -181,9 +217,24 @@ export function createPromptsStore(adapter: PromptsAdapter): PromptsStore {
     await Promise.all([reload(), reloadTrash()]);
   };
 
-  /** 打开一份文件：先放一个 loading 的文档（元数据来自列表），再读原文。 */
+  /**
+   * 打开一份文件：先放一个 loading 的文档（元数据来自列表），再读原文。
+   *
+   * 两次 patch 的版本号可能相同（列表里的 version 就是磁盘上的 version），
+   * 所以**草稿必须在原文到达时显式跟着换**，不能指望订阅者按版本变化去同步。
+   */
   const loadDoc = async (file: PromptFile): Promise<void> => {
-    state.patch({ doc: { file, content: "", version: file.version, loading: true, conflict: false } });
+    state.patch({
+      doc: {
+        file,
+        content: "",
+        draft: "",
+        loaded: false,
+        version: file.version,
+        loading: true,
+        conflict: false,
+      },
+    });
     try {
       const view = await adapter.view(file.id, workspace);
       const current = state.get().doc;
@@ -193,6 +244,8 @@ export function createPromptsStore(adapter: PromptsAdapter): PromptsStore {
         doc: {
           file: view.file,
           content: view.content,
+          draft: view.content,
+          loaded: true,
           version: view.file.version,
           loading: false,
           conflict: false,
@@ -202,7 +255,7 @@ export function createPromptsStore(adapter: PromptsAdapter): PromptsStore {
     } catch (failure) {
       const current = state.get().doc;
       if (current === undefined || current.file.id !== file.id) return;
-      patchDoc({ loading: false, error: errorText(failure) });
+      patchDoc({ loading: false, loaded: false, error: errorText(failure) });
     }
   };
 
@@ -229,16 +282,37 @@ export function createPromptsStore(adapter: PromptsAdapter): PromptsStore {
     closeDoc() {
       state.patch({ doc: undefined });
     },
-    async save(content) {
+    setDraft(text) {
+      patchDoc({ draft: text });
+    },
+    revert() {
+      const doc = state.get().doc;
+      if (doc === undefined) return;
+      patchDoc({ draft: doc.content });
+    },
+    async save() {
       const doc = state.get().doc;
       if (doc === undefined) return failed(new Error(t("prompts.detail.notOpen")));
+      // 原文还没读到就保存，等于用空内容覆盖磁盘上的文件——一律拒绝（界面本来也不给点）。
+      if (!doc.loaded) return failed(new Error(t("prompts.detail.openFailed", { message: doc.error ?? "" })));
+      const content = doc.draft;
       patchDoc({ error: undefined, conflict: false });
       busy(doc.file.id, true);
       try {
         const file = await adapter.save(doc.file.id, content, doc.version, workspace);
         const current = state.get().doc;
         if (current !== undefined && current.file.id === file.id) {
-          state.patch({ doc: { file, content, version: file.version, loading: false, conflict: false } });
+          state.patch({
+            doc: {
+              file,
+              content,
+              draft: content,
+              loaded: true,
+              version: file.version,
+              loading: false,
+              conflict: false,
+            },
+          });
         }
         updateList((list) => replaceFile(list, file));
         void reloadTrash();
@@ -299,11 +373,15 @@ export function createPromptsStore(adapter: PromptsAdapter): PromptsStore {
     async restore(item) {
       trashBusy(item.trashId, true);
       try {
-        await adapter.restore(item.trashId, workspace);
+        const file = await adapter.restore(item.trashId, workspace);
         await reloadAll();
+        // 打开着的那一份就是被恢复的那一份：重读它的原文，草稿跟着换回写回的内容。
         const doc = state.get().doc;
-        if (doc !== undefined && doc.file.id === item.fileId) await loadDoc(doc.file);
-        return ok(t("prompts.trash.restored", { path: item.displayPath }));
+        if (doc !== undefined && doc.file.id === item.fileId) await loadDoc(file);
+        const message = t("prompts.trash.restored", { path: item.displayPath });
+        // 与保存 / 启停同一口径：成功的写操作自己发提示（界面只负责渲染）。
+        notify(message, "success");
+        return ok(message);
       } catch (failure) {
         return failed(failure);
       } finally {

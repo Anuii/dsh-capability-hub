@@ -2,6 +2,11 @@
  * 提示词详情抽屉（UI-DESIGN §6）：上面是完整路径与大小，正文是等宽多行文本框（可编辑），
  * 底部「保存」（有改动才可点）与「还原」（放弃未保存的改动）。
  *
+ * 这个组件**只有渲染**：草稿与「能不能保存 / 还原」都在 prompts-store.ts 里（ADR-0005，
+ * 规则写进可单测的状态仓库）。组件里没有 useState，也没有「原文到达时同步」的 effect ——
+ * 那种写法在「先 patch loading 文档、再 patch 原文」时会漏掉（两次的 version 相同），
+ * 文本框会停在空串上，而「保存」却是亮的，一点就把文件写成空。
+ *
  * 冲突（409）：文件在别处被改过，正文里出现错误与「重新加载」——绝不用旧内容覆盖别人的改动。
  */
 import * as React from "react";
@@ -10,13 +15,14 @@ import { Banner, Drawer, KeyValue, Section, kit } from "../../kit/index.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import { formatBytes } from "./view-model.ts";
-import type { PromptDoc } from "./prompts-store.ts";
+import { docCanRevert, docCanSave, type PromptDoc } from "./prompts-store.ts";
 
 export interface PromptDetailDrawerProps {
   doc: PromptDoc | undefined;
-  busy: boolean;
   saving: boolean;
-  onSave(content: string): void;
+  onDraft(text: string): void;
+  onRevert(): void;
+  onSave(): void;
   onReload(): void;
   onClose(): void;
 }
@@ -24,15 +30,10 @@ export interface PromptDetailDrawerProps {
 /** 详情抽屉。 */
 export function PromptDetailDrawer(props: PromptDetailDrawerProps): React.ReactElement | null {
   const doc = props.doc;
-  const [text, setText] = React.useState<string>("");
-  // 换了一份文件、或保存 / 重新加载之后（版本变了）：正文跟着宿主给的原文走。
-  const stamp = doc === undefined ? "" : doc.file.id + "\u0000" + doc.version;
-  React.useEffect(() => {
-    setText(doc?.content ?? "");
-  }, [stamp]);
   if (doc === undefined) return null;
-  const changed = text !== doc.content;
   const file = doc.file;
+  const canSave = docCanSave(doc, props.saving);
+  const canRevert = docCanRevert(doc, props.saving);
   return (
     <Drawer
       open
@@ -48,19 +49,13 @@ export function PromptDetailDrawer(props: PromptDetailDrawerProps): React.ReactE
             size="sm"
             data-testid="prompts-revert"
             title={t("prompts.detail.revertTitle")}
-            disabled={!changed || props.saving}
-            onClick={() => setText(doc.content)}
+            disabled={!canRevert}
+            onClick={props.onRevert}
           >
             {t("prompts.detail.revert")}
           </Button>
           <span className={kit.drawerFootSpacer} />
-          <Button
-            variant="primary"
-            size="sm"
-            data-testid="prompts-save"
-            disabled={!changed || props.saving || doc.loading || doc.conflict}
-            onClick={() => props.onSave(text)}
-          >
+          <Button variant="primary" size="sm" data-testid="prompts-save" disabled={!canSave} onClick={props.onSave}>
             {props.saving ? t("prompts.detail.saving") : t("prompts.detail.save")}
           </Button>
         </React.Fragment>
@@ -107,13 +102,15 @@ export function PromptDetailDrawer(props: PromptDetailDrawerProps): React.ReactE
               {t("prompts.loading")}
             </p>
           ) : (
+            // 原文没读到（读取失败）时只读：这时保存已经不可点，文本框也不该像是能编辑的。
             <textarea
               className={styles.editor}
-              value={text}
+              value={doc.draft}
+              readOnly={!doc.loaded}
               spellCheck={false}
               aria-label={t("prompts.detail.content")}
               data-testid="prompts-editor"
-              onChange={(event: { target: { value: string } }) => setText(event.target.value)}
+              onChange={(event: { target: { value: string } }) => props.onDraft(event.target.value)}
             />
           )}
         </div>
