@@ -235,6 +235,7 @@ function SkillsTabInner(props: TabProps): React.ReactElement {
         onToggle={onToggle}
         onOpen={(skill: SkillSummary) => setDetailId(skill.id)}
         onAdd={() => setAddOpen(true)}
+        onShowAttention={() => setFilter("attention")}
       />
     );
 

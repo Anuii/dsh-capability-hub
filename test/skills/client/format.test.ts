@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import {
   abbreviateHomePath,
   displayName,
+  dshWontLoad,
+  hiddenFootView,
   homeDirFromRoots,
   isDshInstallPath,
   normalizePath,
@@ -157,10 +159,11 @@ test("四段筛选（UI-DESIGN §4）：全部 / 模型可调用 / 模型不可�
     FILTERS.map((id) => filterLabel(id)),
     ["全部", "模型可调用", "模型不可调用", "需关注"],
   );
-  assert.deepEqual(ids("all"), ["a:visible", "a:disabled", "a:broken", "a:shadowed", "a:updatable"]);
-  assert.deepEqual(ids("enabled"), ["a:visible", "a:broken", "a:shadowed", "a:updatable"]);
+  // 0.8.0（D-B4）：不可加载与被遮蔽的默认不显示，只在「需关注」里出现。
+  assert.deepEqual(ids("all"), ["a:visible", "a:disabled", "a:updatable"]);
+  assert.deepEqual(ids("enabled"), ["a:visible", "a:updatable"]);
   assert.deepEqual(ids("disabled"), ["a:disabled"]);
-  // 需关注 = 不可加载 + 被遮蔽 + 可更新
+  // 需关注 = 不可加载 + 被遮蔽 + 可更新（这三类照旧全在）
   assert.deepEqual(ids("attention"), ["a:broken", "a:shadowed", "a:updatable"]);
   assert.equal(needsAttention(visible, context), false);
   assert.equal(needsAttention(visible), false, "没有 context 时看不到「可更新」，其余两条仍然生效");
@@ -170,16 +173,60 @@ test("四段筛选（UI-DESIGN §4）：全部 / 模型可调用 / 模型不可�
   assert.equal(matches(updatable, "upd", "disabled", context), false);
 });
 
+test("DSH 不会加载的技能：不可加载或被遮蔽；搜索也翻不出来（只在「需关注」里）", () => {
+  const visible = makeSkill({ id: "a:visible", name: "visible" });
+  const broken = makeSkill({ id: "a:broken", name: "broken-skill", loadable: false, modelVisible: false });
+  const shadowed = makeSkill({ id: "a:shadowed", name: "shadowed-skill", shadowedBy: "b:shadowed" });
+  const updatable = makeSkill({ id: "a:updatable", name: "updatable" });
+
+  assert.equal(dshWontLoad(visible), false);
+  assert.equal(dshWontLoad(broken), true);
+  assert.equal(dshWontLoad(shadowed), true);
+  assert.equal(dshWontLoad(updatable), false, "可更新只是「需关注」，DSH 照样会加载它");
+
+  // 搜索命中名字，但前三段不显示它（搜索与筛选是「与」的关系，不是绕过筛选）
+  for (const filter of ["all", "enabled", "disabled"] as const) {
+    assert.equal(matches(broken, "broken-skill", filter), false, filter + " 里不该出现不可加载的技能");
+    assert.equal(matches(shadowed, "shadowed", filter), false, filter + " 里不该出现被遮蔽的技能");
+  }
+  assert.equal(matches(broken, "broken-skill", "attention"), true, "「需关注」里照旧能搜到");
+  assert.equal(matches(shadowed, "shadowed", "attention"), true);
+  // 搜索词为空时同理
+  assert.equal(matchesFilter(broken, "all"), false);
+  assert.equal(matchesFilter(broken, "attention"), true);
+});
+
+test("列表脚注视图模型：有被隐藏的技能且不在「需关注」时提示数量，否则不显示", () => {
+  const visible = makeSkill({ id: "a:visible", name: "visible" });
+  const broken = makeSkill({ id: "a:broken", name: "broken-skill", loadable: false, modelVisible: false });
+  const shadowed = makeSkill({ id: "a:shadowed", name: "shadowed-skill", shadowedBy: "b:shadowed" });
+  const skills = [visible, broken, shadowed];
+
+  for (const filter of ["all", "enabled", "disabled"] as const) {
+    assert.deepEqual(hiddenFootView(skills, "", filter), { count: 2, visible: true }, filter);
+  }
+  // 已经在「需关注」里：这些技能本来就显示，不再提示
+  assert.deepEqual(hiddenFootView(skills, "", "attention"), { count: 2, visible: false });
+  // 一个都没被隐藏：不显示这句
+  assert.deepEqual(hiddenFootView([visible], "", "all"), { count: 0, visible: false });
+  assert.deepEqual(hiddenFootView([], "", "all"), { count: 0, visible: false });
+  // 计数跟着搜索词走：点「查看」只切筛选、不动搜索词，所以行数与这句话对得上
+  assert.deepEqual(hiddenFootView(skills, "broken", "all"), { count: 1, visible: true });
+  assert.deepEqual(hiddenFootView(skills, "visible", "all"), { count: 0, visible: false });
+  assert.deepEqual(hiddenFootView(skills, "SHADOWED", "enabled"), { count: 1, visible: true }, "大小写不敏感");
+});
+
 test("分段计数", () => {
   const skills = [
     makeSkill({ id: "a:1", name: "1" }),
     makeSkill({ id: "a:2", name: "2", modelInvocationDisabled: true, modelVisible: false }),
     makeSkill({ id: "a:3", name: "3", loadable: false, modelVisible: false }),
   ];
-  assert.deepEqual(filterCounts(skills), { all: 3, enabled: 2, disabled: 1, attention: 1 });
+  // 0.8.0（D-B4）：前三段只数 DSH 会加载的，不可加载的 a:3 只进「需关注」
+  assert.deepEqual(filterCounts(skills), { all: 2, enabled: 1, disabled: 1, attention: 1 });
   assert.deepEqual(filterCounts(skills, { updatable: new Set<string>(["a:1"]) }), {
-    all: 3,
-    enabled: 2,
+    all: 2,
+    enabled: 1,
     disabled: 1,
     attention: 2,
   });

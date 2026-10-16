@@ -52,6 +52,9 @@ export const zh = {
   "skills.toggle.disable": "禁止模型调用「{name}」",
   "skills.toggle.blockedReadonly": "只读根，不能修改模型调用",
   "skills.toggle.blockedUnsafe": "文件格式不支持安全改写（只能手工改）",
+  // D-B4（0.8.0）：不可加载与被遮蔽的技能默认不显示，只在「需关注」里出现，列表底部给一句提示。
+  "skills.hidden.foot": "另有 {count} 个技能 DSH 不会加载（不可加载或被遮蔽）",
+  "skills.hidden.footAction": "查看",
 
   /* ---- 空状态 ---- */
   "skills.empty.title": "还没有技能",

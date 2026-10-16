@@ -1,6 +1,7 @@
 /**
  * 技能页的纯逻辑（不碰 DOM、不碰 React、不发请求，node:test 直接测，见 test/skills/client/format.test.ts）：
  * 技能目录（范围、路径缩写、排序）、显示名、搜索与四段筛选（全部 / 模型可调用 / 模型不可调用 / 需关注）、
+ * 「DSH 不会加载的技能默认不显示」这条隐藏规则与列表脚注的视图模型（D-B4，0.8.0）、
  * 诊断级别、格式化、局部更新、错误映射。
  * 「一行技能长什么样」在 row.ts，分组在 tree.ts。文案一律走 strings.ts 的 t()。
  */
@@ -163,10 +164,17 @@ export interface MatchContext {
   updatable?: ReadonlySet<string>;
 }
 
+/**
+ * DSH 不会加载的技能：不可加载（frontmatter 有错、格式不对等）或被遮蔽（有更高优先级的同名技能）。
+ * 0.8.0 起这类技能默认不显示，只在「需关注」筛选里出现（D-B4，使用者决定）。
+ */
+export function dshWontLoad(skill: SkillSummary): boolean {
+  return !skill.loadable || skill.shadowedBy !== undefined;
+}
+
 /** 「需关注」＝ 不可加载 + 被遮蔽 + 可更新（UI-DESIGN §4）。 */
 export function needsAttention(skill: SkillSummary, context?: MatchContext): boolean {
-  if (!skill.loadable) return true;
-  if (skill.shadowedBy !== undefined) return true;
+  if (dshWontLoad(skill)) return true;
   return context?.updatable?.has(skill.id) === true;
 }
 
@@ -182,14 +190,16 @@ export function matchesQuery(skill: SkillSummary, query: string): boolean {
 
 export function matchesFilter(skill: SkillSummary, filter: FilterId, context?: MatchContext): boolean {
   switch (filter) {
-    case "all":
-      return true;
-    case "enabled":
-      return !skill.modelInvocationDisabled;
-    case "disabled":
-      return skill.modelInvocationDisabled;
     case "attention":
+      // 唯一会显示 DSH 不会加载的技能的分段；搜索（matches）同样受这条约束，不会把它们翻出来。
       return needsAttention(skill, context);
+    // 其余三段只数 DSH 会加载的技能：不可加载与被遮蔽的默认不显示（D-B4，0.8.0）。
+    case "all":
+      return !dshWontLoad(skill);
+    case "enabled":
+      return !dshWontLoad(skill) && !skill.modelInvocationDisabled;
+    case "disabled":
+      return !dshWontLoad(skill) && skill.modelInvocationDisabled;
   }
 }
 
@@ -202,6 +212,25 @@ export function filterCounts(skills: readonly SkillSummary[], context?: MatchCon
   const counts: Record<FilterId, number> = { all: 0, enabled: 0, disabled: 0, attention: 0 };
   for (const id of FILTERS) counts[id] = skills.filter((skill) => matchesFilter(skill, id, context)).length;
   return counts;
+}
+
+/**
+ * 列表脚注「另有 N 个技能 DSH 不会加载（不可加载或被遮蔽）· 查看」的视图模型（D-B4，0.8.0）：
+ * 要不要显示、显示几个都在这里定，组件只负责渲染。
+ *
+ * 计数只看**当前搜索词**：点「查看」只切到「需关注」、搜索词不动，所以看到的行数与这句话对得上。
+ * 已经在「需关注」里时这些技能本来就显示，不再提示。
+ */
+export interface HiddenFootView {
+  /** 当前搜索下 DSH 不会加载的技能数（与筛选无关的事实） */
+  count: number;
+  /** true = 显示这句脚注 */
+  visible: boolean;
+}
+
+export function hiddenFootView(skills: readonly SkillSummary[], query: string, filter: FilterId): HiddenFootView {
+  const count = skills.filter((skill) => dshWontLoad(skill) && matchesQuery(skill, query)).length;
+  return { count, visible: count > 0 && filter !== "attention" };
 }
 
 /* ---------------- 诊断级别 ---------------- */

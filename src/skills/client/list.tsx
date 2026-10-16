@@ -7,11 +7,15 @@
  * 分组（tree.ts）：一级 = 层级（DSH 内置默认折叠 / 用户级 / 项目级），二级 = 来源仓库。
  * 折叠用 kit 的 useFold（规则见 kit/fold.ts），状态在本组件里（标签隐藏而不卸载，切标签不会丢）。
  * 工具栏没有目录下拉（使用者决定）：目录标签照旧只在同一层级混了多个技能目录时出现在行上。
+ *
+ * DSH 不会加载的技能（不可加载 / 被遮蔽，D-B4）默认不显示，只在「需关注」里出现——
+ * 隐藏规则在 format.ts 的 matchesFilter（搜索也走它），这里只负责在列表底部给一句脚注与「查看」。
  */
 import * as React from "react";
 import {
   Badge,
   EmptyState,
+  ListFoot,
   ListGroup,
   ListRow,
   ListSurface,
@@ -23,7 +27,7 @@ import {
 import { remoteStore } from "./remote/store.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { FilterId, MatchContext } from "./format.ts";
+import { hiddenFootView, type FilterId, type MatchContext } from "./format.ts";
 import { skillRowView } from "./row.ts";
 import { SkillSwitch } from "./switch.tsx";
 import { buildSkillTree, defaultExpanded, dirTagIndex, filterKeyOf, type LevelView } from "./tree.ts";
@@ -46,6 +50,8 @@ export interface SkillListProps {
   onToggle(skill: SkillSummary, next: boolean): void;
   onOpen(skill: SkillSummary): void;
   onAdd(): void;
+  /** 脚注上的「查看」：切到「需关注」筛选（这些技能只在那里出现）。 */
+  onShowAttention(): void;
 }
 
 /** 一行技能（长什么样由 row.ts 决定，这里只渲染）。 */
@@ -105,6 +111,7 @@ export function SkillList(props: SkillListProps): React.ReactElement {
     hasWorkspace,
     ...(sourcesReady ? { sources: remote.sources } : {}),
   });
+  const foot = hiddenFootView(props.list.skills, props.query, props.filter);
   const tags = React.useMemo(() => dirTagIndex(props.list.roots), [props.list.roots]);
   // 筛选时有匹配的分组先全部展开，但仍可手动折叠（只在这一次筛选里有效），清空后回到原来的折叠。
   const fold = useFold(filterKeyOf(props.query, props.filter));
@@ -154,7 +161,21 @@ export function SkillList(props: SkillListProps): React.ReactElement {
   };
 
   const empty = props.list.skills.length === 0 && !tree.filtering;
-  const surface =
+  // 有被隐藏的技能、又不在「需关注」里时，列表底部给一句「另有 N 个技能 DSH 不会加载 · 查看」
+  // （要不要显示、显示几个由 format.ts 的 hiddenFootView 决定；筛选后为空时同样显示，好让人知道去哪找）。
+  const footNode = foot.visible ? (
+    <ListFoot
+      testId="skills-hidden-foot"
+      textTestId="skills-hidden-foot-text"
+      text={t("skills.hidden.foot", { count: foot.count })}
+      action={{
+        label: t("skills.hidden.footAction"),
+        onClick: props.onShowAttention,
+        testId: "skills-hidden-foot-button",
+      }}
+    />
+  ) : null;
+  const body =
     empty || (tree.filtering && tree.shown === 0) ? (
       <EmptyState
         testId="skills-empty"
@@ -188,6 +209,12 @@ export function SkillList(props: SkillListProps): React.ReactElement {
         ))}
       </ListSurface>
     );
+  const surface = (
+    <div className={styles.groupStack}>
+      {body}
+      {footNode}
+    </div>
+  );
 
   return (
     <div

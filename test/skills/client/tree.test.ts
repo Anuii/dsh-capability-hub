@@ -203,6 +203,108 @@ test("折叠：DSH 内置默认折叠；筛选时有匹配的分组先展开、�
   assert.equal(isFiltering("", "attention"), true, "状态筛选同样算「筛选生效中」");
 });
 
+/* ---------------- 0.8.0（D-B4）：DSH 不会加载的技能默认不显示 ---------------- */
+
+const HIDDEN_ROOTS = [
+  root("user-dsh", { path: "C:\\Users\\me\\.dsh\\skills" }),
+  root("user-agents", { path: "C:\\Users\\me\\.agents\\skills" }),
+];
+
+const HIDDEN_SKILLS = [
+  makeSkill({ id: "user-agents:ok", name: "ok", rootId: "user-agents" }),
+  makeSkill({ id: "user-agents:broken", name: "broken", rootId: "user-agents", loadable: false, modelVisible: false }),
+  makeSkill({ id: "user-agents:shadowed", name: "shadowed", rootId: "user-agents", shadowedBy: "user-dsh:ok" }),
+  makeSkill({ id: "user-dsh:plain", name: "plain", rootId: "user-dsh" }),
+];
+
+const HIDDEN_SOURCES: Record<string, SourceEntry> = {
+  "user-agents:ok": source("user-agents:ok", "mattpocock/skills"),
+  "user-agents:broken": source("user-agents:broken", "mattpocock/skills"),
+  // 这个仓库只剩一个被遮蔽的技能：分组不该出现
+  "user-agents:shadowed": source("user-agents:shadowed", "anthropics/skills"),
+};
+
+const HIDDEN_LIST = makeList(HIDDEN_ROOTS, HIDDEN_SKILLS);
+
+test("默认视图：不可加载与被遮蔽的不出现，层级计数与分组只数显示出来的", () => {
+  const tree = buildSkillTree({
+    list: HIDDEN_LIST,
+    query: "",
+    filter: "all",
+    sources: HIDDEN_SOURCES,
+    hasWorkspace: true,
+  });
+  const user = tree.levels.find((l) => l.level === "user")!;
+  assert.deepEqual(user.skills.map((s) => s.id).sort(), ["user-agents:ok", "user-dsh:plain"]);
+  assert.equal(user.total, 2, "「用户级 2 个」只数 DSH 会加载的（原来会算 4 个）");
+  assert.equal(user.shown, 2);
+  assert.deepEqual(
+    user.repos.map((r) => r.label),
+    ["mattpocock/skills", "无来源"],
+    "只剩被遮蔽技能的 anthropics/skills 不出现，不凭空多出空分组",
+  );
+  assert.deepEqual(
+    user.repos[0]!.skills.map((s) => s.id),
+    ["user-agents:ok"],
+  );
+  assert.deepEqual(
+    user.repos[1]!.skills.map((s) => s.id),
+    ["user-dsh:plain"],
+  );
+  assert.equal(tree.shown, 2);
+  assert.equal(tree.total, 4, "total 仍是列表里的技能总数（含被隐藏的）");
+});
+
+test("某个层级里的技能全被隐藏：层级照旧在，按「空」处理（没有行、没有二级分组）", () => {
+  const list = makeList(
+    HIDDEN_ROOTS,
+    HIDDEN_SKILLS.filter((s) => s.id !== "user-agents:ok" && s.id !== "user-dsh:plain"),
+  );
+  const tree = buildSkillTree({ list, query: "", filter: "all", sources: HIDDEN_SOURCES, hasWorkspace: true });
+  const user = tree.levels.find((l) => l.level === "user")!;
+  assert.equal(user.total, 0);
+  assert.equal(user.shown, 0);
+  assert.deepEqual(user.skills, []);
+  assert.equal(user.flat, true, "没有可见技能时不显示二级分组头");
+  assert.deepEqual(user.repos, []);
+});
+
+test("搜索也翻不出被隐藏的技能（前三段一律不显示，只在「需关注」里）", () => {
+  const searched = buildSkillTree({
+    list: HIDDEN_LIST,
+    query: "broken",
+    filter: "all",
+    sources: HIDDEN_SOURCES,
+    hasWorkspace: true,
+  });
+  assert.equal(searched.shown, 0);
+  assert.deepEqual(searched.levels, [], "搜索命中名字也不出现");
+
+  const shadowSearched = buildSkillTree({
+    list: HIDDEN_LIST,
+    query: "shadowed",
+    filter: "enabled",
+    sources: HIDDEN_SOURCES,
+    hasWorkspace: true,
+  });
+  assert.equal(shadowSearched.shown, 0);
+
+  const attention = buildSkillTree({
+    list: HIDDEN_LIST,
+    query: "",
+    filter: "attention",
+    sources: HIDDEN_SOURCES,
+    hasWorkspace: true,
+  });
+  const user = attention.levels.find((l) => l.level === "user")!;
+  assert.deepEqual(
+    user.skills.map((s) => s.id).sort(),
+    ["user-agents:broken", "user-agents:shadowed"],
+    "「需关注」里照旧出现",
+  );
+  assert.equal(user.total, 2);
+});
+
 test("目录标签只在层级里有不止一个技能目录时显示", () => {
   const tree = buildSkillTree({ list: LIST, query: "", filter: "all", sources: SOURCES, hasWorkspace: true });
   assert.equal(tree.levels.find((l) => l.level === "user")!.multiDir, true, "用户级有 .agents、.dsh、team-skills");

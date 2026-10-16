@@ -9,6 +9,10 @@
  *          没有 skills 段时取最后一段；完整路径做悬停提示。只在层级里有不止一个目录的技能时显示（multiDir）。
  *   折叠 = 调用方持有「被用户折叠的分组 key 集合」；搜索 / 任何筛选生效时一律展开，
  *          清空后回到用户原来的折叠状态（集合本身没被改动过）。
+ *
+ * DSH 不会加载的技能（不可加载 / 被遮蔽，D-B4，0.8.0）默认不显示：它们不参与分组、不参与计数，
+ * 某个层级 / 来源仓库里的技能全被隐藏时按「空」处理（层级照旧在，只是没有行；不凭空多出空分组）。
+ * 判定复用 format.ts 的 matchesFilter("all")，与工具栏计数、搜索是同一套口径。
  */
 
 import { findSourceFor } from "./remote/model.ts";
@@ -16,6 +20,7 @@ import type { SourceEntry } from "../contract/remote.ts";
 import {
   isDshInstallPath,
   matches,
+  matchesFilter,
   normalizePath,
   rootScope,
   sortSkills,
@@ -85,7 +90,7 @@ export interface LevelView {
   /** 折叠 key */
   key: string;
   label: string;
-  /** 层级内技能总数（不受搜索 / 筛选影响） */
+  /** 层级内 DSH 会加载的技能数（不受搜索 / 筛选影响；DSH 不会加载的不算） */
   total: number;
   /** 通过搜索 / 筛选的技能数 */
   shown: number;
@@ -160,6 +165,9 @@ function repoGroups(
 /**
  * 整棵树。不筛选时：用户级总在；DSH 内置有技能才出现；项目级总在（没有工作区时只给一行说明）。
  * 筛选时：只留有匹配的层级。
+ *
+ * 无论筛不筛选，「DSH 不会加载的技能」（不可加载 / 被遮蔽）都不参与——它们只属于「需关注」筛选
+ * （matchesFilter 的口径），所以搜索也翻不出来，分组与计数只数显示出来的那些。
  */
 export function buildSkillTree(input: TreeInput): TreeView {
   const { list } = input;
@@ -171,7 +179,8 @@ export function buildSkillTree(input: TreeInput): TreeView {
 
   const levels: LevelView[] = [];
   for (const level of LEVELS) {
-    const all = list.skills.filter((skill) => levelOf(skill) === level);
+    // 「这个层级有多少技能」一律指 DSH 会加载的那些：被隐藏的不进分组、不进计数。
+    const all = list.skills.filter((skill) => levelOf(skill) === level && matchesFilter(skill, "all", input.context));
     const shown = sortSkills(kept.filter((skill) => levelOf(skill) === level));
     if (filtering && shown.length === 0) continue;
     if (!filtering && level === "builtin" && all.length === 0) continue;
