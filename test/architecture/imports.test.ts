@@ -2,9 +2,9 @@
  * 架构规则（ADR-0001）：按 import 语句检查「谁能引用谁」。违反即失败，不靠自觉。
  *
  * 区域（zone）：
- *   宿主功能模块  src/skills/local · src/skills/remote · src/mcp/config · src/mcp/runtime
- *   宿主外壳      src/platform/host（组装四个宿主模块、接 DSH）
- *   客户端功能    src/skills/client · src/mcp/client
+ *   宿主功能模块  src/skills/local · src/skills/remote · src/mcp/config · src/mcp/runtime · src/prompts/files
+ *   宿主外壳      src/platform/host（组装五个宿主模块、接 DSH）
+ *   客户端功能    src/skills/client · src/mcp/client · src/prompts/client
  *   客户端外壳    src/platform/client（页头、标签、HTTP 客户端 api.ts、标签契约 tab-props.ts）
  *   kit          src/kit（界面组件，不知道任何功能）
  *   契约          src/<功能>/contract（只放类型，宿主与客户端共用）
@@ -13,7 +13,7 @@
  *   宿主共享      src/shared/node/（文件读写等只能在宿主跑的叶子工具）
  *
  * 规则：
- *   1. 四个宿主功能模块互不 import，只能引用自己、契约（仅类型）与共享。
+ *   1. 五个宿主功能模块互不 import，只能引用自己、契约（仅类型）与共享。
  *   2. 宿主外壳不引用任何客户端代码。
  *   3. 客户端（功能、外壳、kit）不引用任何宿主代码；需要宿主的形状时 import type 契约。
  *   4. kit 只引用 kit。
@@ -36,9 +36,11 @@ type Zone =
   | "host:skills-remote"
   | "host:mcp-config"
   | "host:mcp-runtime"
+  | "host:prompts"
   | "host:platform"
   | "client:skills"
   | "client:mcp"
+  | "client:prompts"
   | "client:platform"
   | "kit"
   | "contract"
@@ -52,9 +54,11 @@ const ZONES: Array<[RegExp, Zone]> = [
   [/^skills\/remote\//, "host:skills-remote"],
   [/^mcp\/config\//, "host:mcp-config"],
   [/^mcp\/runtime\//, "host:mcp-runtime"],
+  [/^prompts\/files\//, "host:prompts"],
   [/^platform\/host\//, "host:platform"],
   [/^skills\/client\//, "client:skills"],
   [/^mcp\/client\//, "client:mcp"],
+  [/^prompts\/client\//, "client:prompts"],
   [/^platform\/client\//, "client:platform"],
   [/^kit\//, "kit"],
   [/^[a-z-]+\/contract\//, "contract"],
@@ -72,10 +76,15 @@ const isHostFeature = (zone: Zone): boolean =>
   zone === "host:skills-local" ||
   zone === "host:skills-remote" ||
   zone === "host:mcp-config" ||
-  zone === "host:mcp-runtime";
+  zone === "host:mcp-runtime" ||
+  zone === "host:prompts";
 const isHost = (zone: Zone): boolean => isHostFeature(zone) || zone === "host:platform";
 const isClient = (zone: Zone): boolean =>
-  zone === "client:skills" || zone === "client:mcp" || zone === "client:platform" || zone === "kit";
+  zone === "client:skills" ||
+  zone === "client:mcp" ||
+  zone === "client:prompts" ||
+  zone === "client:platform" ||
+  zone === "kit";
 /** 客户端外壳对功能公开的文件。 */
 const PLATFORM_CLIENT_PUBLIC = new Set(["platform/client/api.ts", "platform/client/tab-props.ts"]);
 
@@ -196,4 +205,11 @@ test("架构规则本身：每条规则都能拦住它要拦的东西", () => {
   assert.match(check("skills/client/x.ts", "shared/node/fsx.ts")!, /规则 8/);
   assert.match(check("mcp/rules/x.ts", "shared/node/fsx.ts")!, /规则 8/);
   assert.match(check("kit/x.ts", "shared/node/fsx.ts")!, /规则 8/);
+  // 提示词（0.8.0）：第五个宿主模块与第三个客户端功能
+  assert.match(check("prompts/files/x.ts", "skills/local/y.ts")!, /规则 1/);
+  assert.match(check("prompts/client/x.ts", "prompts/files/y.ts")!, /规则 3/);
+  assert.match(check("prompts/client/x.ts", "skills/client/y.ts")!, /规则 5/);
+  assert.equal(check("prompts/client/x.ts", "prompts/contract/prompts.ts", true), undefined);
+  assert.equal(check("prompts/files/x.ts", "shared/node/fsx.ts"), undefined);
+  assert.equal(check("platform/host/modules.ts", "prompts/files/module.ts"), undefined);
 });
