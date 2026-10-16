@@ -36,11 +36,12 @@
     src\platform\client\index.tsx      入口，只导出 inject 与 apply
     src\platform\client\applier.ts     装配：样式、字典、会话源、各 slot 注册（永不失败）
     src\platform\client\page.tsx       侧栏行 + 中央面板（main slot）注册
-    src\platform\client\panel.tsx      页面本体：页头、两个标签、ⓘ 诊断、降级与「需要重启」横幅
+    src\platform\client\panel.tsx      页面本体：页头、三个标签、ⓘ 诊断、降级与「需要重启」横幅
     src\platform\client\api.ts         API 客户端（信封、错误、鉴权说明）——标签页可以用
     src\platform\client\tab-props.ts   标签页 props（TabProps）——标签页可以用
     src\skills\client\                 技能页与「添加技能」（仓库视图）
     src\mcp\client\                    MCP 页（列表、详情抽屉、JSON 编辑、粘贴 JSON 添加）
+    src\prompts\client\                提示词页（AGENTS.md / CLAUDE.md：查看、编辑、新建、启停、回收站）
     src\kit\                            界面组件、样式写法（css.ts）、折叠（fold.ts）、状态仓库（store.ts）
     src\<功能>\contract\               宿主与客户端共用的接口类型（只能 import type）
 
@@ -94,7 +95,7 @@
 
 定义在 `src\platform\client\tab-props.ts`，**形状已经冻结**（只能加可选字段）：
 
-    export type PanelTab = "skills" | "mcp";
+    export type PanelTab = "skills" | "mcp" | "prompts";   // 0.8.0 起第三个标签
 
     export interface TabProps {
       /** 当前会话的工作区绝对路径；取不到时 undefined。 */
@@ -110,8 +111,9 @@
 - `workspace` 来自 slot 标准 prop `useSessions`（见第 4 节），技能页拿它找项目级技能目录；
 - `reportAttention`：MCP 页在「有错误」数从 0 变非 0（或反过来）时调用，外壳据此在「MCP」标签旁画红点。
 
-panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab` 与 `mcp/client/index.tsx` 的 `McpTab`；
-两个标签同时挂载、切换只改 `hidden`（状态不丢）。新增路由先在宿主模块里实现，形状写进 `contract/`。
+panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab`、`mcp/client/index.tsx` 的 `McpTab` 与
+`prompts/client/index.tsx` 的 `PromptsTab`；三个标签同时挂载、切换只改 `hidden`（状态不丢）。
+新增路由先在宿主模块里实现，形状写进 `contract/`。
 
 **构建与看效果**
 
@@ -165,7 +167,7 @@ panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab` 与 `mcp/client
       export const styles = sheet.classes;
       export function injectSkillsStyles(): void { injectStyleTag("dsh-capability-hub/skills-styles", sheet.css); }
 
-  前缀：kit = chk_，外壳 = ch_，技能页 = chsk_，MCP 页 = chmcp_。
+  前缀：kit = chk_，外壳 = ch_，技能页 = chsk_，MCP 页 = chmcp_，提示词页 = chpr_。
   颜色只用主题变量（kit 的 `--chk-*` token 或 `--dsw-*`），写死颜色会被单测拦下。
   页面根节点带 data-dsh-capability-hub-view 属性，方便写作用域选择器。
 
@@ -176,6 +178,7 @@ panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab` 与 `mcp/client
 | 位置 | 怎么做 | 备注 |
 |---|---|---|
 | 侧栏行 + 中央面板 | page.tsx 的 registerCapabilityHubPanel（sidebar.panellist + main） | main 是 keyed，key = capability-hub |
+| 标签顺序 | panel.tsx 的 `TABS`（技能 / MCP / 提示词） | 顺序即界面上从左到右；标签 id 见 tab-props.ts 的 `PanelTab` |
 | 插件管理页那一行的「配置」 | config-button.tsx 的 registerRowConfig（plugins.row.config） | key = 「dsh-capability-hub#capability-hub」 |
 | 别的 slot | 一律用 ctx.slots.inject(name, () => ctx.slots.register(...)) | owner 还没出现时 inject 会等，不要直接 register |
 

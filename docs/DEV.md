@@ -372,6 +372,7 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
     node scripts\ui-shot-pages.mjs [--suffix v2]               # 真实页面的亮色 / 暗色验收截图（UI-DESIGN 第 5 节）
     node scripts\ui-walk-mcp.mjs                               # MCP 页操作走查：粘贴 JSON 添加、连上、重新连接、启停、JSON 编辑、删除
     node scripts\ui-walk-skills.mjs                            # 技能「来源」走查：手动登记、取消登记（不联网）
+    node scripts\ui-walk-prompts.mjs                           # 提示词页走查：改一行保存、回收站恢复、停用启用（只动「全局」那一行的夹具文件）
 
 脚本自己从启动日志里取令牌，用 Edge headless + CDP 打开页面：关掉「预览版说明」模态框 →
 点开侧栏「能力中心」→ 依次切两个标签（每步一张 PNG）→ 读取 DOM 事实写成 `facts.json`。
@@ -380,7 +381,10 @@ Host/Origin 信任闸 + browser-auth 是 `dsh-client-connection` 注册的 **pre
 MCP 页、「添加服务器」（粘贴 JSON）与服务器抽屉，
 亮色暗色各一张，并在 `pages-facts.json` 里统计每行未悬停时可见的控件数与彩色元素。
 
-`ui-walk-mcp.mjs` / `ui-walk-skills.mjs` 用真实点击走一遍 MCP 页 / 技能「来源」（期望末行 `UI-WALK-…-RESULT pass=N fail=0`），只改夹具数据，结束时撤销自己做的改动。
+`ui-walk-mcp.mjs` / `ui-walk-skills.mjs` / `ui-walk-prompts.mjs` 用真实点击走一遍 MCP 页 / 技能「来源」/ 提示词页
+（期望末行 `UI-WALK-…-RESULT pass=N fail=0`），只改夹具数据，结束时撤销自己做的改动。
+`ui-walk-prompts.mjs` 只碰「全局」那一行（测试 profile 里是 `devOverrides.homeDir` 指向的 `.dev/home/.dsh/AGENTS.md`），
+绝不在「当前工作区」组里编辑 / 新建 / 启停——那一组指向使用者真实项目里的 AGENTS.md；夹具文件不存在时它会先新建并保留。
 无头浏览器的启动、登录、点击、给受控输入框写值在 `scripts/lib/hub-browser.mjs`，新的走查脚本复用它。
 
 两个坑：
@@ -433,7 +437,7 @@ DSH 网页端每次加载都会读 localStorage 的 `dsh.sessions.current`：指
       package.json           files 白名单 = 打包内容
       src/
         host/                宿主半：平台外壳 + skills-local / skills-remote / mcp-config / mcp-runtime
-        client/              客户端半：外壳、技能 / MCP 两个标签页、共用 UI kit
+        client/              客户端半：外壳、技能 / MCP / 提示词三个标签页、共用 UI kit
       test/                  node:test 单测 + 夹具
       scripts/               开发脚本：打包、测试 profile、link 暂存、热同步、冒烟、截图
       docs/                  开发文档、客户端指南、宿主 primitives 参考、设计决策
