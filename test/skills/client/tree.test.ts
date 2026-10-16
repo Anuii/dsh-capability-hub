@@ -305,6 +305,82 @@ test("搜索也翻不出被隐藏的技能（前三段一律不显示，只在�
   assert.equal(user.total, 2);
 });
 
+test("「需关注」下不可加载 / 被遮蔽 / 可更新的技能照常出现在树里（行与来源仓库分组都含它们）", () => {
+  const tree = buildSkillTree({
+    list: HIDDEN_LIST,
+    query: "",
+    filter: "attention",
+    sources: HIDDEN_SOURCES,
+    context: { updatable: new Set<string>(["user-agents:ok"]) },
+    hasWorkspace: true,
+  });
+  const user = tree.levels.find((l) => l.level === "user")!;
+  assert.ok(user, "层级不因为 total 只数「DSH 会加载的」而被跳过");
+  // 三类都在：不可加载（broken）、被遮蔽（shadowed）、可更新（ok）
+  assert.deepEqual(user.skills.map((s) => s.id).sort(), [
+    "user-agents:broken",
+    "user-agents:ok",
+    "user-agents:shadowed",
+  ]);
+  assert.equal(user.shown, 3);
+  // total 是「这一层有多少 DSH 会加载的技能」（与筛选无关的事实），所以这里仍只算 ok 与 plain；
+  // 筛选时分组标题显示的是 shown，界面不会出现「数比行少」。
+  assert.equal(user.total, 2);
+  // 二级来源仓库分组里同样含它们：被遮蔽的那个仓库不再被当成空分组丢掉
+  assert.equal(user.flat, false);
+  assert.deepEqual(
+    user.repos.map((r) => r.label),
+    ["anthropics/skills", "mattpocock/skills"],
+  );
+  assert.deepEqual(
+    user.repos[0]!.skills.map((s) => s.id),
+    ["user-agents:shadowed"],
+    "被遮蔽的技能在自己的来源仓库分组里",
+  );
+  assert.deepEqual(
+    user.repos[1]!.skills.map((s) => s.id),
+    ["user-agents:broken", "user-agents:ok"],
+    "不可加载与可更新的一起出现在同一个来源仓库分组里",
+  );
+  assert.equal(tree.shown, 3);
+  assert.equal(tree.filtering, true);
+});
+
+test("「需关注」下某层级只有被隐藏的技能：层级照样出现并列出它们", () => {
+  const onlyHidden = HIDDEN_SKILLS.filter((s) => s.id === "user-agents:broken" || s.id === "user-agents:shadowed");
+  const list = makeList(HIDDEN_ROOTS, onlyHidden);
+
+  const attention = buildSkillTree({
+    list,
+    query: "",
+    filter: "attention",
+    sources: HIDDEN_SOURCES,
+    hasWorkspace: true,
+  });
+  const user = attention.levels.find((l) => l.level === "user")!;
+  assert.ok(user, "整个层级的技能都是被隐藏的，也要出现（否则「需关注」里点进去什么都看不到）");
+  assert.deepEqual(user.skills.map((s) => s.id).sort(), ["user-agents:broken", "user-agents:shadowed"]);
+  assert.equal(user.shown, 2);
+  assert.equal(user.total, 0, "这一层没有 DSH 会加载的技能");
+  assert.equal(user.flat, false, "两个来源仓库各有一个，照常分二级");
+  assert.deepEqual(
+    user.repos.map((r) => r.label),
+    ["anthropics/skills", "mattpocock/skills"],
+  );
+  assert.deepEqual(
+    user.repos.map((r) => r.skills.map((s) => s.id)),
+    [["user-agents:shadowed"], ["user-agents:broken"]],
+  );
+  assert.equal(attention.shown, 2);
+
+  // 对照：同一份数据在「全部」里层级照旧在，只是没有行（0.8.0 的默认行为）
+  const all = buildSkillTree({ list, query: "", filter: "all", sources: HIDDEN_SOURCES, hasWorkspace: true });
+  const userAll = all.levels.find((l) => l.level === "user")!;
+  assert.equal(userAll.total, 0);
+  assert.equal(userAll.shown, 0);
+  assert.deepEqual(userAll.skills, []);
+});
+
 test("目录标签只在层级里有不止一个技能目录时显示", () => {
   const tree = buildSkillTree({ list: LIST, query: "", filter: "all", sources: SOURCES, hasWorkspace: true });
   assert.equal(tree.levels.find((l) => l.level === "user")!.multiDir, true, "用户级有 .agents、.dsh、team-skills");
