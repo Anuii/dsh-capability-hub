@@ -40,6 +40,16 @@ test("诊断信息不再常驻：只有模态框正文带 data-testid=capability
   assert.equal(panel.split("<DiagnosticsBody").length - 1, 1, "DiagnosticsBody 只在模态框里用一次");
 });
 
+test("三个标签按「技能 / MCP / 提示词」的顺序挂在标签栏上", () => {
+  const order = [...panel.matchAll(/\{ id: "(skills|mcp|prompts)", labelKey: "(tab\.[a-z]+)" \}/g)].map(
+    (match) => match[1] + "=" + match[2],
+  );
+  assert.deepEqual(order, ["skills=tab.skills", "mcp=tab.mcp", "prompts=tab.prompts"]);
+  assert.ok(panel.includes("<PromptsTab {...props} />"));
+  assert.ok(zh["tab.prompts"] === "提示词", "第三个标签的术语是「提示词」");
+  assert.ok(en["tab.prompts"] !== undefined);
+});
+
 test("三个标签同时挂载，切换只改 hidden（状态不丢）", () => {
   assert.ok(panel.includes("hidden={tab !== entry.id}"));
   assert.ok(panel.includes('role="tabpanel"'));

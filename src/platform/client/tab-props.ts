@@ -13,8 +13,8 @@
  *     要么经自己功能的 data.ts 调 `./api.ts`（见 docs/CLIENT-GUIDE.md 第 3、5 节）。
  */
 
-/** 标签 id（顺序即界面上从左到右的顺序）。 */
-export type PanelTab = "skills" | "mcp";
+/** 标签 id（顺序即界面上从左到右的顺序）。0.8.0 起加了第三个「提示词」。 */
+export type PanelTab = "skills" | "mcp" | "prompts";
 
 /** 标签页组件收到的 props（panel.tsx 传给它引入的每一个标签组件）。 */
 export interface TabProps {

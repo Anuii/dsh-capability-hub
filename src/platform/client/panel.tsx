@@ -23,6 +23,7 @@ import { HUB_VERSION } from "../../version.ts";
 import { Banner, KitPreview, searchFlag } from "../../kit/index.ts";
 import { SkillsTab } from "../../skills/client/index.tsx";
 import { McpTab } from "../../mcp/client/index.tsx";
+import { PromptsTab } from "../../prompts/client/index.tsx";
 import type { PanelTab, TabProps } from "./tab-props.ts";
 
 /** 标签 id（契约见 tab-props.ts，这里再导出一次方便老代码引用）。 */
@@ -32,6 +33,7 @@ export type { PanelTab } from "./tab-props.ts";
 const TABS: Array<{ id: PanelTab; labelKey: string }> = [
   { id: "skills", labelKey: "tab.skills" },
   { id: "mcp", labelKey: "tab.mcp" },
+  { id: "prompts", labelKey: "tab.prompts" },
 ];
 
 /** 外部（插件管理页的配置按钮）可以要求直达某个标签。 */
@@ -165,7 +167,7 @@ function DiagnosticsBody(props: {
 }
 
 /**
- * 标签正文：两个标签各自在自己的目录里实现（src/skills/client|mcp），
+ * 标签正文：三个标签各自在自己的目录里实现（src/skills/client|mcp|prompts），
  * 外壳只负责按 TabProps 契约传值（见 tab-props.ts 与 docs/CLIENT-GUIDE.md 第 3 节）。
  */
 function TabBody({ tab, props }: { tab: PanelTab; props: TabProps }): React.ReactElement {
@@ -174,6 +176,8 @@ function TabBody({ tab, props }: { tab: PanelTab; props: TabProps }): React.Reac
       return <SkillsTab {...props} />;
     case "mcp":
       return <McpTab {...props} />;
+    case "prompts":
+      return <PromptsTab {...props} />;
   }
 }
 
