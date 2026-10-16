@@ -257,7 +257,7 @@ test("回归：真实路由表的形状（同路径 GET + POST skills/settings�
   };
   const registry = new ModuleRegistry(ctx, {});
   try {
-    // 与外壳 createShell 的第 2 步同源：四个真实模块按依赖顺序装载，路由表就是它们填出来的。
+    // 与外壳 createShell 的第 2 步同源：五个真实模块按依赖顺序装载，路由表就是它们填出来的。
     await registry.loadAll(
       createFeatureModuleEntries({
         ctx,
@@ -266,14 +266,17 @@ test("回归：真实路由表的形状（同路径 GET + POST skills/settings�
         listTools: () => [],
         yaml: { status: "loaded", yaml: YAML, source: "import" },
         state: makeFeatureState(),
+        hostCtx: {},
       }),
     );
-    assert.deepEqual(registry.degraded(), [], "四个模块都该正常装载，路由表才是完整的");
+    assert.deepEqual(registry.degraded(), [], "五个模块都该正常装载，路由表才是完整的");
 
     const table = registry.routes();
     const keys = Object.keys(table);
     assert.ok(keys.includes("GET skills/settings"), "真实路由表里要有 GET skills/settings");
     assert.ok(keys.includes("POST skills/settings"), "真实路由表里要有 POST skills/settings");
+    assert.ok(keys.includes("GET prompts/list"), "真实路由表里要有提示词的八条路由");
+    assert.ok(keys.includes("POST prompts/save"), "真实路由表里要有提示词的八条路由");
 
     const routes = createFetchRoutes(table, logger);
     const paths = routes.map((route) => route.path);

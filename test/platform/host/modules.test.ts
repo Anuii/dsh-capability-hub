@@ -41,7 +41,12 @@ function makeCtx(hubHome: string, logger: HubLogger): HubContext {
   };
 }
 
-function entriesFor(options: { mcpClient: McpClientLoadState; hubHome: string; logger: HubLogger }): ModuleEntry[] {
+function entriesFor(options: {
+  mcpClient: McpClientLoadState;
+  hubHome: string;
+  logger: HubLogger;
+  hostCtx?: unknown;
+}): ModuleEntry[] {
   return createFeatureModuleEntries({
     ctx: makeCtx(options.hubHome, options.logger),
     mcpClient: options.mcpClient,
@@ -49,6 +54,7 @@ function entriesFor(options: { mcpClient: McpClientLoadState; hubHome: string; l
     listTools: () => [],
     yaml: { status: "failed", message: "测试里不加载技能模块" } as never,
     state: makeFeatureState(),
+    hostCtx: options.hostCtx ?? {},
   });
 }
 
@@ -82,6 +88,73 @@ describe("host modules: 依赖缺失时的降级", () => {
       assert.equal(degraded[0]?.message, reason, "降级原因就是插件加载失败的中文原因");
       assert.match(logger.lines.join("\n"), /模块 mcp-runtime 加载失败，已降级/);
       assert.ok(registry.get("mcp-runtime") === undefined, "降级的模块不进 live 表");
+      await registry.disposeAll();
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
+  it("prompts-files 不依赖任何其他模块：其余模块都降级时它照常起来并注册 8 条路由", async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), "host-modules-test-"));
+    const logger = recordingLogger();
+    try {
+      const entries = entriesFor({
+        mcpClient: { status: "failed", message: "官方插件没加载" },
+        hubHome: dir,
+        logger,
+      });
+      // 只加载 prompts-files：上游全都不可用也不该影响它
+      const registry = new ModuleRegistry(makeCtx(dir, logger), {});
+      await registry.loadAll([entryNamed(entries, "prompts-files")]);
+      assert.deepEqual(registry.degraded(), [], "prompts-files 不该降级");
+      const mod = registry.get<{ routes: Record<string, unknown> }>("prompts-files");
+      assert.ok(mod !== undefined);
+      assert.deepEqual(Object.keys(mod.routes).sort(), [
+        "GET prompts/list",
+        "GET prompts/trash",
+        "GET prompts/view",
+        "POST prompts/create",
+        "POST prompts/save",
+        "POST prompts/set-enabled",
+        "POST prompts/trash/purge",
+        "POST prompts/trash/restore",
+      ]);
+      // 路由真的能跑（拿不到 loader → 默认设置；夹具里没有任何提示词文件）
+      const list = (await (mod.routes["GET prompts/list"] as (req: unknown) => Promise<unknown>)({
+        query: {},
+        body: undefined,
+        signal: new AbortController().signal,
+      })) as { layers: unknown[]; budget: { maxBytes: number; source: string } };
+      assert.equal(list.layers.length, 1, "没有 workspace → 只有全局层");
+      assert.equal(list.budget.maxBytes, 65536);
+      assert.equal(list.budget.source, "default");
+      await registry.disposeAll();
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
+  it("prompts-files 可以用 devOverrides.failModules 强制降级，不牵连其他模块", async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), "host-modules-test-"));
+    const logger = recordingLogger();
+    try {
+      const entries = createFeatureModuleEntries({
+        ctx: makeCtx(dir, logger),
+        mcpClient: { status: "failed", message: "官方插件没加载" },
+        root: {} as never,
+        listTools: () => [],
+        yaml: { status: "failed", message: "测试里不加载技能模块" } as never,
+        state: makeFeatureState(),
+        hostCtx: {},
+        failModules: ["prompts-files"],
+      });
+      const registry = new ModuleRegistry(makeCtx(dir, logger), {});
+      await registry.loadAll([entryNamed(entries, "prompts-files")]);
+      const degraded = registry.degraded();
+      assert.equal(degraded.length, 1);
+      assert.equal(degraded[0]?.name, "prompts-files");
+      assert.match(degraded[0]?.message ?? "", /failModules/);
+      assert.match(logger.lines.join("\n"), /模块 prompts-files 加载失败，已降级/);
       await registry.disposeAll();
     } finally {
       await fs.rm(dir, { recursive: true, force: true, maxRetries: 3 });
