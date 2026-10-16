@@ -4,7 +4,7 @@
  * 职责：
  *   1. 解析 HubContext；
  *   2. 加载 DSH 官方 MCP 插件与 yaml（失败只降级）；
- *   3. 按依赖顺序装载各功能模块（4 个真实模块 + health + 可选「故意失败」演示），
+ *   3. 按依赖顺序装载各功能模块（5 个真实模块 + health + 可选「故意失败」演示），
  *      每个模块独立 try/catch，失败只记账（见 modules.ts 的 createFeatureModuleEntries）；
  *   4. 接 agent 事件（按会话的 MCP 服务器挂到 agent.ctx 上），再让 MCP 运行时挂载全局服务器（ADR-0010）；
  *   5. 挂 HTTP 路由（前缀 /api/dsh-capability-hub/，继承 DSH browser-auth）；
@@ -20,6 +20,7 @@ import { resolveHubContext, type PlatformConfig } from "./hub-context.ts";
 import { makeLogger, safeGet } from "./host-ctx.ts";
 import { skillSourceDiagnostics } from "./diagnostics.ts";
 import { scanSkillRoots } from "./skill-roots.ts";
+import { readPromptSettings } from "./prompt-settings.ts";
 import { ROUTE_PREFIX, registerRoutes, type ConnectionFace } from "./router.ts";
 import {
   ModuleRegistry,
@@ -165,7 +166,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
       ? { status: "loaded", ...(mcpClientState.version === undefined ? {} : { version: mcpClientState.version }) }
       : mcpClientState;
 
-  // ---- 2. 模块表（4 个真实模块按依赖顺序；health 放最前，失败演示放最后） ----
+  // ---- 2. 模块表（5 个真实模块按依赖顺序；health 放最前，失败演示放最后） ----
   const state: FeatureState = makeFeatureState();
   const listTools = toolLister(hostCtx);
   const mcpServers = (): McpServerHealth[] =>
@@ -202,6 +203,18 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
             ...(registrationError === undefined ? {} : { error: registrationError }),
           }),
           wiring: wiringSnapshot,
+          prompts: () => {
+            const settings = readPromptSettings(hostCtx);
+            return {
+              maxBytes: settings.maxBytes,
+              source: settings.source,
+              loaderDisabled: settings.loaderDisabled,
+              fileNames: settings.fileNames,
+              projectRootMarkers: settings.projectRootMarkers,
+              maxSourceBytes: settings.maxSourceBytes,
+              notes: settings.notes,
+            };
+          },
         }),
     },
     ...createFeatureModuleEntries({
@@ -211,6 +224,7 @@ export async function createShell(hostCtx: unknown, config: PlatformConfig, pack
       listTools,
       yaml: yamlState,
       state,
+      hostCtx,
       ...(config.devOverrides?.failModules === undefined ? {} : { failModules: config.devOverrides.failModules }),
     }),
   ];

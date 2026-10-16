@@ -11,6 +11,7 @@
  * 外壳自己的模块：健康检查（health.ts）与「故意失败」演示（failure-demo.ts，devOverrides.failureDemo 打开）。
  * 阶段 B：4 个真实模块（skills-local / skills-remote / mcp-config / mcp-runtime）
  *         由本文件的 createFeatureModuleEntries() 按依赖顺序接入（见该函数顶部说明）。
+ * 0.8.0：第五个模块 prompts-files（提示词），不依赖任何其他功能模块。
  */
 import type { HubContext } from "../contract/host.ts";
 import type { HubModule, RouteTable } from "../contract/host.ts";
@@ -21,6 +22,8 @@ import { createMcpConfigModule } from "../../mcp/config/module.ts";
 import { createSkillsLocalModule } from "../../skills/local/module.ts";
 import { createSkillsRemoteModule } from "../../skills/remote/module.ts";
 import { createMcpRuntimeModule } from "../../mcp/runtime/module.ts";
+import { createPromptsFilesModule } from "../../prompts/files/module.ts";
+import { readPromptSettings } from "./prompt-settings.ts";
 import { errorText } from "../../shared/error-text.ts";
 
 /** 一个模块条目的定义。 */
@@ -165,6 +168,7 @@ export interface FeatureState {
   skillsLocal?: ReturnType<typeof createSkillsLocalModule>;
   skillsRemote?: ReturnType<typeof createSkillsRemoteModule>;
   mcpRuntime?: ReturnType<typeof createMcpRuntimeModule>;
+  promptsFiles?: ReturnType<typeof createPromptsFilesModule>;
   /** skills-local ← skills-remote.lockStash 是否绑定成功。 */
   lockStashBound: boolean;
   /** 接线过程中的中文说明（health 里可见）。 */
@@ -199,6 +203,8 @@ export function createFeatureModuleEntries(options: {
   state: FeatureState;
   /** 调试开关：强制这些模块装载失败（降级验证用，见 devOverrides.failModules）。 */
   failModules?: string[];
+  /** DSH 根 ctx：prompts-files 的设置每次请求现读（组合配置可能在运行期变化）。 */
+  hostCtx?: unknown;
 }): ModuleEntry[] {
   const { ctx, mcpClient, yaml, state } = options;
   const log = ctx.logger;
@@ -272,6 +278,19 @@ export function createFeatureModuleEntries(options: {
           listTools: options.listTools,
         });
         state.mcpRuntime = mod;
+        return mod as unknown as HubModule;
+      },
+    },
+    {
+      // 0.8.0：第五个宿主模块。**不依赖任何其他功能模块**（放最后只是为了让上面的顺序不变）。
+      // 设置由外壳读（prompt-settings.ts）后注入：模块不能 import platform/host（ADR-0001 规则 1）。
+      name: "prompts-files",
+      load: (moduleCtx) => {
+        if (forced.has("prompts-files")) {
+          throw new Error("调试开关 devOverrides.failModules 要求 prompts-files 失败（降级验证用）");
+        }
+        const mod = createPromptsFilesModule(moduleCtx, { settings: () => readPromptSettings(options.hostCtx) });
+        state.promptsFiles = mod;
         return mod as unknown as HubModule;
       },
     },

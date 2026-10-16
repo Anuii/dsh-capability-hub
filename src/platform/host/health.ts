@@ -35,6 +35,16 @@ export interface HealthDeps {
   registration(): { registered: string[]; error?: string };
   /** 接线摘要。 */
   wiring(): { lockStashBound: boolean; notes: string[] };
+  /** 提示词设置（读 DSH 组合配置的结果；拿不到 loader 时是默认值）。 */
+  prompts(): {
+    maxBytes: number;
+    source: "dsh-config" | "default";
+    loaderDisabled: boolean;
+    fileNames: string[];
+    projectRootMarkers: string[];
+    maxSourceBytes: number;
+    notes: string[];
+  };
 }
 
 export function createHealthModule(deps: HealthDeps): HubModule {
@@ -71,6 +81,7 @@ export function createHealthModule(deps: HealthDeps): HubModule {
     mcpServers: deps.mcpServers(),
     registration: deps.registration(),
     wiring: deps.wiring(),
+    prompts: deps.prompts(),
     host: deps.host(),
     serverTime: new Date().toISOString(),
   });
