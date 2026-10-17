@@ -1,0 +1,51 @@
+# 发布到 npm（Trusted Publishing / OIDC）。
+#
+# 为什么这样做：npm 账号开了两步验证，本地 npm publish 每次都要人按指纹或输动态码，
+# 没法自动化；npm 也正在废弃「绕过 2FA 的 token」（2026-07 公告）。Trusted Publishing 让
+# GitHub Actions 用一次性 OIDC 凭据发布：不需要 2FA、不需要任何长期 token、本地不存凭据。
+#
+# 一次性设置（在 npmjs.com，不在仓库里）：
+#   包的 Settings → Trusted publishing → 添加 GitHub Actions：
+#     Repository:        Anuii/dsh-capability-hub
+#     Workflow filename: publish.yml
+#     Environment:       留空
+#
+# 之后发布 = 推送一个 v* tag（tag 名必须等于 package.json 的 version）。
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  # Trusted Publishing 必需：让 npm 校验这个 workflow 的身份。
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: tag 与 package.json 版本必须一致
+        run: |
+          node -e "const p=require('./package.json');const t=process.env.GITHUB_REF_NAME.replace(/^v/,'');if(p.version!==t){console.error('tag ' + process.env.GITHUB_REF_NAME + ' 与 package.json 版本 ' + p.version + ' 不一致');process.exit(1)}"
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 构建（正式构建，产物里没有开发用代码）
+        run: npm run build
+
+      - name: 发布（带 provenance，无需 token）
+        run: npm publish --provenance --access public
