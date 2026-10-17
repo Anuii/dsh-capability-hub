@@ -13,7 +13,10 @@
  *     要么经自己功能的 data.ts 调 `./api.ts`（见 docs/CLIENT-GUIDE.md 第 3、5 节）。
  */
 
-/** 标签 id（顺序即界面上从左到右的顺序）。0.8.0 起加了第三个「提示词」。 */
+/**
+ * 标签 id（顺序即界面上从左到右的顺序）。0.8.0 起加了第三个「提示词」；
+ * 0.9.0 起顺序改为 提示词 / 技能 / MCP，「提示词」还是默认打开的标签。
+ */
 export type PanelTab = "skills" | "mcp" | "prompts";
 
 /** 标签页组件收到的 props（panel.tsx 传给它引入的每一个标签组件）。 */
@@ -29,9 +32,4 @@ export interface TabProps {
    * 外壳保证这个回调稳定可调用，且在任意标签里都能用。
    */
   openTab(tab: PanelTab): void;
-  /**
-   * 0.3.4 起（可选）：告诉外壳这个标签现在有没有需要注意的错误（例如 MCP 有服务器连接失败），
-   * 外壳在标签文字旁画一个红点，在别的标签里也能察觉。
-   */
-  reportAttention?(tab: PanelTab, attention: boolean): void;
 }

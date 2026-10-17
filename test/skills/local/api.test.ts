@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createSkillsLocalImpl } from "../../../src/skills/local/api.ts";
 import { createSkillsLocalModule } from "../../../src/skills/local/module.ts";
 import {
@@ -17,6 +18,8 @@ import {
   type TempArea,
   LOCAL_DEPS,
 } from "./fixtures.ts";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 async function withArea(label: string, fn: (area: TempArea) => Promise<void>): Promise<void> {
   const area = await makeTempArea(label);
@@ -597,8 +600,8 @@ test("purge：单条与全部；列出按时间倒序", async () => {
   });
 });
 
-test("warnings：检测 CC Switch 统一存储位置与符号链接技能", async () => {
-  await withArea("warnings", async (area) => {
+test("warnings：0.9.0 起不再读 ~/.cc-switch（专属检测已移除，链接警告仍在）", async () => {
+  await withArea("warnings-no-cc-switch", async (area) => {
     await fs.mkdir(agentsRoot(area), { recursive: true });
     await writeSkill(agentsRoot(area), "demo", skillMd("demo", "d"));
 
@@ -606,24 +609,27 @@ test("warnings：检测 CC Switch 统一存储位置与符号链接技能", asyn
     let list = await impl.list({});
     assert.deepEqual(list.warnings, [], "没有外部工具特征时不能误报");
 
+    // 旧版会因为这个文件报一条「统一存储」专属提示；现在它存在也不该产生任何警告。
     await fs.mkdir(path.join(area.homeDir, ".cc-switch"), { recursive: true });
     await fs.writeFile(
       path.join(area.homeDir, ".cc-switch", "settings.json"),
       JSON.stringify({ skillStorageLocation: "unified", skillSyncMethod: "symlink" }),
     );
     list = await impl.list({});
-    assert.equal(list.warnings.length, 1);
-    assert.equal(list.warnings[0].includes("CC Switch"), true);
-    assert.equal(list.warnings[0].includes("软链接"), true, "同步方式为 symlink 时应写软链接");
-    assert.equal(list.warnings[0].includes("互相覆盖"), true, "要说清风险");
+    assert.deepEqual(list.warnings, [], "不再做 CC Switch 专属检测，也不再读它的配置");
 
-    // 切到 cc-switch 自己的存储位置 -> 不再对 user-agents 报警
-    await fs.writeFile(
-      path.join(area.homeDir, ".cc-switch", "settings.json"),
-      JSON.stringify({ skillStorageLocation: "cc-switch", skillSyncMethod: "copy" }),
+    // 规则删了，名字也不许留：源码里不得再出现那个工具，但两条通用链接警告必须还在。
+    const source = await fs.readFile(
+      path.join(here, "..", "..", "..", "src", "skills", "local", "warnings.ts"),
+      "utf8",
     );
-    list = await impl.list({});
-    assert.deepEqual(list.warnings, []);
+    for (const needle of ["cc-switch", "CC Switch"]) {
+      assert.equal(source.includes(needle), false, "warnings.ts 不得再出现「" + needle + "」");
+    }
+    assert.equal(source.includes("readFile"), false, "不再读任何外部配置文件");
+    assert.equal(source.includes("readlink"), true, "技能根是链接的警告要保留");
+    assert.equal(source.includes("linkedSkills"), true, "技能是链接的警告要保留");
+    assert.equal(source.includes("外部工具"), true, "文案要保留中性的「外部工具」说法");
   });
 });
 

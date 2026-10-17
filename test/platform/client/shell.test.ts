@@ -40,14 +40,17 @@ test("诊断信息不再常驻：只有模态框正文带 data-testid=capability
   assert.equal(panel.split("<DiagnosticsBody").length - 1, 1, "DiagnosticsBody 只在模态框里用一次");
 });
 
-test("三个标签按「技能 / MCP / 提示词」的顺序挂在标签栏上", () => {
+test("三个标签按「提示词 / 技能 / MCP」的顺序挂在标签栏上，默认打开「提示词」", () => {
   const order = [...panel.matchAll(/\{ id: "(skills|mcp|prompts)", labelKey: "(tab\.[a-z]+)" \}/g)].map(
     (match) => match[1] + "=" + match[2],
   );
-  assert.deepEqual(order, ["skills=tab.skills", "mcp=tab.mcp", "prompts=tab.prompts"]);
+  assert.deepEqual(order, ["prompts=tab.prompts", "skills=tab.skills", "mcp=tab.mcp"]);
   assert.ok(panel.includes("<PromptsTab {...props} />"));
-  assert.ok(zh["tab.prompts"] === "提示词", "第三个标签的术语是「提示词」");
+  assert.ok(zh["tab.prompts"] === "提示词", "第一个标签的术语是「提示词」");
   assert.ok(en["tab.prompts"] !== undefined);
+  // 0.9.0：默认标签是「提示词」，且没有别的默认值分叉
+  assert.ok(panel.includes('pendingTab ?? "prompts"'), "默认打开的标签必须是「提示词」");
+  assert.equal(panel.includes('pendingTab ?? "skills"'), false);
 });
 
 test("三个标签同时挂载，切换只改 hidden（状态不丢）", () => {

@@ -24,7 +24,6 @@ const shellSheet = defineSheet(
     "infoButton",
     "tabBar",
     "tab",
-    "tabDot",
     "content",
     "tabPane",
     "diagModal",
@@ -55,7 +54,6 @@ const shellSheet = defineSheet(
     ".ch_tab[data-active]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-state-business-primary);font-weight:500}",
     ".ch_tab:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px;border-radius:2px}",
     ".ch_tab{display:inline-flex;align-items:center;gap:5px}",
-    ".ch_tabDot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-error-primary)}",
     // 内容区：横幅在最上，下面是真正可滚动的标签正文。
     ".ch_content{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding:12px 20px 20px;overflow:hidden;width:100%;max-width:1180px;box-sizing:border-box}",
     ".ch_tabPane{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:auto}",

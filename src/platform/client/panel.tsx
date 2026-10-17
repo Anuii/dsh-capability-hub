@@ -29,11 +29,11 @@ import type { PanelTab, TabProps } from "./tab-props.ts";
 /** 标签 id（契约见 tab-props.ts，这里再导出一次方便老代码引用）。 */
 export type { PanelTab } from "./tab-props.ts";
 
-/** 标签定义（顺序即 UI 顺序）。 */
+/** 标签定义（顺序即 UI 顺序）：0.9.0 起「提示词」在最左，也是默认打开的标签。 */
 const TABS: Array<{ id: PanelTab; labelKey: string }> = [
+  { id: "prompts", labelKey: "tab.prompts" },
   { id: "skills", labelKey: "tab.skills" },
   { id: "mcp", labelKey: "tab.mcp" },
-  { id: "prompts", labelKey: "tab.prompts" },
 ];
 
 /** 外部（插件管理页的配置按钮）可以要求直达某个标签。 */
@@ -66,15 +66,7 @@ export function kitPreviewEnabled(): boolean {
 }
 
 /** 标签栏（下划线式）。 */
-function TabBar({
-  active,
-  onSelect,
-  attention,
-}: {
-  active: PanelTab;
-  onSelect: (tab: PanelTab) => void;
-  attention: ReadonlySet<PanelTab>;
-}): React.ReactElement {
+function TabBar({ active, onSelect }: { active: PanelTab; onSelect: (tab: PanelTab) => void }): React.ReactElement {
   return (
     <div className={styles.tabBar} role="tablist" data-dsh-part="tab-bar">
       {TABS.map((tab) => (
@@ -91,15 +83,6 @@ function TabBar({
           onClick={() => onSelect(tab.id)}
         >
           {tt(tab.labelKey)}
-          {/* 红点：这个标签里有错误（例如 MCP 有服务器连接失败）；红色只表示错误（UI-DESIGN 原则 4）。 */}
-          {attention.has(tab.id) ? (
-            <span
-              className={styles.tabDot}
-              title={tt("tab.attention")}
-              aria-label={tt("tab.attention")}
-              data-testid={"capability-hub-tab-dot-" + tab.id}
-            />
-          ) : null}
         </button>
       ))}
     </div>
@@ -185,21 +168,11 @@ function TabBody({ tab, props }: { tab: PanelTab; props: TabProps }): React.Reac
 export function CapabilityHubPage(props: Record<string, unknown>): React.ReactElement {
   const useSessions = props.useSessions as SessionsHook | undefined;
   const current = useCurrentSession(useSessions);
-  const [tab, setTab] = React.useState<PanelTab>(pendingTab ?? "skills");
+  const [tab, setTab] = React.useState<PanelTab>(pendingTab ?? "prompts");
   const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(false);
   const [health, setHealth] = React.useState<HealthPayload | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [loading, setLoading] = React.useState<boolean>(true);
-  const [attention, setAttention] = React.useState<ReadonlySet<PanelTab>>(() => new Set<PanelTab>());
-  const reportAttention = React.useCallback((target: PanelTab, flag: boolean): void => {
-    setAttention((current) => {
-      if (current.has(target) === flag) return current;
-      const next = new Set(current);
-      if (flag) next.add(target);
-      else next.delete(target);
-      return next;
-    });
-  }, []);
   const refresh = React.useCallback((): void => {
     setLoading(true);
     setError(undefined);
@@ -230,7 +203,6 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
   const tabProps: TabProps = {
     workspace: current.workspace,
     openTab: setTab,
-    reportAttention,
   };
   const closeDiagnostics = React.useCallback((): void => setDiagnosticsOpen(false), []);
   const openDiagnostics = React.useCallback((): void => setDiagnosticsOpen(true), []);
@@ -251,7 +223,7 @@ export function CapabilityHubPage(props: Record<string, unknown>): React.ReactEl
             {"\u24d8"}
           </button>
         </div>
-        <TabBar active={tab} onSelect={setTab} attention={attention} />
+        <TabBar active={tab} onSelect={setTab} />
       </header>
       <div className={styles.content}>
         {/* 升级后没重启：浏览器半已是新版本，宿主半还是旧的（新接口会 404）。 */}
