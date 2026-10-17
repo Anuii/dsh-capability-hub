@@ -104,12 +104,10 @@
       sessionId?: string;
       /** 切换到另一个标签页。 */
       openTab(tab: PanelTab): void;
-      /** 0.3.4（可选）：报告这个标签有没有需要注意的错误，外壳在标签旁画红点。 */
-      reportAttention?(tab: PanelTab, attention: boolean): void;
     }
 
-- `workspace` 来自 slot 标准 prop `useSessions`（见第 4 节），技能页拿它找项目级技能目录；
-- `reportAttention`：MCP 页在「有错误」数从 0 变非 0（或反过来）时调用，外壳据此在「MCP」标签旁画红点。
+- `workspace` 来自 slot 标准 prop `useSessions`（见第 4 节），技能页拿它找项目级技能目录。
+- 0.9.0 起标签栏没有红点通道：原先只有 MCP 页用它上报连接失败，运行状态界面去掉后不再需要。
 
 panel.tsx 固定引入 `skills/client/index.tsx` 的 `SkillsTab`、`mcp/client/index.tsx` 的 `McpTab` 与
 `prompts/client/index.tsx` 的 `PromptsTab`；三个标签同时挂载、切换只改 `hidden`（状态不丢）。

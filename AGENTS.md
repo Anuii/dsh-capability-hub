@@ -30,7 +30,7 @@ YAML 对拍要在 Electron-as-node 下运行，命令见 docs/DEV.md 第 2 节�
 
 ## 写代码
 - TypeScript 只用可擦除语法（无 enum、namespace、参数属性、装饰器）；相对 import 带 `.ts` 扩展名；界面用 JSX。
-- 谁能 import 谁由 `test/architecture/imports.test.ts` 强制：五个宿主模块互不 import，只通过外壳注入的接口协作；客户端只能 `import type` 各功能的 `contract/`；宿主与界面都要用的纯规则放 `src/<功能>/rules/`（ADR-0008），不要在两边各写一份。任何模块故障只降级，不得拖垮 DSH。
+- 谁能 import 谁由 `test/architecture/imports.test.ts` 强制：六个宿主模块互不 import，只通过外壳注入的接口协作；客户端只能 `import type` 各功能的 `contract/`；宿主与界面都要用的纯规则放 `src/<功能>/rules/`（ADR-0008），不要在两边各写一份。任何模块故障只降级，不得拖垮 DSH。
 - 规则写进可单测的视图模型或状态仓库（经数据 adapter 访问宿主），组件只渲染；不为测内部细节而导出函数。
 - 界面文案写在各页的 `strings.ts`；颜色只用主题变量；界面用 `src/kit` 的组件拼。
 - 完成的标准：tsc 0 错、全部单测通过；改界面要有亮色、暗色截图，并满足 UI-DESIGN 第 5 节。

@@ -256,8 +256,12 @@ tgz 方式：
           homeDir: '<仓库根>/.dev/home'   # 把 homeDir 钉到夹具，别动真实用户目录
           failureDemo: false                # true = 打开两个「故意失败」的演示模块
           failModules: []                   # 例如 ['mcp-config'] = 强制该模块装载失败
+          registryFixture: true            # MCP Registry 走固定夹具、完全不联网（走查 / 截图用）
 
 - `homeDir`：把 `~/.agents`、`~/.dsh` 换成一个可随时删掉的夹具目录；
+- `registryFixture`：MCP 页「从 Official Registry 搜索」返回两条固定夹具（一条 streamable-http
+  远程、一条带必填 env 的 npm 包），**一次网络请求都不发**。registry 的 search 实测 10–60 秒，
+  走查与截图不该等它；**只有 `enabled: true` 时才生效**，包内 `cordis.patch.yml` 绝不写它；
 - `failureDemo` / `failModules`：验证「永不失败外壳」的降级链——每个功能模块独立 try/catch，
   失败只降级不影响其余模块。改完 `restart`，再用 `scripts\smoke.ps1 -Path health` 看效果。
   期望：目标模块 `degraded` 且带中文原因，**依赖它的下游也 degraded**，其余模块与 DSH 不受影响；
@@ -313,14 +317,15 @@ HttpOnly + SameSite=Strict 的签名 cookie（绑定 Host 头的 authority）。
     curl.exe -s -o NUL -c jar.txt "http://127.0.0.1:19411/?token=<令牌>"
     curl.exe -s -b jar.txt "http://127.0.0.1:19411/api/dsh-capability-hub/health"
 
-端到端冒烟（技能 / MCP 配置 / 运行时 / health 全链路）：
+端到端冒烟（技能 / MCP 配置 / 连接 / health 全链路）：
 
     pwsh -NoProfile -File scripts\smoke-stage-b.ps1
 
 依次跑 skills/list → skills/view → set-enabled 停用再启用（逐行 diff + SHA256 证明「除那一行外
 字节不变」）→ mcp/config → upsert 一个指向 `test\mcp\runtime\fixtures\fake-mcp-server.mjs` 的
-stdio 服务器 → 等官方 MCP 插件连上、注册工具（state = connected）→ mcp/runtime/reconnect → health →
-skills/github-auth（**只打印 mode**）→ 删掉测试服务器恢复原状。
+stdio 服务器 → 轮询 health 的 mcpServers 到 state = connected 且 toolCount > 0 → 确认 mcp/runtime 与
+mcp/runtime/reconnect 已 404（0.9.0 起删除了运行状态接口）→ health → skills/github-auth（**只打印 mode**）→
+删掉测试服务器恢复原状。
 失败以非零退出码结束，末行是 `SMOKE-STAGE-B-RESULT pass=N fail=0`。
 
 ### 路由必须注册到 `ctx.connection.fetch`
