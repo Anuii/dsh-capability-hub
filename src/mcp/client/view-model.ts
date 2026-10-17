@@ -7,7 +7,40 @@
  */
 
 import { t } from "./strings.ts";
+import type { HealthPayload } from "../../platform/client/api.ts";
 import type { ServerView } from "../contract/config.ts";
+
+/* ---------------- 连接失败 ---------------- */
+
+/** 一台连接失败的服务器（界面上只给名字与原因，别的都不显示）。 */
+export interface FailedServerView {
+  name: string;
+  /** 宿主给的失败原因（可能没有）。 */
+  error?: string;
+}
+
+/**
+ * 从 GET health 的 mcpServers 里挑出**连接失败**的服务器。
+ *
+ * 口径（0.9.0 起页面不显示运行状态，只剩这一条失败提示）：
+ *   - `failed`：挂载/握手失败（命令不存在、连不上等）；
+ *   - `disconnected`：连过又断了（官方插件会自己重连，断了也值得提示一句）。
+ * `connecting` 是瞬态、`connected` / `disabled` / `session` 正常，都不提示。
+ * 没有 health（还没读到 / 宿主没给这一项）时返回空数组，绝不抛。
+ */
+export function failedServers(health: HealthPayload | undefined): FailedServerView[] {
+  const rows = Array.isArray(health?.mcpServers) ? health.mcpServers : [];
+  const out: FailedServerView[] = [];
+  for (const row of rows) {
+    if (row === null || typeof row !== "object") continue;
+    if (row.state !== "failed" && row.state !== "disconnected") continue;
+    const name = typeof row.name === "string" ? row.name : "";
+    if (name === "") continue;
+    const error = typeof row.error === "string" && row.error.trim() !== "" ? row.error : undefined;
+    out.push(error === undefined ? { name } : { name, error });
+  }
+  return out;
+}
 
 /* ---------------- 展示格式化 ---------------- */
 

@@ -473,6 +473,25 @@ FACTS.registryBlocked = await evaluate("!!document.querySelector('[data-testid=m
 await pair("p25", "mcp-registry-preview");
 await escape();
 
+// 连接失败提示（0.9.0 瘦身后唯一的运行状态信息）：临时加一台命令不存在的服务器，截完立刻删掉。
+await clickTestId("mcp-add");
+await sleep(700);
+await evaluate(
+  "(() => { const n = document.querySelector('[data-testid=mcp-paste-textarea]'); if (!n) return false; const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(n, JSON.stringify({ mcpServers: { 'shot-broken': { command: 'definitely-not-a-real-command-xyz' } } }, null, 2)); n.dispatchEvent(new Event('input', { bubbles: true })); return true; })()",
+);
+await clickTestId("mcp-paste-parse");
+await sleep(700);
+await clickTestId("mcp-paste-save");
+await sleep(1500);
+await escape();
+await sleep(2500);
+FACTS.failureBanner = await evaluate("!!document.querySelector('[data-testid=mcp-connect-failures]')");
+await pair("p27", "mcp-connect-failed");
+await evaluate(
+  "fetch('api/dsh-capability-hub/mcp/servers/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'shot-broken' }) }).then((r) => r.status)",
+);
+await sleep(800);
+
 await open("");
 await openHub();
 await clickTestId("capability-hub-tab-mcp");

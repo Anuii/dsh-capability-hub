@@ -27,6 +27,7 @@ import type { TabProps } from "../../platform/client/tab-props.ts";
 import { Banner, Drawer, EmptyState, SkeletonRows, Toolbar, kit, useStoreState } from "../../kit/index.ts";
 import { JsonPasteView } from "./intake/json-paste.tsx";
 import { RegistrySearchView } from "./registry/registry-view.tsx";
+import { fetchHealth, type HealthPayload } from "../../platform/client/api.ts";
 import { serversApi } from "./data.ts";
 import { createServersStore } from "./servers-store.ts";
 import { ServerDetailBody } from "./detail.tsx";
@@ -36,6 +37,7 @@ import { ServerList } from "./list.tsx";
 import { serverJsonText } from "./json-model.ts";
 import {
   SERVER_FILTERS,
+  failedServers,
   filterLabel,
   serverFilterCounts,
   viewSummaryText,
@@ -96,6 +98,47 @@ function McpTabInner(): React.ReactElement {
   const store = React.useMemo(() => createServersStore(serversApi), []);
   const { config, loadError, loading, busy, deleting, notice } = useStoreState(store.state);
   React.useEffect(() => void store.reload(), [store]);
+
+  /**
+   * 连接失败提示（0.9.0 瘦身后唯一的运行状态信息）：读 GET health 的 mcpServers。
+   *
+   * 时机：进页面读一次，配置一变（保存 / 启停 / 删除）再读一次；刚保存的服务器在
+   * `connecting` 时每 1 秒再补读一次，最多 10 次就停（官方插件连不上会很快变成 failed，
+   * 不能像以前那样常驻轮询）。读 health 失败就当没读（提示只是锦上添花，绝不因此报错）。
+   */
+  const [failureHealth, setFailureHealth] = React.useState<HealthPayload | undefined>(undefined);
+  React.useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = (attempt: number): void => {
+      void fetchHealth().then(
+        (payload) => {
+          if (cancelled) return;
+          setFailureHealth(payload);
+          const settling = (payload.mcpServers ?? []).some((row) => row.state === "connecting");
+          if (settling && attempt < 10) timer = setTimeout(() => tick(attempt + 1), 1000);
+        },
+        () => {
+          /* 读不到就保持现状 */
+        },
+      );
+    };
+    tick(0);
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [config]);
+  const failures = React.useMemo(() => failedServers(failureHealth), [failureHealth]);
+  /** 手动重读一次 health：横幅可能因为别处改了配置（或服务器自己恢复）而过时，给它一个出口。 */
+  const recheckFailures = React.useCallback((): void => {
+    void fetchHealth().then(
+      (payload) => setFailureHealth(payload),
+      () => {
+        /* 读不到就保持现状 */
+      },
+    );
+  }, []);
 
   const servers = config?.servers ?? [];
   const names = servers.map((server) => server.serverName);
@@ -187,6 +230,19 @@ function McpTabInner(): React.ReactElement {
       {warnings.length === 0 ? null : (
         <Banner tone="warn" testId="mcp-config-warnings">
           {t("mcp.warnings.title", { count: warnings.length }) + " " + warnings.join("；")}
+        </Banner>
+      )}
+      {failures.length === 0 ? null : (
+        <Banner
+          tone="warn"
+          testId="mcp-connect-failures"
+          action={{ label: t("mcp.failure.recheck"), onClick: recheckFailures, testId: "mcp-connect-recheck" }}
+        >
+          {t("mcp.failure.banner", { names: failures.map((server) => server.name).join("、") })}
+          {failures.length === 1 && failures[0]?.error !== undefined
+            ? t("mcp.failure.reason", { message: failures[0].error })
+            : ""}
+          {" " + t("mcp.failure.hint")}
         </Banner>
       )}
       {body}

@@ -23,7 +23,8 @@ Licensed under the MIT License.
 - **MCP 连接**：由 DSH 官方的 MCP 插件（`@deepseek-ai/dsh-mcp-client`）连接服务器并注册工具
   `mcp__<服务器>__<工具>`（PTC 模式下就是独立的类型化绑定）；每台服务器可选「全局一份」（默认）或「按会话」；
 - **连接结果**：MCP 页不显示运行状态（0.9.0 起没有状态点、工具数、工具清单与「重新连接」）；
-  连上与否看 `GET /api/dsh-capability-hub/health` 的 `mcpServers`（与 `boot.json`），要重试就重启 DSH。
+  **连不上时顶部有一条失败提示（0.9.1）**，完整信息看 `GET /api/dsh-capability-hub/health` 的
+  `mcpServers`（与 `boot.json`），要重试就重启 DSH。
 
 插件是「永不失败外壳」：每个功能模块独立加载，任何一个出问题只降级并给出原因，
 不影响其余模块，也不会让 `dsh web` 启动失败。

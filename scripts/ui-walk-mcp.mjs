@@ -106,7 +106,29 @@ try {
   check(await hub.waitFor("!" + sel("mcp-row-" + NAME), 8000), "删除后从列表消失");
   check(await hub.waitFor(text("已删除「" + NAME + "」"), 5000), "删除提示");
 
-  // 7. 从 Official Registry 搜索（测试 profile 开了 devOverrides.registryFixture：固定夹具、不联网）
+  // 7. 连接失败提示：加一台启动命令不存在的服务器 → 顶部出现失败横幅 → 删掉后消失
+  const BROKEN = "walk-broken";
+  await hub.clickTestId("mcp-add");
+  await hub.waitFor(sel("mcp-paste-textarea"), 8000);
+  await hub.setInput(
+    "mcp-paste-textarea",
+    JSON.stringify({ mcpServers: { [BROKEN]: { command: "definitely-not-a-real-command-xyz" } } }, null, 2),
+  );
+  await hub.clickTestId("mcp-paste-parse");
+  await hub.waitFor(sel("mcp-paste-row-0"), 8000);
+  await hub.clickTestId("mcp-paste-save");
+  await hub.waitFor(sel("mcp-paste-row-result-0"), 15000);
+  await hub.evaluate("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+  await sleep(400);
+  check(await hub.waitFor(sel("mcp-connect-failures"), 25000), "连不上时出现失败提示");
+  check(await hub.waitFor(text(BROKEN), 5000), "失败提示里点名了那台服务器");
+  createdRegistry.push(BROKEN);
+  await apiDeleteName(BROKEN);
+  // 删是通过接口做的，页面配置没变、不会自动重读 health；点横幅上的「重新读取」再确认它消失。
+  await hub.clickTestId("mcp-connect-recheck");
+  check(await hub.waitFor("!" + sel("mcp-connect-failures"), 20000), "删掉连不上的服务器后提示消失");
+
+  // 8. 从 Official Registry 搜索（测试 profile 开了 devOverrides.registryFixture：固定夹具、不联网）
   await hub.clickTestId("mcp-add");
   check(await hub.waitFor(sel("mcp-add-modes"), 8000), "「添加服务器」有两种方式");
   const switched = await hub.evaluate(

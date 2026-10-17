@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   compactSummaryText,
+  failedServers,
   isPathLike,
   matchesFilter,
   matchesQuery,
@@ -20,7 +21,24 @@ import {
   viewSummaryText,
   visibleServers,
 } from "../../../src/mcp/client/view-model.ts";
+import type { HealthPayload } from "../../../src/platform/client/api.ts";
 import { makeServerView } from "./fixtures.ts";
+
+const healthWith = (servers: unknown[]): HealthPayload => ({ mcpServers: servers }) as unknown as HealthPayload;
+
+test("连接失败提示：只挑 failed / disconnected（connecting 是瞬态，不提示）", () => {
+  const health = healthWith([
+    { name: "a", scope: "global", state: "connected", toolCount: 5, sessions: 0 },
+    { name: "b", scope: "global", state: "failed", toolCount: 0, sessions: 0, error: "Connection closed" },
+    { name: "c", scope: "global", state: "connecting", toolCount: 0, sessions: 0 },
+    { name: "d", scope: "global", state: "disconnected", toolCount: 0, sessions: 0 },
+    { name: "e", scope: "global", state: "disabled", toolCount: 0, sessions: 0 },
+    { name: "f", scope: "session", state: "session", toolCount: 0, sessions: 1 },
+  ]);
+  assert.deepEqual(failedServers(health), [{ name: "b", error: "Connection closed" }, { name: "d" }]);
+  assert.deepEqual(failedServers(undefined), [], "没有 health 时不提示，也不抛");
+  assert.deepEqual(failedServers(healthWith([])), []);
+});
 
 test("reorderNames（拖动排序）", () => {
   const names = ["a", "b", "c"];

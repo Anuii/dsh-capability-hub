@@ -52,6 +52,10 @@ export const zh = {
   /* ---- 空状态 ---- */
   "mcp.empty.title": "还没有配置任何 MCP 服务器",
   "mcp.empty.hint": "点「添加服务器」：粘贴一段 mcpServers 配置（JSON），或从 Official Registry 搜索。",
+  "mcp.failure.banner": "连接失败：{names}",
+  "mcp.failure.reason": "（{message}）",
+  "mcp.failure.hint": "连接由 DSH 官方 MCP 插件负责，重启 DSH 会重试；详情见 GET health 的 mcpServers。",
+  "mcp.failure.recheck": "重新读取",
   "mcp.empty.add": "添加服务器",
   "mcp.empty.filtered": "没有符合当前搜索与筛选的服务器。",
 
