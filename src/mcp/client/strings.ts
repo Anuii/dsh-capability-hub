@@ -34,26 +34,24 @@ export const zh = {
   "mcp.toast.toggleOn": "已启用「{name}」。",
   "mcp.toast.toggleOff": "已停用「{name}」。",
   "mcp.toast.revealed": "已向服务端取回明文，只在本次查看里保留。",
-  "mcp.toast.connectPending": "已保存「{name}」，还在连接中，稍后在列表里看结果。",
-  "mcp.toast.connected": "「{name}」已连接 · {count} 个工具。",
-  "mcp.toast.sessionSaved": "已保存「{name}」：按会话连接，下一个会话开始时生效。",
-  "mcp.toast.connectFailed": "「{name}」连接失败：{message}",
-  "mcp.toast.reconnectFailed": "重新连接「{name}」失败：{message}",
   "mcp.toast.saved": "已保存「{name}」。",
 
-  /* ---- 筛选 ---- */
+  /* ---- 筛选（0.9.0 起没有「有错误」：页面不显示运行状态） ---- */
   "mcp.filter.all": "全部",
   "mcp.filter.enabled": "已启用",
   "mcp.filter.disabled": "已停用",
-  "mcp.filter.failing": "有错误",
   "mcp.filter.label": "筛选服务器",
 
-  /* ---- 添加 ---- */
+  /* ---- 添加（对话框里两种方式：粘贴 JSON / 从 Official Registry 搜索） ---- */
   "mcp.add.button": "添加服务器",
+  "mcp.add.title": "添加 MCP 服务器",
+  "mcp.add.modeLabel": "添加方式",
+  "mcp.add.modePaste": "粘贴 JSON",
+  "mcp.add.modeRegistry": "从 Official Registry 搜索",
 
   /* ---- 空状态 ---- */
   "mcp.empty.title": "还没有配置任何 MCP 服务器",
-  "mcp.empty.hint": "点「添加服务器」，粘贴一段 mcpServers 配置（JSON）。",
+  "mcp.empty.hint": "点「添加服务器」：粘贴一段 mcpServers 配置（JSON），或从 Official Registry 搜索。",
   "mcp.empty.add": "添加服务器",
   "mcp.empty.filtered": "没有符合当前搜索与筛选的服务器。",
 
@@ -61,18 +59,10 @@ export const zh = {
   "mcp.row.noCommand": "（未设置启动命令）",
   "mcp.row.noUrl": "（未设置地址）",
   "mcp.row.toggleLabel": "启用或停用「{name}」",
-  "mcp.row.tools": "· {count} 个工具",
-  "mcp.row.badgeFailed": "连接失败",
-  "mcp.row.stateActive": "已连接",
-  "mcp.row.stateFailed": "连接失败",
   "mcp.row.dragHint": "拖动可排序",
-  "mcp.row.badgeDisconnected": "未连接",
-  "mcp.row.stateConnecting": "正在连接",
-  "mcp.row.session": "· 按会话",
 
-  /* ---- 详情抽屉 ---- */
+  /* ---- 详情抽屉（0.9.0 起没有「工具」一节与「重新连接」） ---- */
   "mcp.detail.overview": "概览",
-  "mcp.detail.tools": "工具",
   "mcp.detail.secrets": "环境变量与请求头",
   "mcp.detail.transport": "传输方式",
   "mcp.detail.command": "命令",
@@ -91,8 +81,6 @@ export const zh = {
   "mcp.detail.deleteTitle": "删除「{name}」",
   "mcp.detail.jsonTitle": "用 JSON 编辑「{name}」",
   "mcp.detail.scope": "进程",
-  "mcp.detail.reconnect": "重新连接",
-  "mcp.detail.reconnecting": "连接中…",
 
   /* ---- 单服务器 JSON 编辑 ---- */
   "mcp.json.title": "JSON 编辑「{name}」",
@@ -113,7 +101,6 @@ export const zh = {
   "mcp.delete.done": "已删除「{name}」。",
 
   /* ---- 粘贴 JSON 添加（D-C2） ---- */
-  "mcp.paste.title": "粘贴 MCP 配置（JSON）",
   "mcp.paste.hint":
     '支持 { "mcpServers": { … } }、{ "servers": { … } }、「名称 → 服务器对象」映射，或单个服务器对象。除了标准写法，还可以写 envFrom、scope（global / session）、meta.description 等本插件的字段。识别结果先预览，勾选后才逐个保存。',
   "mcp.paste.placeholder": '{ "mcpServers": { "my-server": { "command": "npx", "args": ["-y", "pkg"] } } }',
@@ -143,23 +130,56 @@ export const zh = {
   "mcp.paste.saving": "保存中…",
   "mcp.paste.resultSaved": "已保存",
   "mcp.paste.resultFailed": "保存失败：{message}",
-  "mcp.paste.savedMany": "已保存 {count} 个服务器，正在连接。",
+  "mcp.paste.savedMany": "已保存 {count} 个服务器。",
   "mcp.paste.savedNone": "没有任何服务器被保存。",
   "mcp.paste.hiddenWarning": "检测到 ***hidden*** 占位符（{names}）：新建时它会被当成真实值保存，请先替换成真实值。",
+
+  /* ---- 从 Official Registry 搜索添加（0.9.0） ---- */
+  "mcp.registry.hint":
+    "搜索会请求 Official Registry（registry.modelcontextprotocol.io）的只读接口，不需要令牌。实测比较慢：通常 10–60 秒，请耐心等「加载中…」结束。",
+  "mcp.registry.queryLabel": "关键词",
+  "mcp.registry.placeholder": "例如 github、filesystem、jira",
+  "mcp.registry.search": "搜索",
+  "mcp.registry.loading": "加载中…",
+  "mcp.registry.searching": "正在搜索 Official Registry，可能要 10–60 秒…",
+  "mcp.registry.needQuery": "请先输入搜索关键词。",
+  "mcp.registry.searchFailed": "搜索失败：{message}",
+  "mcp.registry.retry": "重试",
+  "mcp.registry.empty": "没有匹配的服务器，换个关键词再试。",
+  "mcp.registry.results": "搜到 {count} 个结果",
+  "mcp.registry.more": "加载更多",
+  "mcp.registry.needsEnv": "需要填 {count} 个变量",
+  "mcp.registry.kind.remotes": "远程 HTTP",
+  "mcp.registry.kind.npm": "npm 包",
+  "mcp.registry.kind.pypi": "PyPI 包",
+  "mcp.registry.kind.oci": "OCI 镜像",
+  "mcp.registry.version": "版本 {version}",
+  "mcp.registry.back": "返回搜索结果",
+  "mcp.registry.detailLoading": "读取详情…",
+  "mcp.registry.detailFailed": "读取详情失败：{message}",
+  "mcp.registry.detailBroken": "服务端没有返回这条服务器的详情。",
+  "mcp.registry.unsupported": "不能一键生成配置：{message}",
+  "mcp.registry.notes": "注意",
+  "mcp.registry.nameLabel": "服务器名",
+  "mcp.registry.nameHint": "保存用的名字：只能包含英文字母、数字、下划线、短横线，长度 1–32（DSH 用它拼工具名）。",
+  "mcp.registry.nameEmpty": "服务器名不能为空。",
+  "mcp.registry.nameInvalid": "服务器名只能包含英文字母、数字、下划线、短横线，长度 1–32。",
+  "mcp.registry.nameConflict": "已经有一台服务器叫「{name}」，换一个名字再保存。",
+  "mcp.registry.envTitle": "环境变量",
+  "mcp.registry.envRequired": "必填",
+  "mcp.registry.envOptional": "可选",
+  "mcp.registry.envMissingOne": "必填变量，请先填上。",
+  "mcp.registry.envMissing": "还有必填变量没填：{names}",
+  "mcp.registry.configTitle": "将要保存的配置（只读）",
+  "mcp.registry.save": "保存",
+  "mcp.registry.saving": "保存中…",
+  "mcp.registry.saved": "已保存「{name}」。",
+  "mcp.registry.saveFailed": "保存失败：{message}",
+  "mcp.registry.saveConflict": "服务器名「{name}」已经存在（宿主返回 409），换一个名字再保存。",
 
   /* ---- 进程放在哪（scope） ---- */
   "mcp.scope.global": "全局一份（所有会话共用一个进程）",
   "mcp.scope.session": "按会话（每个会话、子代理各一个进程）",
-
-  /* ---- 运行状态（详情「工具」一节） ---- */
-  "mcp.state.disabled": "已停用：不会连接，也不会注册工具。",
-  "mcp.state.unknown": "还没读到运行状态。",
-  "mcp.state.connecting": "正在连接…",
-  "mcp.state.connected": "已连接 · {count} 个工具（下面是模型看到的名字）",
-  "mcp.state.disconnected": "未连接：连接断开后 DSH 在自动重连，或已经放弃；可以点「重新连接」。",
-  "mcp.state.failed": "连接失败：{message}",
-  "mcp.state.noReason": "（没有拿到原因，详见 DSH 日志）",
-  "mcp.state.session": "按会话：每个会话开始时各自连接，当前 {count} 个会话已连接。",
 } as const;
 
 export type McpKey = keyof typeof zh;

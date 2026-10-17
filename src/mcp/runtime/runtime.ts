@@ -8,8 +8,9 @@
  *   - envFrom 先由本插件执行命令解析成 env，失败就不挂，状态里写原因（绝不注入空值，D-D8）；
  *   - 配置变化按「挂载指纹」只重挂变了的服务器；停用、删除即卸下。
  *
- * 全局挂载用 failOnStartupError: true，这样首次连接失败时能拿到原因（状态显示「连接失败：…」，
- * 由使用者点「重新连接」）；连上之后的断线由官方插件自动重连。按会话的挂载不让失败冒泡到 agent。
+ * 全局挂载用 failOnStartupError: true，这样首次连接失败时能拿到原因（原因只进 GET health 的
+ * mcpServers 与 boot.json：0.9.0 起页面不显示运行状态，要重试就重启 DSH）；
+ * 连上之后的断线由官方插件自动重连。按会话的挂载不让失败冒泡到 agent。
  */
 
 import { resolveEnvFrom, type EnvFromRunner } from "./atoms/env-from.ts";
@@ -28,7 +29,7 @@ import type { HubLogger } from "../../platform/contract/host.ts";
 
 /** 不设超时（toolCallTimeoutMs ≤ 0）时交给官方插件的值：一天。 */
 const NO_TIMEOUT_MS = 24 * 3600 * 1000;
-/** 描述只取第一行、最多这么多字（界面列表用）。 */
+/** 描述只取第一行、最多这么多字（health 诊断用）。 */
 const TOOL_DESCRIPTION_MAX = 160;
 
 export interface McpRuntimeOptions {
@@ -46,7 +47,10 @@ export interface McpRuntimeOptions {
 }
 
 export interface McpRuntimeInternal extends McpRuntime {
-  /** 卸下再挂上（全局：重连这一个；按会话：在每个现存 agent 上重挂）。 */
+  /**
+   * 卸下再挂上（全局：重连这一个；按会话：在每个现存 agent 上重挂）。
+   * 0.9.0 起没有 HTTP 入口（页面不提供「重新连接」）：只作为内部的重挂原语保留，由单测覆盖。
+   */
   reconnect(name: string): Promise<RuntimeServerView>;
   /** 等所有进行中的挂载与卸载结束（测试与 dispose 用）。 */
   settle(): Promise<void>;

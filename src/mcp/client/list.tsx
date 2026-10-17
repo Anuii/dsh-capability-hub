@@ -1,8 +1,9 @@
 /**
  * MCP 服务器列表（UI-DESIGN §5）：一片 Surface + 若干行，行与行之间只有 1px 分隔线。
  *
- * 一行只说两件事：**这是什么**（状态点 + 名称 + 等宽的启动摘要与工具数）与**开没开**（行尾开关）。
- * 其他信息（工具清单、环境变量、失败原因…）全在详情抽屉里。标记只在有事时出现：连接失败 / 未连接（红）。
+ * 一行只说两件事：**这是什么**（名称 + 等宽的启动摘要）与**开没开**（行尾开关）。
+ * 0.9.0 起行上没有运行状态：没有状态点、没有状态文字与工具数、没有连接失败标记
+ * （连接是否成功只看宿主 GET health 的 mcpServers）。其他信息全在详情抽屉里。
  *
  * 排序：悬停时行首出现拖动把手，HTML5 拖放（dragstart / dragover / drop 都冒泡到容器上，
  * 所以这里用事件委托，不需要 kit 暴露额外的 props）。**没有上移 / 下移按钮**。
@@ -10,16 +11,14 @@
 
 import * as React from "react";
 import { Switch } from "@deepseek-ai/dsh-client-ui-primitives";
-import { Badge, GripIcon, ListGroup, ListRow, ListSurface, StatusDot, kit } from "../../kit/index.ts";
-import { rowSubtitleText, rowSubtitleTitle, serverStatusTone, statusTitle } from "./view-model.ts";
+import { GripIcon, ListGroup, ListRow, ListSurface, kit } from "../../kit/index.ts";
+import { rowSubtitleText, rowSubtitleTitle } from "./view-model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import type { RuntimeServerView } from "../contract/runtime.ts";
 import type { ServerView } from "../contract/config.ts";
 
 export interface ServerListProps {
   servers: readonly ServerView[];
-  rows: ReadonlyMap<string, RuntimeServerView>;
   busy: ReadonlySet<string>;
   onToggle(view: ServerView, disabled: boolean): void;
   onOpen(view: ServerView): void;
@@ -37,49 +36,19 @@ function dragHandle(name: string): React.ReactElement {
 
 function ServerRow(props: {
   view: ServerView;
-  row: RuntimeServerView | undefined;
   busy: boolean;
   onToggle(view: ServerView, disabled: boolean): void;
   onOpen(view: ServerView): void;
 }): React.ReactElement {
   const view = props.view;
   const name = view.serverName;
-  const row = props.row;
-  const tone = serverStatusTone(view, row);
-  const badges =
-    view.disabled || row === undefined
-      ? []
-      : row.state === "failed"
-        ? [
-            <Badge key="failed" tone="danger" testId={"mcp-badge-failed-" + name}>
-              {t("mcp.row.badgeFailed")}
-            </Badge>,
-          ]
-        : row.state === "disconnected"
-          ? [
-              <Badge key="disconnected" tone="danger" testId={"mcp-badge-disconnected-" + name}>
-                {t("mcp.row.badgeDisconnected")}
-              </Badge>,
-            ]
-          : [];
-  const dotTitle = statusTitle(tone);
   return (
     <ListRow
       testId={"mcp-row-" + name}
       title={name}
-      subtitle={rowSubtitleText(view, row)}
+      subtitle={rowSubtitleText(view)}
       subtitleTitle={rowSubtitleTitle(view)}
       subtitleMono
-      leading={
-        dotTitle === undefined ? (
-          tone
-        ) : (
-          <span title={dotTitle} data-testid={"mcp-dot-" + name}>
-            <StatusDot tone={tone} />
-          </span>
-        )
-      }
-      badges={badges}
       dragHandle={dragHandle(name)}
       trailing={
         <Switch
@@ -149,7 +118,6 @@ export function ServerList(props: ServerListProps): React.ReactElement {
             <ServerRow
               key={view.serverName}
               view={view}
-              row={props.rows.get(view.serverName)}
               busy={props.busy.has(view.serverName)}
               onToggle={props.onToggle}
               onOpen={props.onOpen}

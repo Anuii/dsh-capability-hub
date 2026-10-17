@@ -1,29 +1,26 @@
 /**
- * MCP 服务器详情抽屉的正文（UI-DESIGN §5）：概览 → 工具 → 环境变量与请求头。
+ * MCP 服务器详情抽屉的正文（UI-DESIGN §5）：概览 → 环境变量与请求头。
  *
  * 两条纪律：
+ *   - 概览只说这台服务器是什么（传输方式、命令 / 地址、工作目录、进程范围、描述）；
  *   - **遮罩**（D-C5）：env / headers 的值默认就是 ***hidden***，只有用户显式点「显示」
- *     才向服务端要一次明文，明文只存在本次抽屉的组件状态里；
- *   - 「工具」一节先说状态（已连接 · N 个工具 / 连接失败：原因 / 按会话……），再列模型看到的工具名；
- *     「重新连接」= 卸下再挂上官方 MCP 插件实例（ADR-0010）。
+ *     才向服务端要一次明文，明文只存在本次抽屉的组件状态里。
+ *
+ * 0.9.0 起没有「工具」一节（连接状态与 mcp__… 工具名）与「重新连接」按钮：
+ * 页面不显示运行状态，连接失败只看宿主 GET health 的 mcpServers（要重试就重启 DSH）。
  */
 
 import * as React from "react";
 import { revealServer } from "./data.ts";
-import { scopeLabel, stateText, transportLabel, viewSummaryText } from "./view-model.ts";
+import { scopeLabel, transportLabel, viewSummaryText } from "./view-model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
-import { Button } from "@deepseek-ai/dsh-client-ui-primitives";
 import { KeyValue, Section } from "../../kit/index.ts";
-import type { RuntimeServerView } from "../contract/runtime.ts";
 import type { ServerView } from "../contract/config.ts";
 import { errorText } from "../../shared/error-text.ts";
 
 export interface ServerDetailBodyProps {
   view: ServerView;
-  row: RuntimeServerView | undefined;
-  reconnecting: boolean;
-  onReconnect(): void;
   showToast(text: string, tone?: "success"): void;
 }
 
@@ -91,7 +88,6 @@ function SecretBlock(props: {
 
 export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactElement {
   const view = props.view;
-  const row = props.row;
   const [plain, setPlain] = React.useState<Record<string, Record<string, string>>>({});
   const [revealing, setRevealing] = React.useState<string | undefined>(undefined);
   const [revealError, setRevealError] = React.useState<string | undefined>(undefined);
@@ -155,45 +151,10 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
       : [{ label: t("mcp.detail.description"), value: description, testId: "mcp-detail-description" }]),
   ];
 
-  const tools = view.disabled ? [] : (row?.tools ?? []);
-  const failed = !view.disabled && (row?.state === "failed" || row?.state === "disconnected");
-
   return (
     <React.Fragment>
       <Section title={t("mcp.detail.overview")} testId="mcp-detail-overview">
         <KeyValue items={overview} testId="mcp-detail-overview-kv" />
-      </Section>
-      <Section
-        title={t("mcp.detail.tools")}
-        testId="mcp-detail-tools"
-        end={
-          <Button
-            size="sm"
-            variant="outline"
-            data-testid="mcp-detail-reconnect"
-            disabled={props.reconnecting || view.disabled}
-            onClick={props.onReconnect}
-          >
-            {props.reconnecting ? t("mcp.detail.reconnecting") : t("mcp.detail.reconnect")}
-          </Button>
-        }
-      >
-        <p className={failed ? styles.failure : styles.cacheLine} data-testid="mcp-detail-state">
-          {stateText(view, row)}
-        </p>
-        {tools.length === 0 ? null : (
-          <ul className={styles.toolList} data-testid="mcp-detail-tool-list">
-            {tools.map((tool) => (
-              <li
-                key={tool.name}
-                className={styles.toolItem}
-                {...(tool.description === undefined ? {} : { title: tool.description })}
-              >
-                {tool.name}
-              </li>
-            ))}
-          </ul>
-        )}
       </Section>
       <Section title={t("mcp.detail.secrets")} testId="mcp-detail-secrets">
         <SecretBlock

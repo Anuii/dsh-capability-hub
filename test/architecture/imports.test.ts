@@ -2,8 +2,8 @@
  * 架构规则（ADR-0001）：按 import 语句检查「谁能引用谁」。违反即失败，不靠自觉。
  *
  * 区域（zone）：
- *   宿主功能模块  src/skills/local · src/skills/remote · src/mcp/config · src/mcp/runtime · src/prompts/files
- *   宿主外壳      src/platform/host（组装五个宿主模块、接 DSH）
+ *   宿主功能模块  src/skills/local · src/skills/remote · src/mcp/config · src/mcp/runtime · src/prompts/files · src/mcp/registry
+ *   宿主外壳      src/platform/host（组装六个宿主模块、接 DSH）
  *   客户端功能    src/skills/client · src/mcp/client · src/prompts/client
  *   客户端外壳    src/platform/client（页头、标签、HTTP 客户端 api.ts、标签契约 tab-props.ts）
  *   kit          src/kit（界面组件，不知道任何功能）
@@ -37,6 +37,7 @@ type Zone =
   | "host:mcp-config"
   | "host:mcp-runtime"
   | "host:prompts"
+  | "host:mcp-registry"
   | "host:platform"
   | "client:skills"
   | "client:mcp"
@@ -55,6 +56,7 @@ const ZONES: Array<[RegExp, Zone]> = [
   [/^mcp\/config\//, "host:mcp-config"],
   [/^mcp\/runtime\//, "host:mcp-runtime"],
   [/^prompts\/files\//, "host:prompts"],
+  [/^mcp\/registry\//, "host:mcp-registry"],
   [/^platform\/host\//, "host:platform"],
   [/^skills\/client\//, "client:skills"],
   [/^mcp\/client\//, "client:mcp"],
@@ -77,7 +79,8 @@ const isHostFeature = (zone: Zone): boolean =>
   zone === "host:skills-remote" ||
   zone === "host:mcp-config" ||
   zone === "host:mcp-runtime" ||
-  zone === "host:prompts";
+  zone === "host:prompts" ||
+  zone === "host:mcp-registry";
 const isHost = (zone: Zone): boolean => isHostFeature(zone) || zone === "host:platform";
 const isClient = (zone: Zone): boolean =>
   zone === "client:skills" ||
@@ -212,4 +215,9 @@ test("架构规则本身：每条规则都能拦住它要拦的东西", () => {
   assert.equal(check("prompts/client/x.ts", "prompts/contract/prompts.ts", true), undefined);
   assert.equal(check("prompts/files/x.ts", "shared/node/fsx.ts"), undefined);
   assert.equal(check("platform/host/modules.ts", "prompts/files/module.ts"), undefined);
+  // Official MCP Registry（0.9.0）：第六个宿主模块，与其余宿主模块互不 import
+  assert.equal(check("platform/host/modules.ts", "mcp/registry/module.ts"), undefined);
+  assert.match(check("mcp/registry/module.ts", "mcp/config/module.ts")!, /规则 1/);
+  assert.equal(check("mcp/registry/module.ts", "mcp/rules/registry-map.ts"), undefined);
+  assert.equal(check("mcp/client/x.ts", "mcp/rules/registry-map.ts"), undefined);
 });

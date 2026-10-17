@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  端到端冒烟：带 browser-auth 走完「技能 / MCP 配置 / 运行态 / health」全链路。
+  端到端冒烟：带 browser-auth 走完「技能 / MCP 配置 / 连接 / health」全链路。
 
 .DESCRIPTION
   步骤：
@@ -10,8 +10,8 @@
     3  POST skills/set-enabled   停用再启用（archify），证明「除那一行外字节不变」
     4  GET  mcp/config           → 加服务器之前的配置
     5  POST mcp/servers/upsert   加一个指向夹具 fake-mcp-server.mjs 的 stdio 服务器
-    6  GET  mcp/runtime          轮询到 DSH 官方 MCP 插件连上、注册了工具（state = connected）
-    7  POST mcp/runtime/reconnect 重新连接一次
+    6  GET  health               轮询 mcpServers 到 state = connected 且 toolCount > 0
+    7  404 探测                  GET mcp/runtime 与 POST mcp/runtime/reconnect 已删除（0.9.0 起）
     8  GET  health               4 个真实模块 ok；官方 MCP 插件已加载；测试服务器已连接
     9  GET  skills/github-auth   只看 mode（绝不打印令牌）
    10  POST mcp/servers/delete   收尾：删掉测试服务器，恢复原状；它的工具随之从 DSH 注销
@@ -161,26 +161,23 @@ $upsert = Envelope (Invoke-Hub POST 'mcp/servers/upsert' @{
 Check ($upsert.ok -eq $true -and $upsert.data.server.serverName -eq $ServerName) "upsert 成功"
 Say ("  warnings: " + (($upsert.data.warnings) -join ' | '))
 
-# ---- 6. 等官方 MCP 插件连上 ----
-Step "等 DSH 官方 MCP 插件连上（GET mcp/runtime）"
+# ---- 6. 等官方 MCP 插件连上（0.9.0 起页面不显示运行状态，只经 health 的 mcpServers 观察）----
+Step "等 DSH 官方 MCP 插件连上（GET health 的 mcpServers）"
 $toolCount = 0
 for ($i = 0; $i -lt 40; $i++) {
   Start-Sleep -Milliseconds 500
-  $runtime = Envelope (Invoke-Hub GET 'mcp/runtime')
-  $server = @($runtime.data.servers) | Where-Object { $_.name -eq $ServerName } | Select-Object -First 1
-  if ($null -ne $server -and $server.state -eq 'connected' -and @($server.tools).Count -gt 0) { $toolCount = @($server.tools).Count; break }
+  $h = Envelope (Invoke-Hub GET 'health')
+  $entry = @($h.data.mcpServers) | Where-Object { $_.name -eq $ServerName } | Select-Object -First 1
+  if ($null -ne $entry -and $entry.state -eq 'connected' -and $entry.toolCount -gt 0) { $toolCount = $entry.toolCount; break }
 }
-Check ($toolCount -gt 0) "连上后注册了 $toolCount 个工具（> 0）"
-$runtime = Envelope (Invoke-Hub GET 'mcp/runtime')
-$server = @($runtime.data.servers) | Where-Object { $_.name -eq $ServerName } | Select-Object -First 1
-$names = @($server.tools | ForEach-Object { $_.name })
-Check (@($names | Where-Object { $_ -notlike "mcp__$($ServerName)__*" }).Count -eq 0) "工具名都是 mcp__<服务器>__<工具>：$($names -join ', ')"
-Check ($names -contains "mcp__$($ServerName)__pick") "参数写法复杂的 pick（anyOf / 元组 / `$ref）也注册了"
+Check ($toolCount -gt 0) "连上后注册了 $toolCount 个工具（> 0，含 anyOf / 元组 / `$ref 的 pick）"
 
-# ---- 7. reconnect ----
-Step "POST mcp/runtime/reconnect"
-$reconnect = Envelope (Invoke-Hub POST 'mcp/runtime/reconnect' @{ name = $ServerName })
-Check ($reconnect.ok -eq $true -and $reconnect.data.server.state -eq 'connected' -and @($reconnect.data.server.tools).Count -gt 0) "重新连接后 state = $($reconnect.data.server.state)，$(@($reconnect.data.server.tools).Count) 个工具"
+# ---- 7. 运行时路由确实已经删除（0.9.0 去掉运行状态界面）----
+Step "确认 GET mcp/runtime 与 POST mcp/runtime/reconnect 已删除（应 404）"
+$runtimeProbe = Invoke-Hub GET 'mcp/runtime'
+Check ($runtimeProbe.Code -eq 404) "GET mcp/runtime 返回 404（运行状态界面已移除）"
+$reconnectProbe = Invoke-Hub POST 'mcp/runtime/reconnect' @{ name = $ServerName }
+Check ($reconnectProbe.Code -eq 404) "POST mcp/runtime/reconnect 返回 404（重连入口已移除）"
 
 # ---- 8. health ----
 Step "GET health"

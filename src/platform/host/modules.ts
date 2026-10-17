@@ -12,6 +12,7 @@
  * 阶段 B：4 个真实模块（skills-local / skills-remote / mcp-config / mcp-runtime）
  *         由本文件的 createFeatureModuleEntries() 按依赖顺序接入（见该函数顶部说明）。
  * 0.8.0：第五个模块 prompts-files（提示词），不依赖任何其他功能模块。
+ * 0.9.0：第六个模块 mcp-registry（Official MCP Registry），只读现有服务器名去重，排在 prompts-files 之后。
  */
 import type { HubContext } from "../contract/host.ts";
 import type { HubModule, RouteTable } from "../contract/host.ts";
@@ -23,6 +24,7 @@ import { createSkillsLocalModule } from "../../skills/local/module.ts";
 import { createSkillsRemoteModule } from "../../skills/remote/module.ts";
 import { createMcpRuntimeModule } from "../../mcp/runtime/module.ts";
 import { createPromptsFilesModule } from "../../prompts/files/module.ts";
+import { createMcpRegistryModule } from "../../mcp/registry/module.ts";
 import { readPromptSettings } from "./prompt-settings.ts";
 import { errorText } from "../../shared/error-text.ts";
 
@@ -169,6 +171,7 @@ export interface FeatureState {
   skillsRemote?: ReturnType<typeof createSkillsRemoteModule>;
   mcpRuntime?: ReturnType<typeof createMcpRuntimeModule>;
   promptsFiles?: ReturnType<typeof createPromptsFilesModule>;
+  mcpRegistry?: ReturnType<typeof createMcpRegistryModule>;
   /** skills-local ← skills-remote.lockStash 是否绑定成功。 */
   lockStashBound: boolean;
   /** 接线过程中的中文说明（health 里可见）。 */
@@ -180,8 +183,9 @@ export function makeFeatureState(): FeatureState {
 }
 
 /**
- * 4 个真实模块的加载表（依赖顺序）：**mcp-config → skills-local → skills-remote
- * → lockStash 绑定 → mcp-runtime**（运行时的 start() 由外壳在路由注册后调用）。
+ * 真实模块的加载表（依赖顺序）：**mcp-config → skills-local → skills-remote
+ * → lockStash 绑定 → mcp-runtime → prompts-files → mcp-registry**
+ *（运行时的 start() 由外壳在路由注册后调用；mcp-registry 只依赖 mcp-config 的现有服务器名）。
  *
  * 降级语义（D-F1「永不失败外壳」）：
  *   - 每个模块的 load 由 ModuleRegistry 独立 try/catch（同步抛与 rejected Promise 都算）；
@@ -205,6 +209,11 @@ export function createFeatureModuleEntries(options: {
   failModules?: string[];
   /** DSH 根 ctx：prompts-files 的设置每次请求现读（组合配置可能在运行期变化）。 */
   hostCtx?: unknown;
+  /**
+   * 调试开关：mcp-registry 走固定夹具、完全不联网（见 devOverrides.registryFixture）。
+   * 外壳只在 devOverrides.enabled === true 时才可能传 true；默认 false 走真实网络。
+   */
+  registryFixture?: boolean;
 }): ModuleEntry[] {
   const { ctx, mcpClient, yaml, state } = options;
   const log = ctx.logger;
@@ -291,6 +300,27 @@ export function createFeatureModuleEntries(options: {
         }
         const mod = createPromptsFilesModule(moduleCtx, { settings: () => readPromptSettings(options.hostCtx) });
         state.promptsFiles = mod;
+        return mod as unknown as HubModule;
+      },
+    },
+    {
+      // 0.9.0：第六个宿主模块（Official MCP Registry：搜索、详情、一键生成配置）。
+      // 排在 prompts-files 之后，只为不改上面的顺序；它只依赖 mcp-config 的「现有服务器名」。
+      name: "mcp-registry",
+      load: (moduleCtx) => {
+        if (forced.has("mcp-registry")) {
+          throw new Error("调试开关 devOverrides.failModules 要求 mcp-registry 失败（降级验证用）");
+        }
+        const config = state.mcpConfig;
+        if (config === undefined) {
+          throw new Error("依赖 mcp-config 未加载：拿不到现有服务器名，Registry 的建议名无法去重");
+        }
+        const mod = createMcpRegistryModule(moduleCtx, {
+          // 活值：每次生成建议名现读，别用启动那一刻的快照
+          existingNames: () => config.source.get().servers.map((server) => server.serverName),
+          ...(options.registryFixture === true ? { fixture: true } : {}),
+        });
+        state.mcpRegistry = mod;
         return mod as unknown as HubModule;
       },
     },

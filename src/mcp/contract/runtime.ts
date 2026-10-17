@@ -2,9 +2,11 @@
  * MCP 运行时（mcp-runtime）的契约（ADR-0002）：只有类型。
  *
  * 0.7.0 起运行时不再自己连 MCP 服务器，而是把配置里的服务器挂载成 DSH 官方
- * @deepseek-ai/dsh-mcp-client 的插件实例（ADR-0010）。用在两条 seam 上：
- *   - HTTP：GET mcp/runtime（每台服务器的挂载状态与已注册的工具）、POST mcp/runtime/reconnect；
- *   - 进程内：外壳把官方插件模块、插件根作用域与工具注册表交给运行时，并在 agent 创建时转告它。
+ * @deepseek-ai/dsh-mcp-client 的插件实例（ADR-0010）。
+ *
+ * 0.9.0 起只有进程内 seam：外壳把官方插件模块、插件根作用域与工具注册表交给运行时，
+ * 并在 agent 创建时转告它。**不再有 HTTP 接口**（页面上没有运行状态、也没有「重新连接」），
+ * 挂载状态只经外壳进 GET health 的 mcpServers 与 boot.json；要重试就重启 DSH。
  */
 
 /** 官方 dsh-mcp-client 模块（外壳动态 import 后注入）：Config 校验并补齐配置，整个模块作为插件挂载。 */
@@ -20,7 +22,7 @@ export interface PluginScope {
   plugin(plugin: unknown, config: unknown): unknown;
 }
 
-/** 工具注册表里的一项（只取界面要的字段）。 */
+/** 工具注册表里的一项（只取 health 诊断要的字段）。 */
 export interface RegisteredTool {
   name: string;
   description?: string;
@@ -48,14 +50,9 @@ export interface RuntimeServerView {
   since?: number;
 }
 
-/** GET mcp/runtime 的 data。 */
+/** 全部服务器的挂载状态（外壳取它填 health 的 mcpServers 与 boot.json）。 */
 export interface RuntimeStatus {
   servers: RuntimeServerView[];
-}
-
-/** POST mcp/runtime/reconnect 的 data。 */
-export interface ReconnectResult {
-  server: RuntimeServerView;
 }
 
 /** 运行时模块的进程内接口（外壳用）。 */
@@ -66,6 +63,7 @@ export interface McpRuntime {
   agentCreated(sessionId: string, scope: PluginScope): void;
   /** agent 释放了（它作用域里的挂载由 DSH 一起回收，这里只记账）。 */
   agentDisposed(sessionId: string): void;
+  /** 挂载状态快照：外壳拿它填 health 的 mcpServers 与 boot.json（页面不读）。 */
   status(): RuntimeStatus;
   dispose(): Promise<void>;
 }

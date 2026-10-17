@@ -341,6 +341,10 @@ FACTS.hubEntryClicked = await openHub();
 FACTS.tabs = await evaluate(
   "[...document.querySelectorAll('[data-testid=capability-hub-page] [role=tab]')].map((n) => n.textContent.trim())",
 );
+// 0.9.0 起默认停在「提示词」：记下首屏选中的标签，谁改顺序/默认值都会在这里暴露。
+FACTS.defaultTab = await evaluate(
+  "(() => { const n = document.querySelector('[data-testid=capability-hub-page] [role=tab][aria-selected=true]'); return n ? n.textContent.trim() : null; })()",
+);
 await clickTestId("capability-hub-tab-skills");
 await sleep(1200);
 FACTS.skillsAudit = await evaluate(AUDIT);
@@ -434,7 +438,8 @@ await escape();
 await clickTestId("capability-hub-tab-mcp");
 await sleep(1200);
 FACTS.mcpAudit = await evaluate(AUDIT);
-FACTS.mcpTabDot = await evaluate("!!document.querySelector('[data-testid=capability-hub-tab-dot-mcp]')");
+// 0.9.0 起标签栏没有红点（原先只有 MCP 用它上报连接失败，运行状态界面去掉后一并移除）。
+FACTS.tabDotsRemoved = await evaluate("!document.querySelector('[data-testid^=capability-hub-tab-dot-]')");
 FACTS.mcpRowSubtitle = await evaluate(
   "(() => { const n = document.querySelector('[data-testid^=mcp-row-] .chk_rowSub'); return n ? [n.textContent, n.title] : null; })()",
 );
@@ -444,6 +449,28 @@ await clickTestId("mcp-add");
 await sleep(800);
 FACTS.pasteDialog = await evaluate("!!document.querySelector('[data-testid=mcp-paste-textarea]')");
 await pair("p09", "mcp-add-json");
+
+// 从 Official Registry 搜索（测试 profile 开了 devOverrides.registryFixture：固定夹具、不联网）
+FACTS.registryModeSwitched = await evaluate(
+  "(() => { const tabs = [...document.querySelectorAll('[data-testid=mcp-add-modes] [role=tab]')]; const t = tabs.find((n) => (n.textContent || '').includes('Registry')); if (!t) return false; t.click(); return true; })()",
+);
+await sleep(800);
+await evaluate(
+  "(() => { const n = document.querySelector('[data-testid=mcp-registry-query]'); if (!n) return false; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(n, 'demo'); n.dispatchEvent(new Event('input', { bubbles: true })); return true; })()",
+);
+await clickTestId("mcp-registry-search");
+await sleep(1800);
+FACTS.registryRows = await evaluate(
+  "[...document.querySelectorAll('[data-testid^=mcp-registry-row-]')].map((n) => n.getAttribute('data-testid'))",
+);
+await pair("p23", "mcp-registry-search");
+FACTS.registryPreviewOpened = await evaluate(
+  "(() => { const rows = [...document.querySelectorAll('[data-testid^=mcp-registry-row-]')]; const r = rows.find((n) => (n.innerText || '').includes('npm-demo')); if (!r) return false; r.click(); return true; })()",
+);
+await sleep(1500);
+FACTS.registryPreview = await evaluate("!!document.querySelector('[data-testid=mcp-registry-preview]')");
+FACTS.registryBlocked = await evaluate("!!document.querySelector('[data-testid=mcp-registry-blocked]')");
+await pair("p25", "mcp-registry-preview");
 await escape();
 
 await open("");

@@ -1,13 +1,13 @@
 /**
- * MCP 页的**列表与展示**逻辑：一行服务器怎么显示（摘要、状态点、副标题、状态文字）、筛选与计数、排序。
+ * MCP 页的**列表与展示**逻辑：一行服务器怎么显示（摘要、副标题）、筛选与计数、排序。
  * 纯函数，不碰 DOM / React / 网络（见 test/mcp/client/view-model.test.ts）。文案走 strings.ts 的 t()。
  *
- * 0.7.0 起服务器由 DSH 官方 MCP 插件连接（ADR-0010），运行状态只有「挂没挂上、注册了哪些工具」。
+ * 0.9.0 起页面上没有运行状态：行上没有状态点、状态文字与「N 个工具」，筛选里也没有「有错误」。
+ * 服务器是否连上只看宿主 GET health 的 mcpServers（要重试就重启 DSH）。
  */
 
 import { t } from "./strings.ts";
 import type { ServerView } from "../contract/config.ts";
-import type { RuntimeServerView, RuntimeStatus } from "../contract/runtime.ts";
 
 /* ---------------- 展示格式化 ---------------- */
 
@@ -80,12 +80,15 @@ export function reorderNames(names: readonly string[], from: number, to: number)
   return next;
 }
 
-/* ---------------- 列表：筛选、状态点、副标题 ---------------- */
+/* ---------------- 列表：筛选、副标题 ---------------- */
 
-/** 列表筛选的四个分段（UI-DESIGN §5）。 */
-export type ServerFilterId = "all" | "enabled" | "disabled" | "failing";
+/**
+ * 列表筛选的三个分段（UI-DESIGN §5）。
+ * 0.9.0 起没有「有错误」：它靠运行状态判断，而运行状态已经不在界面上。
+ */
+export type ServerFilterId = "all" | "enabled" | "disabled";
 
-export const SERVER_FILTERS: readonly ServerFilterId[] = ["all", "enabled", "disabled", "failing"];
+export const SERVER_FILTERS: readonly ServerFilterId[] = ["all", "enabled", "disabled"];
 
 export function filterLabel(id: ServerFilterId): string {
   switch (id) {
@@ -93,29 +96,18 @@ export function filterLabel(id: ServerFilterId): string {
       return t("mcp.filter.enabled");
     case "disabled":
       return t("mcp.filter.disabled");
-    case "failing":
-      return t("mcp.filter.failing");
     default:
       return t("mcp.filter.all");
   }
 }
 
-/** 运行状态里的一行（可能是 undefined：运行状态还没读到 / 接口失败）。 */
-export type RuntimeRow = RuntimeServerView | undefined;
-
-/** 一行是不是「有错误」：连接失败，或挂着但没有工具（断线）。 */
-export function isFailing(row: RuntimeRow): boolean {
-  return row?.state === "failed" || row?.state === "disconnected";
-}
-
-export function matchesFilter(view: ServerView, row: RuntimeRow, filter: ServerFilterId): boolean {
+/** 一台服务器是否属于某个分段（只看配置里的 disabled，与连接状态无关）。 */
+export function matchesFilter(view: ServerView, filter: ServerFilterId): boolean {
   switch (filter) {
     case "enabled":
       return !view.disabled;
     case "disabled":
       return view.disabled;
-    case "failing":
-      return !view.disabled && isFailing(row);
     default:
       return true;
   }
@@ -129,101 +121,30 @@ export function matchesQuery(view: ServerView, query: string): boolean {
   return haystack.includes(text);
 }
 
-/** 运行状态 → 名字到行的映射（列表与筛选共用）。 */
-export function runtimeIndex(runtime: RuntimeStatus | undefined): Map<string, RuntimeServerView> {
-  const map = new Map<string, RuntimeServerView>();
-  for (const row of runtime?.servers ?? []) map.set(row.name, row);
-  return map;
-}
-
 /** 分段上的计数（工具栏用）。 */
-export function serverFilterCounts(
-  servers: readonly ServerView[],
-  rows: ReadonlyMap<string, RuntimeServerView>,
-): Record<ServerFilterId, number> {
-  const counts: Record<ServerFilterId, number> = { all: 0, enabled: 0, disabled: 0, failing: 0 };
+export function serverFilterCounts(servers: readonly ServerView[]): Record<ServerFilterId, number> {
+  const counts: Record<ServerFilterId, number> = { all: 0, enabled: 0, disabled: 0 };
   for (const view of servers) {
     counts.all += 1;
     for (const id of SERVER_FILTERS) {
       if (id === "all") continue;
-      if (matchesFilter(view, rows.get(view.serverName), id)) counts[id] += 1;
+      if (matchesFilter(view, id)) counts[id] += 1;
     }
   }
   return counts;
 }
 
 /** 搜索 + 筛选之后的服务器（保持配置顺序）。 */
-export function visibleServers(
-  servers: readonly ServerView[],
-  rows: ReadonlyMap<string, RuntimeServerView>,
-  query: string,
-  filter: ServerFilterId,
-): ServerView[] {
-  return servers.filter((view) => matchesQuery(view, query) && matchesFilter(view, rows.get(view.serverName), filter));
+export function visibleServers(servers: readonly ServerView[], query: string, filter: ServerFilterId): ServerView[] {
+  return servers.filter((view) => matchesQuery(view, query) && matchesFilter(view, filter));
 }
 
-/** 状态点（kit 的四种色调）：连接中 = 琥珀，有错误 = 红，已连接 / 有会话挂着 = 强调色，其余 = 灰。 */
-export function serverStatusTone(view: ServerView, row: RuntimeRow): "idle" | "active" | "failed" | "cooling" {
-  if (view.disabled || row === undefined) return "idle";
-  switch (row.state) {
-    case "connecting":
-      return "cooling";
-    case "failed":
-    case "disconnected":
-      return "failed";
-    case "connected":
-      return "active";
-    case "session":
-      return row.sessions > 0 ? "active" : "idle";
-    default:
-      return "idle";
-  }
-}
-
-/** 状态点的悬停文字（灰色不需要说明时 undefined）。 */
-export function statusTitle(tone: "idle" | "active" | "failed" | "cooling"): string | undefined {
-  switch (tone) {
-    case "active":
-      return t("mcp.row.stateActive");
-    case "failed":
-      return t("mcp.row.stateFailed");
-    case "cooling":
-      return t("mcp.row.stateConnecting");
-    default:
-      return undefined;
-  }
-}
-
-/** 行副标题：紧凑的命令 / 地址，后面接一小段状态（「4 个工具」「按会话」）。 */
-export function rowSubtitleText(view: ServerView, row: RuntimeRow): string {
-  const base = compactSummaryText(view as unknown as Record<string, unknown>);
-  if (view.disabled || row === undefined) return base;
-  if (row.state === "session") return base + " " + t("mcp.row.session");
-  if (row.state === "connected") return base + " " + t("mcp.row.tools", { count: row.tools.length });
-  return base;
+/** 行副标题：紧凑的命令 / 地址（0.9.0 起不再追加「N 个工具」「按会话」这类运行信息）。 */
+export function rowSubtitleText(view: ServerView): string {
+  return compactSummaryText(view as unknown as Record<string, unknown>);
 }
 
 /** 行副标题的悬停提示：完整命令 / 地址。 */
 export function rowSubtitleTitle(view: ServerView): string {
   return viewSummaryText(view);
-}
-
-/** 抽屉「工具」小节的状态文字。 */
-export function stateText(view: ServerView, row: RuntimeRow): string {
-  if (view.disabled) return t("mcp.state.disabled");
-  if (row === undefined) return t("mcp.state.unknown");
-  switch (row.state) {
-    case "connecting":
-      return t("mcp.state.connecting");
-    case "connected":
-      return t("mcp.state.connected", { count: row.tools.length });
-    case "disconnected":
-      return t("mcp.state.disconnected");
-    case "failed":
-      return t("mcp.state.failed", { message: row.error ?? t("mcp.state.noReason") });
-    case "session":
-      return t("mcp.state.session", { count: row.sessions });
-    default:
-      return t("mcp.state.unknown");
-  }
 }

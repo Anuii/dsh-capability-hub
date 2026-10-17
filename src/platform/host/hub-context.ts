@@ -29,6 +29,13 @@ export interface PlatformConfig {
      * mcp 工具退回桩实现（描述里写明原因）。见 docs/DEV.md「降级验证」。
      */
     failModules?: string[];
+    /**
+     * 调试开关：mcp-registry 返回固定夹具、完全不联网（registry 很慢或没有外网时走查界面用）。
+     *
+     * 只有 devOverrides.enabled === true 时才生效（外壳在 shell.ts 里把关）；默认 false 走真实网络，
+     * 包内 cordis.patch.yml 绝不写它。夹具内容见 src/mcp/registry/module.ts 的 FIXTURE_SERVERS。
+     */
+    registryFixture?: boolean;
   };
 }
 

@@ -161,6 +161,62 @@ describe("host modules: 依赖缺失时的降级", () => {
     }
   });
 
+  it("mcp-registry 依赖 mcp-config：上游缺失时带着中文原因降级", async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), "host-modules-test-"));
+    const logger = recordingLogger();
+    try {
+      const entries = entriesFor({
+        mcpClient: { status: "failed", message: "官方插件没加载" },
+        hubHome: dir,
+        logger,
+      });
+      const entry = entryNamed(entries, "mcp-registry");
+      assert.throws(() => entry.load(makeCtx(dir, logger)), {
+        message: "依赖 mcp-config 未加载：拿不到现有服务器名，Registry 的建议名无法去重",
+      });
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
+  it("mcp-registry：registryFixture 透传（夹具模式不联网），existingNames 取自已挂载的 mcp-config", async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), "host-modules-test-"));
+    const logger = recordingLogger();
+    try {
+      const ctx = makeCtx(dir, logger);
+      const entries = createFeatureModuleEntries({
+        ctx,
+        mcpClient: { status: "failed", message: "官方插件没加载" },
+        root: {} as never,
+        listTools: () => [],
+        yaml: { status: "failed", message: "测试里不加载技能模块" } as never,
+        state: makeFeatureState(),
+        hostCtx: {},
+        registryFixture: true,
+      });
+      const registry = new ModuleRegistry(ctx, {});
+      await registry.loadAll([entryNamed(entries, "mcp-config"), entryNamed(entries, "mcp-registry")]);
+      assert.deepEqual(registry.degraded(), [], "mcp-config 起来后 mcp-registry 不该降级");
+      type Handler = (req: { query: Record<string, string>; body: unknown; signal: AbortSignal }) => Promise<unknown>;
+      const mod = registry.get<{ routes: Record<string, Handler> }>("mcp-registry");
+      assert.ok(mod !== undefined);
+      assert.deepEqual(Object.keys(mod.routes).sort(), ["GET mcp/registry/detail", "GET mcp/registry/search"]);
+      // 夹具模式：一次网络都不发就能拿到两条固定 server（证明 registryFixture 真的传到了模块里）
+      const data = (await mod.routes["GET mcp/registry/search"]!({
+        query: { q: "demo" },
+        body: undefined,
+        signal: new AbortController().signal,
+      })) as { items: { name: string }[] };
+      assert.deepEqual(
+        data.items.map((item) => item.name),
+        ["io.example/remote-demo", "io.example/npm-demo"],
+      );
+      await registry.disposeAll();
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
   it("mcp-config 没加载 ⇒ mcp-runtime 抛出「依赖 mcp-config 未加载」", async () => {
     const dir = await fs.mkdtemp(join(tmpdir(), "host-modules-test-"));
     const logger = recordingLogger();

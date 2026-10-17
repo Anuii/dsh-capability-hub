@@ -257,7 +257,7 @@ test("回归：真实路由表的形状（同路径 GET + POST skills/settings�
   };
   const registry = new ModuleRegistry(ctx, {});
   try {
-    // 与外壳 createShell 的第 2 步同源：五个真实模块按依赖顺序装载，路由表就是它们填出来的。
+    // 与外壳 createShell 的第 2 步同源：六个真实模块按依赖顺序装载，路由表就是它们填出来的。
     await registry.loadAll(
       createFeatureModuleEntries({
         ctx,

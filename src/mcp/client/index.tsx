@@ -2,29 +2,32 @@
  * MCP 服务器标签页（UI-DESIGN §5）：工具栏 + 列表 + 一个抽屉。
  *
  * 页面自上而下只有两样常驻元素：**工具栏、列表**（页头与标签由外壳提供）。其余全部按需出现：
- *   - 详情抽屉：点行打开，概览 / 工具（状态 + 模型看到的工具名 + 重新连接）/ 环境变量与请求头，
- *     底部删除｜JSON 编辑；
+ *   - 详情抽屉：点行打开，概览 / 环境变量与请求头，底部删除｜JSON 编辑；
  *   - JSON 编辑在**同一个抽屉里**切换（0.7.0 起修改服务器只用 JSON，D-C3）；
- *   - 「添加服务器」打开粘贴 JSON 的模态框（0.7.0 起唯一的添加方式，D-C2）。
+ *   - 「添加服务器」打开模态框：粘贴 JSON（0.7.0 起的添加方式，D-C2）与从 Official Registry 搜索
+ *     （0.9.0 新增）两种方式，分段切换；两个面板都常驻，切换不丢已经粘贴的 JSON。
+ *
+ * 0.9.0 起页面上没有运行状态：没有状态点与状态文字、没有「工具」一节与「重新连接」，
+ * 「MCP」标签也不上报红点。连接全靠 DSH 官方 MCP 插件（ADR-0010）；连不上只记在宿主
+ * GET health 的 mcpServers 与 boot.json 里，要重试就重启 DSH。
  *
  * 职责划分：
  *   - servers-store.ts：配置的读取与写操作、保存后的跟进、页面提示（可单测）；
- *   - runtime-store.ts：运行状态（轮询与重读都在里面）；
- *   - 本文件：把两个仓库接到界面上——抽屉的路由、确认对话框的开合、错误边界；
+ *   - 本文件：把仓库接到界面上——抽屉的路由、确认对话框的开合、错误边界；
  *   - list.tsx / detail.tsx / json.tsx / dialogs.tsx / intake/json-paste.tsx：视图；
  *   - json-model.ts：JSON 编辑的纯逻辑；view-model.ts：列表与展示逻辑；data.ts：接口封装；strings.ts：全部文案。
  *
  * 决策落点：D-C1（只存改过的字段）、D-C2 / D-C3（只用 JSON）、D-C4（保存时只查 PATH）、
- * D-C5（每个服务器单独启停；env/headers 默认遮罩，显式「显示」才拿明文）、ADR-0010（官方 MCP 插件连接）。
+ * D-C5（每个服务器单独启停；env/headers 默认遮罩，显式「显示」才拿明文）。
  */
 
 import * as React from "react";
-import { Button, Modal, Switch, Toast } from "@deepseek-ai/dsh-client-ui-primitives";
+import { Button, Modal, SegmentedControl, Switch, Toast } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { TabProps } from "../../platform/client/tab-props.ts";
 import { Banner, Drawer, EmptyState, SkeletonRows, Toolbar, kit, useStoreState } from "../../kit/index.ts";
 import { JsonPasteView } from "./intake/json-paste.tsx";
-import { runtimeApi, serversApi } from "./data.ts";
-import { createRuntimeStore } from "./runtime-store.ts";
+import { RegistrySearchView } from "./registry/registry-view.tsx";
+import { serversApi } from "./data.ts";
 import { createServersStore } from "./servers-store.ts";
 import { ServerDetailBody } from "./detail.tsx";
 import { DeleteServerDialog } from "./dialogs.tsx";
@@ -34,7 +37,6 @@ import { serverJsonText } from "./json-model.ts";
 import {
   SERVER_FILTERS,
   filterLabel,
-  runtimeIndex,
   serverFilterCounts,
   viewSummaryText,
   visibleServers,
@@ -49,6 +51,9 @@ injectMcpStyles();
 
 /** 抽屉里当前显示的内容。 */
 type Panel = { kind: "detail"; name: string } | { kind: "json"; name: string; text: string };
+
+/** 「添加服务器」对话框里的两种方式（0.9.0）。切换只切 hidden，两个面板都常驻，粘贴过的 JSON 不丢。 */
+type AddMode = "paste" | "registry";
 
 /** 抽屉头部的一行副标题：太长就截断（完整值在概览里）。 */
 function drawerSubtitle(text: string): string {
@@ -79,28 +84,23 @@ class TabErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
-function McpTabInner(props: TabProps): React.ReactElement {
+/** 本页不需要外壳给 TabProps（没有当前工作区、也不上报标签红点，见文件头）。 */
+function McpTabInner(): React.ReactElement {
   const [panel, setPanel] = React.useState<Panel | undefined>(undefined);
-  const [pasteOpen, setPasteOpen] = React.useState<boolean>(false);
+  const [addOpen, setAddOpen] = React.useState<boolean>(false);
+  /** 添加服务器的两种方式：粘贴 JSON（默认）与从 Official Registry 搜索。 */
+  const [addMode, setAddMode] = React.useState<AddMode>("paste");
   const [pendingDelete, setPendingDelete] = React.useState<ServerView | undefined>(undefined);
   const [query, setQuery] = React.useState<string>("");
   const [filter, setFilter] = React.useState<ServerFilterId>("all");
-  /** 运行状态只有这一份：服务器行、详情抽屉、标签红点都读它（runtime-store.ts）。 */
-  const runtimeStore = React.useMemo(() => createRuntimeStore(runtimeApi), []);
-  const store = React.useMemo(() => createServersStore(serversApi, runtimeStore), [runtimeStore]);
-  const runtime = useStoreState(runtimeStore.state).status;
-  const { config, loadError, loading, busy, deleting, reconnecting, notice } = useStoreState(store.state);
-  React.useEffect(() => runtimeStore.startPolling(), [runtimeStore]);
+  const store = React.useMemo(() => createServersStore(serversApi), []);
+  const { config, loadError, loading, busy, deleting, notice } = useStoreState(store.state);
   React.useEffect(() => void store.reload(), [store]);
 
   const servers = config?.servers ?? [];
   const names = servers.map((server) => server.serverName);
-  const rows = React.useMemo(() => runtimeIndex(runtime), [runtime]);
-  const visible = React.useMemo(() => visibleServers(servers, rows, query, filter), [servers, rows, query, filter]);
-  const counts = React.useMemo(() => serverFilterCounts(servers, rows), [servers, rows]);
-  /** 有服务器连接失败时让外壳在「MCP」标签旁画红点。 */
-  const reportAttention = props.reportAttention;
-  React.useEffect(() => reportAttention?.("mcp", counts.failing > 0), [reportAttention, counts.failing]);
+  const visible = React.useMemo(() => visibleServers(servers, query, filter), [servers, query, filter]);
+  const counts = React.useMemo(() => serverFilterCounts(servers), [servers]);
 
   const notify = (text: string, tone?: "success"): void => store.notify(text, tone);
   const onSaved = (server: ServerView, warnings: readonly string[]): void => {
@@ -146,7 +146,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
         <EmptyState
           title={t("mcp.empty.title")}
           description={t("mcp.empty.hint")}
-          action={{ label: t("mcp.empty.add"), onClick: () => setPasteOpen(true), testId: "mcp-empty-add" }}
+          action={{ label: t("mcp.empty.add"), onClick: () => setAddOpen(true), testId: "mcp-empty-add" }}
           testId="mcp-empty"
         />
       );
@@ -161,7 +161,6 @@ function McpTabInner(props: TabProps): React.ReactElement {
     return (
       <ServerList
         servers={visible}
-        rows={rows}
         busy={busy}
         onToggle={(view: ServerView, disabled: boolean) => void store.toggle(view, disabled)}
         onOpen={(view: ServerView) => setPanel({ kind: "detail", name: view.serverName })}
@@ -181,15 +180,9 @@ function McpTabInner(props: TabProps): React.ReactElement {
           value: filter,
           onChange: (id: string) => setFilter(id as ServerFilterId),
           label: t("mcp.filter.label"),
-          // 「有错误 0」调淡：没有错误时不抢眼。
-          items: SERVER_FILTERS.map((id) => ({
-            id,
-            label: filterLabel(id),
-            count: counts[id],
-            quiet: id === "failing" && counts[id] === 0,
-          })),
+          items: SERVER_FILTERS.map((id) => ({ id, label: filterLabel(id), count: counts[id] })),
         }}
-        primary={{ label: t("mcp.add.button"), onClick: () => setPasteOpen(true), testId: "mcp-add" }}
+        primary={{ label: t("mcp.add.button"), onClick: () => setAddOpen(true), testId: "mcp-add" }}
       />
       {warnings.length === 0 ? null : (
         <Banner tone="warn" testId="mcp-config-warnings">
@@ -245,13 +238,7 @@ function McpTabInner(props: TabProps): React.ReactElement {
             })}
       >
         {detailView !== undefined ? (
-          <ServerDetailBody
-            view={detailView}
-            row={rows.get(detailView.serverName)}
-            reconnecting={reconnecting === detailView.serverName}
-            onReconnect={() => void store.reconnect(detailView.serverName)}
-            showToast={notify}
-          />
+          <ServerDetailBody view={detailView} showToast={notify} />
         ) : panel !== undefined && panel.kind === "json" ? (
           <JsonEditor
             originalName={panel.name}
@@ -261,20 +248,58 @@ function McpTabInner(props: TabProps): React.ReactElement {
           />
         ) : null}
       </Drawer>
-      {/* 添加服务器：粘贴 JSON。 */}
+      {/* 添加服务器：两种方式（粘贴 JSON / 从 Official Registry 搜索）。 */}
       <Modal
-        open={pasteOpen}
-        onClose={() => setPasteOpen(false)}
-        title={t("mcp.paste.title")}
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title={t("mcp.add.title")}
         closeLabel={t("mcp.close")}
         className={styles.intakeModal}
       >
         <div className={kit.scope}>
-          <JsonPasteView
-            existingNames={names}
-            onSaved={(saved: readonly string[]) => store.batchSaved(saved)}
-            showToast={notify}
-          />
+          <div className={styles.intakeBody}>
+            <div className={styles.addModes} data-testid="mcp-add-modes">
+              <SegmentedControl
+                id="mcp-add-mode"
+                label={t("mcp.add.modeLabel")}
+                value={addMode}
+                options={[
+                  { value: "paste", label: t("mcp.add.modePaste") },
+                  { value: "registry", label: t("mcp.add.modeRegistry") },
+                ]}
+                onChange={(next: string) => setAddMode(next === "registry" ? "registry" : "paste")}
+              />
+            </div>
+            {/* 两个面板都保持挂载（切换只切 hidden）：从 Registry 搜索看一眼再切回来，粘贴的 JSON 还在。 */}
+            <div
+              className={styles.addPanel}
+              id="mcp-add-mode-paste-panel"
+              role="tabpanel"
+              aria-labelledby="mcp-add-mode-paste"
+              hidden={addMode !== "paste"}
+              data-testid="mcp-add-paste-panel"
+            >
+              <JsonPasteView
+                existingNames={names}
+                onSaved={(saved: readonly string[]) => store.batchSaved(saved)}
+                showToast={notify}
+              />
+            </div>
+            <div
+              className={styles.addPanel}
+              id="mcp-add-mode-registry-panel"
+              role="tabpanel"
+              aria-labelledby="mcp-add-mode-registry"
+              hidden={addMode !== "registry"}
+              data-testid="mcp-add-registry-panel"
+            >
+              <RegistrySearchView
+                existingNames={names}
+                onSaved={(saved: readonly string[]) => store.batchSaved(saved)}
+                showToast={notify}
+              />
+            </div>
+          </div>
         </div>
       </Modal>
       <DeleteServerDialog
@@ -296,11 +321,16 @@ function McpTabInner(props: TabProps): React.ReactElement {
   );
 }
 
-/** MCP 标签页（对外只导出这一个）。 */
-export function McpTab(props: TabProps): React.ReactElement {
+/**
+ * MCP 标签页（对外只导出这一个）。
+ *
+ * 签名照旧接受 TabProps（外壳统一传）：本页 0.9.0 起不读其中任何字段——
+ * 不需要当前工作区，也不再上报标签红点。
+ */
+export function McpTab(_props: TabProps): React.ReactElement {
   return (
     <TabErrorBoundary>
-      <McpTabInner {...props} />
+      <McpTabInner />
     </TabErrorBoundary>
   );
 }

@@ -1,9 +1,11 @@
 /**
  * 客户端 MCP 页的测试夹具（纯数据，不碰 DOM / 网络）。
+ *
+ * 0.9.0 起没有运行状态的夹具（页面不读它）：连接状态只在宿主 GET health 的 mcpServers 里，
+ * 由宿主侧的测试覆盖。
  */
 
 import type { ConfigPayload, ServerView } from "../../../src/mcp/contract/config.ts";
-import type { RuntimeServerView, RuntimeStatus } from "../../../src/mcp/contract/runtime.ts";
 
 /** 造一个 ServerView（默认是「什么都没设置」的 stdio 服务器）。 */
 export function makeServerView(overrides: Partial<ServerView> = {}): ServerView {
@@ -28,19 +30,4 @@ export function makeServerView(overrides: Partial<ServerView> = {}): ServerView 
 
 export function makeConfig(servers: ServerView[], overrides: Partial<ConfigPayload> = {}): ConfigPayload {
   return { servers, warnings: [], ...overrides };
-}
-
-/** 一行运行状态（默认：全局、已连接、两个工具）。 */
-export function makeRow(overrides: Partial<RuntimeServerView> & { name: string }): RuntimeServerView {
-  return {
-    scope: "global",
-    state: "connected",
-    tools: [{ name: "mcp__" + overrides.name + "__echo" }, { name: "mcp__" + overrides.name + "__ping" }],
-    sessions: 0,
-    ...overrides,
-  };
-}
-
-export function makeRuntime(rows: RuntimeServerView[]): RuntimeStatus {
-  return { servers: rows };
 }
