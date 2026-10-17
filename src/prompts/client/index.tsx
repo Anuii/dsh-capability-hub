@@ -19,7 +19,7 @@ import { Banner, Toolbar, useStoreState } from "../../kit/index.ts";
 import type { MenuItem } from "../../kit/index.ts";
 import { promptsApi } from "./data.ts";
 import { createPromptsStore } from "./prompts-store.ts";
-import { budgetText, budgetTitle, createOptions, defaultCreateLocation } from "./view-model.ts";
+import { budgetText, budgetTitle, createOptions, defaultCreateLocation, layerOfFile } from "./view-model.ts";
 import { PromptDetailDrawer } from "./detail.tsx";
 import { PromptList } from "./list.tsx";
 import { PromptTrashDrawer } from "./trash.tsx";
@@ -85,6 +85,8 @@ function PromptsTabInner(props: TabProps): React.ReactElement {
   const [saving, setSaving] = React.useState<boolean>(false);
 
   const options = React.useMemo(() => (list === undefined ? [] : createOptions(list)), [list]);
+  /** 待启停的文件所在的层：确认框里那句 git 提示按它判断（全局层恒 false）。 */
+  const toggleLayer = pendingToggle === undefined ? undefined : layerOfFile(list, pendingToggle.file.id);
   const openCreate = (): void => {
     setCreateError(undefined);
     setCreateFieldErrors([]);
@@ -225,7 +227,7 @@ function PromptsTabInner(props: TabProps): React.ReactElement {
       <TogglePromptDialog
         file={pendingToggle?.file}
         next={pendingToggle?.next}
-        inGit={list?.inGit === true}
+        inGit={toggleLayer?.inGit === true}
         busy={pendingToggle !== undefined && busyIds.has(pendingToggle.file.id)}
         error={toggleError}
         onConfirm={confirmToggle}

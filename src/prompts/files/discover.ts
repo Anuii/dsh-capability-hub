@@ -226,12 +226,15 @@ export async function discoverPrompts(ctx: HubContext, options: DiscoverOptions)
     isWorkspace: false,
     files: globalFiles,
     canCreate: await canCreateIn(globalDir, settings.fileNames),
+    // 全局提示词在 DSH 主目录里，不属于任何项目：改名不会被任何仓库的 git 记下来。
+    inGit: false,
   });
 
   // ---- 项目层 ----
   let projectRoot: string | undefined;
   let inGit = false;
   let workspace: string | undefined;
+  let found: { root: string; inGit: boolean } | undefined;
   const rawWorkspace = typeof options.workspace === "string" ? options.workspace.trim() : "";
   if (rawWorkspace !== "") {
     const resolved = path.resolve(rawWorkspace);
@@ -239,7 +242,7 @@ export async function discoverPrompts(ctx: HubContext, options: DiscoverOptions)
     else warnings.push("工作区目录不存在或不是目录：" + resolved + "（只显示全局提示词）");
   }
   if (workspace !== undefined) {
-    const found = await findProjectRoot(workspace, settings.projectRootMarkers);
+    found = await findProjectRoot(workspace, settings.projectRootMarkers);
     projectRoot = found.root;
     inGit = found.inGit;
     for (const dir of layerDirs(projectRoot, workspace)) {
@@ -267,6 +270,8 @@ export async function discoverPrompts(ctx: HubContext, options: DiscoverOptions)
         isWorkspace: isWs,
         files,
         canCreate: (isRoot || isWs) && (await canCreateIn(dir, settings.fileNames)),
+        // 项目层都在项目根之下，项目根命中标记时整棵树都在同一个仓库里。
+        inGit: found?.inGit === true,
       });
     }
   }

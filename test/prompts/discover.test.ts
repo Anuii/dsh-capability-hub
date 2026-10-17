@@ -32,6 +32,11 @@ test("发现：没有 .git 时项目根就是工作区本身（只有一层）",
     assert.equal(snap.discovery.layers.length, 2, "全局层 + 工作区一层");
     assert.equal(snap.discovery.layers[1]!.isProjectRoot, true);
     assert.equal(snap.discovery.layers[1]!.isWorkspace, true);
+    assert.deepEqual(
+      snap.discovery.layers.map((layer) => layer.inGit),
+      [false, false],
+      "没有 .git：全局层与项目层都不在仓库里",
+    );
     assert.deepEqual(filesOf(snap), ["global:~/.dsh/AGENTS.md", "project:./AGENTS.md"]);
   } finally {
     await area.cleanup();
@@ -62,6 +67,11 @@ test("发现：有 .git（目录）时项目根上移，逐层到工作区（含
     assert.deepEqual(
       snap.discovery.layers.map((layer) => layer.isWorkspace),
       [false, false, false, true],
+    );
+    assert.deepEqual(
+      snap.discovery.layers.map((layer) => layer.inGit),
+      [false, true, true, true],
+      "项目根的 .git 管整棵树；全局层恒 false",
     );
     assert.deepEqual(filesOf(snap), [
       "global:~/.dsh/AGENTS.md",

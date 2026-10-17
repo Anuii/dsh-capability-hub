@@ -79,6 +79,13 @@ export interface PromptLayer {
    * AGENTS.md.disabled 都不存在；只有全局、项目根、工作区三层可能为 true）
    */
   canCreate: boolean;
+  /**
+   * 这一层的目录在 git 仓库里（项目根由 projectRootMarkers 命中）。启停是原地改名，为 true 时
+   * 确认框多一句「git 会显示文件被改名」。
+   *
+   * **全局层恒为 false**：全局提示词在 DSH 主目录里，不属于任何项目，git 不会记录它的改名。
+   */
+  inGit: boolean;
 }
 
 /** GET prompts/list 的 data。 */
@@ -87,8 +94,6 @@ export interface PromptsListResult {
   layers: PromptLayer[];
   /** 项目根绝对路径（有工作区时） */
   projectRoot?: string;
-  /** 项目根由 projectRootMarkers 命中（默认 .git；停用、启用会让 git 显示改名） */
-  inGit: boolean;
   budget: {
     /** DSH 的提示词预算（字节） */
     maxBytes: number;

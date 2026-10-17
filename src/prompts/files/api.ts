@@ -135,7 +135,6 @@ export function createPromptsFilesImpl(ctx: HubContext, deps: PromptsFilesDeps):
       const snap = await discover(opts.workspace);
       const result: PromptsListResult = {
         layers: snap.discovery.layers,
-        inGit: snap.discovery.inGit,
         budget: { maxBytes: settings.maxBytes, usedBytes: snap.usedBytes, source: settings.source },
         warnings: [...snap.discovery.warnings, ...settings.notes],
       };

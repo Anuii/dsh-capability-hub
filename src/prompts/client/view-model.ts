@@ -87,6 +87,15 @@ export function layerLabel(layer: PromptLayer): string {
   return layer.displayDir;
 }
 
+/**
+ * 这个文件在哪一层（启停是原地改名，确认框里那句 git 提示按**文件所在层**给：
+ * 全局层恒不在仓库里，只有项目层可能命中）。找不到层时返回 undefined。
+ */
+export function layerOfFile(list: PromptsListResult | undefined, id: string): PromptLayer | undefined {
+  if (list === undefined) return undefined;
+  return list.layers.find((layer) => layer.files.some((file) => file.id === id));
+}
+
 /** 一行副标题的各个片段（顺序即显示顺序）。 */
 function subtitleParts(file: PromptFile, layer: PromptLayer | undefined): string[] {
   const parts: string[] = [];

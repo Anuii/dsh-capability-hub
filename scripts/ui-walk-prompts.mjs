@@ -162,12 +162,11 @@ try {
   );
   await hub.evaluate(sel(GLOBAL_ROW + "-toggle") + ".querySelector('[role=switch]').click()");
   check(await hub.waitFor(sel("prompts-toggle-dialog"), 8000), "停用要先确认");
-  // inGit 由宿主给：仓库里的项目根才会有「git 会显示文件被改名」这句提示。
-  const inGit = (await apiGet("prompts/list"))?.inGit === true;
-  check(
-    (await hub.exists("[data-testid=prompts-toggle-git]")) === inGit,
-    inGit ? "inGit 时确认框里提示「git 会显示文件被改名」" : "不在 git 仓库里时不提示改名",
-  );
+  // git 提示按**文件所在层**给：全局层的目录不属于任何项目，即使工作区是 git 仓库也不该出现。
+  const layers = (await apiGet("prompts/list"))?.layers ?? [];
+  const globalLayer = layers.find((layer) => layer.scope === "global");
+  check(globalLayer?.inGit === false, "宿主：全局层不算 git 仓库");
+  check((await hub.exists("[data-testid=prompts-toggle-git]")) === false, "全局行的启停确认里不提 git 改名");
   await hub.clickTestId("prompts-toggle-confirm");
   check(await hub.waitFor(text("已停用"), 10000), "停用给出提示");
   check(

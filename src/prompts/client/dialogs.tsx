@@ -1,7 +1,8 @@
 /**
  * 提示词页的四个确认对话框：新建（选位置）、启停确认、回收站恢复确认、彻底删除 / 清空。
  *
- * 启停是**原地改名**：在 git 仓库里 git 会显示文件被改名，所以 inGit 时确认框里多一句提示。
+ * 启停是**原地改名**：文件所在的层在 git 仓库里时，git 会显示文件被改名，所以 inGit 时确认框里多一句提示。
+ * inGit 按**文件所在层**给（全局层恒 false：DSH 主目录不属于任何项目）。
  * 组件的任何异常都会被 index.tsx 的错误边界兜住，且这里不主动 throw。
  */
 import * as React from "react";
@@ -112,7 +113,7 @@ export interface TogglePromptDialogProps {
   file: PromptFile | undefined;
   /** 目标状态：true = 要启用，false = 要停用 */
   next: boolean | undefined;
-  /** 项目根下有 .git：改名会被 git 记下来 */
+  /** 文件所在的层在 git 仓库里：改名会被 git 记下来（全局层恒 false） */
   inGit: boolean;
   busy: boolean;
   error: string | undefined;

@@ -48,7 +48,11 @@ test("api：list 的预算、warnings、loaderDisabled、projectRoot", async () 
     await writeAt(area, "workspace/AGENTS.md", "w\n");
     const list = await implOf(area).list({ workspace: area.workspace });
     assert.equal(list.layers.length, 2);
-    assert.equal(list.inGit, false);
+    assert.deepEqual(
+      list.layers.map((layer) => layer.inGit),
+      [false, false],
+      "没有 .git 时两层都不在仓库里；全局层恒 false",
+    );
     assert.equal(list.projectRoot, area.workspace);
     assert.equal(list.budget.maxBytes, 65536);
     assert.equal(list.budget.source, "default");

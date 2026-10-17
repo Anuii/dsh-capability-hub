@@ -52,17 +52,17 @@ function normalizeLayer(raw: Partial<PromptLayer>): PromptLayer {
     isWorkspace: raw.isWorkspace === true,
     files: Array.isArray(raw.files) ? raw.files.map((file) => normalizeFile(file)) : [],
     canCreate: raw.canCreate === true,
+    inGit: raw.inGit === true,
   };
 }
 
-/** GET prompts/list ?workspace= → { layers, projectRoot?, inGit, budget, loaderDisabled?, warnings }。 */
+/** GET prompts/list ?workspace= → { layers, projectRoot?, budget, loaderDisabled?, warnings }；git 提示按层给（layer.inGit）。 */
 export async function listPrompts(workspace: string | undefined): Promise<PromptsListResult> {
   const data = await api.get<Partial<PromptsListResult>>("prompts/list", workspaceQuery(workspace));
   const budget = data?.budget;
   return {
     layers: Array.isArray(data?.layers) ? data.layers.map((layer) => normalizeLayer(layer)) : [],
     ...(typeof data?.projectRoot === "string" ? { projectRoot: data.projectRoot } : {}),
-    inGit: data?.inGit === true,
     budget: {
       maxBytes: typeof budget?.maxBytes === "number" ? budget.maxBytes : 65536,
       usedBytes: typeof budget?.usedBytes === "number" ? budget.usedBytes : 0,

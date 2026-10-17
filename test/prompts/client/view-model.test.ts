@@ -13,6 +13,7 @@ import {
   formatDateTime,
   groupPrompts,
   layerLabel,
+  layerOfFile,
   promptRowView,
 } from "../../../src/prompts/client/view-model.ts";
 import { makeFile, makeLayer, makeList } from "./fixtures.ts";
@@ -80,10 +81,19 @@ test("分组：全局一组、当前工作区一组；组内每行带所在层�
   assert.match(groups[1].rows[1].subtitle, /^当前工作区 · 500 B$/);
 });
 
+test("启停提示的 git 判断按文件所在层：全局层不在仓库里，项目层才可能命中", () => {
+  const list = makeList();
+  const globalFile = list.layers[0]!.files[0]!;
+  const projectFile = list.layers[1]!.files[0]!;
+  assert.equal(layerOfFile(list, globalFile.id)?.inGit, false, "全局层恒 false");
+  assert.equal(layerOfFile(list, projectFile.id)?.inGit, true, "项目层跟随项目根的标记");
+  assert.equal(layerOfFile(list, "不存在的 id"), undefined);
+  assert.equal(layerOfFile(undefined, projectFile.id), undefined, "列表还没到时按「不提示」处理");
+});
+
 test("没有工作区时：工作区组只有一句说明", () => {
   const list = makeList({
     layers: [makeLayer({ scope: "global", isProjectRoot: false, displayDir: "~/.dsh" })],
-    inGit: false,
   });
   const groups = groupPrompts(list);
   assert.equal(groups[1].rows.length, 0);
