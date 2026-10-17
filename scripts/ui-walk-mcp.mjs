@@ -192,6 +192,32 @@ try {
   );
   await hub.evaluate("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
   await sleep(400);
+
+  // 10. 结果很多时：列表在固定高度里滚动，滚到底后最后一条也能点开（修复「选项溢出窗口」）
+  await hub.clickTestId("mcp-add");
+  await hub.waitFor(sel("mcp-add-modes"), 8000);
+  await hub.evaluate(
+    "(() => { const tabs = [...document.querySelectorAll('[data-testid=mcp-add-modes] [role=tab]')]; const t = tabs.find((n) => (n.textContent || '').includes('Registry')); if (t) t.click(); return true; })()",
+  );
+  await hub.setInput("mcp-registry-query", "many");
+  await hub.clickTestId("mcp-registry-search");
+  await hub.waitFor(sel("mcp-registry-results"), 20000);
+  const manyRows = await hub.evaluate(
+    "[...document.querySelectorAll('[data-testid^=mcp-registry-row-]')].filter((n) => !/^mcp-registry-row-env-/.test(n.getAttribute('data-testid'))).length",
+  );
+  check(manyRows === 12, "夹具的多结果查询返回 12 条", String(manyRows));
+  const scrollInfo = await hub.evaluate(
+    "(() => { const n = document.querySelector('[data-testid=mcp-registry-results-scroll]'); if (!n) return null; return n.scrollHeight > n.clientHeight; })()",
+  );
+  check(scrollInfo === true, "结果多时结果框内部可滚动（不撑破对话框）");
+  const lastVisible = await hub.evaluate(
+    "(() => { const box = document.querySelector('[data-testid=mcp-registry-results-scroll]'); const row = document.querySelector('[data-testid=mcp-registry-row-11]'); if (!box || !row) return false; box.scrollTop = box.scrollHeight; const b = box.getBoundingClientRect(); const r = row.getBoundingClientRect(); return r.bottom <= b.bottom + 1; })()",
+  );
+  check(lastVisible === true, "滚到底后最后一条落在结果框内");
+  await hub.clickTestId("mcp-registry-row-11");
+  check(await hub.waitFor(sel("mcp-registry-preview"), 15000), "最后一条也能点开预览");
+  await hub.evaluate("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+  await sleep(400);
 } catch (error) {
   check(false, "走查中途出错", error instanceof Error ? error.message : String(error));
 } finally {

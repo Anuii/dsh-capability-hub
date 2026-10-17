@@ -400,31 +400,33 @@ export function RegistrySearchView(props: RegistrySearchViewProps): React.ReactE
           <p className={styles.small} data-testid="mcp-registry-count">
             {t("mcp.registry.results", { count: list.length })}
           </p>
-          <ListSurface testId="mcp-registry-results">
-            <ListGroup>
-              {list.map((item, index) => {
-                const row = registryRowView(item);
-                return (
-                  <ListRow
-                    key={item.name + "-" + String(index)}
-                    testId={"mcp-registry-row-" + index}
-                    title={row.heading}
-                    subtitle={row.name + " · " + row.version}
-                    subtitleMono
-                    badges={row.kindLabels.map((label, badgeIndex) => (
-                      <Badge key={badgeIndex} tone="neutral">
-                        {label}
-                      </Badge>
-                    ))}
-                    {...(row.needsEnv === undefined
-                      ? {}
-                      : { note: { text: row.needsEnv, testId: "mcp-registry-row-env-" + index } })}
-                    onOpen={() => openPreview(item)}
-                  />
-                );
-              })}
-            </ListGroup>
-          </ListSurface>
+          <div className={styles.registryResults} data-testid="mcp-registry-results-scroll">
+            <ListSurface testId="mcp-registry-results">
+              <ListGroup>
+                {list.map((item, index) => {
+                  const row = registryRowView(item);
+                  return (
+                    <ListRow
+                      key={item.name + "-" + String(index)}
+                      testId={"mcp-registry-row-" + index}
+                      title={row.heading}
+                      subtitle={row.name + " · " + row.version}
+                      subtitleMono
+                      badges={row.kindLabels.map((label, badgeIndex) => (
+                        <Badge key={badgeIndex} tone="neutral">
+                          {label}
+                        </Badge>
+                      ))}
+                      {...(row.needsEnv === undefined
+                        ? {}
+                        : { note: { text: row.needsEnv, testId: "mcp-registry-row-env-" + index } })}
+                      onOpen={() => openPreview(item)}
+                    />
+                  );
+                })}
+              </ListGroup>
+            </ListSurface>
+          </div>
         </React.Fragment>
       )}
       {nextCursor === undefined ? null : (

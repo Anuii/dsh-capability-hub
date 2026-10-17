@@ -473,6 +473,28 @@ FACTS.registryBlocked = await evaluate("!!document.querySelector('[data-testid=m
 await pair("p25", "mcp-registry-preview");
 await escape();
 
+// 结果很多时：结果框固定高度内部滚动（0.9.2 修复「选项溢出窗口」）
+await clickTestId("mcp-add");
+await sleep(700);
+await evaluate(
+  "(() => { const tabs = [...document.querySelectorAll('[data-testid=mcp-add-modes] [role=tab]')]; const t = tabs.find((n) => (n.textContent || '').includes('Registry')); if (!t) return false; t.click(); return true; })()",
+);
+await sleep(600);
+await evaluate(
+  "(() => { const n = document.querySelector('[data-testid=mcp-registry-query]'); if (!n) return false; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(n, 'many'); n.dispatchEvent(new Event('input', { bubbles: true })); return true; })()",
+);
+await clickTestId("mcp-registry-search");
+await sleep(1200);
+FACTS.registryManyRows = await evaluate(
+  "[...document.querySelectorAll('[data-testid^=mcp-registry-row-]')].filter((n) => !/^mcp-registry-row-env-/.test(n.getAttribute('data-testid'))).length",
+);
+FACTS.registryManyScrollable = await evaluate(
+  "(() => { const n = document.querySelector('[data-testid=mcp-registry-results-scroll]'); return n ? n.scrollHeight > n.clientHeight : null; })()",
+);
+await pair("p29", "mcp-registry-many");
+await escape();
+await sleep(400);
+
 // 连接失败提示（0.9.0 瘦身后唯一的运行状态信息）：临时加一台命令不存在的服务器，截完立刻删掉。
 await clickTestId("mcp-add");
 await sleep(700);

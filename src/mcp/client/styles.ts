@@ -47,6 +47,7 @@ const mcpSheet = defineSheet(
     "registryHead",
     "registryTitle",
     "registryMono",
+    "registryResults",
     "jsonPreview",
     "pasteRows",
     "pasteRow",
@@ -105,11 +106,14 @@ const mcpSheet = defineSheet(
     ".chmcp_warnItem{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}",
     // 添加对话框的两种方式（分段切换 + 两个常驻面板；切换只切换 hidden，粘贴的 JSON 不丢）。
     ".chmcp_addModes{display:flex;align-items:center;gap:8px;min-width:0}",
-    ".chmcp_addPanel{display:flex;flex-direction:column;gap:12px;min-width:0}",
+    // 面板自己滚动：搜索结果、预览里的 env 表单与配置 JSON 都可能比视口高，撑破对话框就够不到了。
+    ".chmcp_addPanel{display:flex;flex-direction:column;gap:12px;min-width:0;max-height:min(72vh,680px);overflow-y:auto;box-sizing:border-box;padding-right:2px}",
     ".chmcp_addPanel[hidden]{display:none}",
     // 从 Registry 搜索：预览头部与只读配置 JSON。
     ".chmcp_registryHead{display:flex;flex-direction:column;gap:4px;min-width:0}",
     ".chmcp_registryTitle{margin:0;font-size:14px;font-weight:500;color:var(--dsw-alias-label-primary)}",
+    // 搜索结果框：固定高度 + 内部滚动（与技能页的搜索框同一思路），结果再多也不会把对话框撑破。
+    ".chmcp_registryResults{max-height:320px;overflow-y:auto;border-radius:10px}",
     '.chmcp_registryMono{margin:0;font-family:var(--ds-font-family-code,"Cascadia Mono",Consolas,Menlo,ui-monospace,monospace);font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}',
     '.chmcp_jsonPreview{margin:0;max-height:260px;overflow:auto;padding:10px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-family:var(--ds-font-family-code,"Cascadia Mono",Consolas,Menlo,ui-monospace,monospace);font-size:12px;line-height:18px;white-space:pre-wrap;overflow-wrap:anywhere}',
     ".chmcp_resultOk{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}",

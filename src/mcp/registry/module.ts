@@ -84,8 +84,33 @@ const FIXTURE_SERVERS: readonly unknown[] = [
   },
 ];
 
-/** 夹具里的搜索：固定两条，**不看 q**（夹具是给界面走查用的确定结果，不是搜索模拟器）。 */
-function fixtureSearchResult(): RegistrySearchResult {
+/** 夹具里「结果很多」的一条：走查与截图用它验证结果列表的滚动（真 registry 搜一次要 10–60 秒，不能靠它）。 */
+export const FIXTURE_MANY_QUERY = "many";
+export const FIXTURE_MANY_COUNT = 12;
+
+/** 夹具里的「结果很多」：12 条同名风格的条目，只用于界面走查。 */
+function fixtureManyResult(): RegistrySearchResult {
+  const items: RegistryItem[] = [];
+  for (let index = 1; index <= FIXTURE_MANY_COUNT; index += 1) {
+    const suffix = String(index).padStart(2, "0");
+    items.push({
+      name: "io.example/many-" + suffix,
+      title: "批量结果示例 " + suffix,
+      description: "用来验证搜索结果很多时列表会在固定高度里滚动，不会把对话框撑破。",
+      version: "1.0." + String(index),
+      kinds: index % 3 === 0 ? ["pypi"] : ["npm"],
+      requiresEnv: index % 4 === 0 ? ["DEMO_KEY"] : [],
+    });
+  }
+  return { items };
+}
+
+/**
+ * 夹具里的搜索：**不看 q**（夹具是给界面走查用的确定结果，不是搜索模拟器）。
+ * 例外：`q` 命中 {@link FIXTURE_MANY_QUERY} 时给 {@link FIXTURE_MANY_COUNT} 条，专门用来验证「结果很多」的滚动。
+ */
+function fixtureSearchResult(q: string): RegistrySearchResult {
+  if (q.trim().toLowerCase() === FIXTURE_MANY_QUERY) return fixtureManyResult();
   return { items: FIXTURE_SERVERS.map((server) => registryItemOf(server)) };
 }
 
@@ -218,7 +243,7 @@ export function createMcpRegistryModule(ctx: HubContext, opts: McpRegistryModule
       const cursor = optionalQuery(req, "cursor");
       if (fixture) {
         ctx.logger.debug("mcp-registry: fixture 打开，搜索「" + q + "」返回固定夹具（不联网）");
-        return fixtureSearchResult();
+        return fixtureSearchResult(q);
       }
       const url = endpoint("v0.1/servers");
       url.searchParams.set("search", q);
