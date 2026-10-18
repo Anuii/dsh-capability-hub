@@ -11,17 +11,21 @@
  */
 
 import * as React from "react";
+import { SegmentedControl } from "@deepseek-ai/dsh-client-ui-primitives";
 import { revealServer } from "./data.ts";
-import { scopeLabel, transportLabel, viewSummaryText } from "./view-model.ts";
+import { transportLabel, viewSummaryText } from "./view-model.ts";
 import { styles } from "./styles.ts";
 import { t } from "./strings.ts";
 import { KeyValue, Section } from "../../kit/index.ts";
-import type { ServerView } from "../contract/config.ts";
+import type { ServerScope, ServerView } from "../contract/config.ts";
 import { errorText } from "../../shared/error-text.ts";
 
 export interface ServerDetailBodyProps {
   view: ServerView;
   showToast(text: string, tone?: "success"): void;
+  /** 改进程归属（全局一份 ↔ 按会话）；在途时传 scopeBusy 让控件置灰。 */
+  onScopeChange(scope: ServerScope): void;
+  scopeBusy?: boolean;
 }
 
 /** 敏感值清单（env / headers）：遮罩值 + 「显示」。 */
@@ -145,7 +149,6 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
     ...(view.cwd === undefined || view.cwd === ""
       ? []
       : [{ label: t("mcp.detail.cwd"), value: view.cwd, mono: true, testId: "mcp-detail-cwd" }]),
-    { label: t("mcp.detail.scope"), value: scopeLabel(view.scope), testId: "mcp-detail-scope" },
     ...(description === undefined || description === ""
       ? []
       : [{ label: t("mcp.detail.description"), value: description, testId: "mcp-detail-description" }]),
@@ -155,6 +158,33 @@ export function ServerDetailBody(props: ServerDetailBodyProps): React.ReactEleme
     <React.Fragment>
       <Section title={t("mcp.detail.overview")} testId="mcp-detail-overview">
         <KeyValue items={overview} testId="mcp-detail-overview-kv" />
+      </Section>
+      {/* 进程归属：0.9.0 之前只能进 JSON 改 scope，这里给了个就地切换的控件（D-C2 的例外）。 */}
+      <Section title={t("mcp.detail.scope")} testId="mcp-detail-process">
+        <div className={styles.stack} data-testid="mcp-detail-scope">
+          <div className={styles.scopeControl}>
+            <SegmentedControl
+              id="mcp-detail-scope-control"
+              label={t("mcp.detail.scope")}
+              value={view.scope}
+              options={[
+                { value: "global", label: t("mcp.scope.globalShort") },
+                { value: "session", label: t("mcp.scope.sessionShort") },
+              ]}
+              onChange={(next: string) => {
+                const scope: ServerScope = next === "session" ? "session" : "global";
+                if (scope !== view.scope && props.scopeBusy !== true) props.onScopeChange(scope);
+              }}
+            />
+          </div>
+          <p
+            className={styles.hint}
+            data-testid="mcp-detail-scope-hint"
+            {...(props.scopeBusy === true ? { "aria-busy": "true" } : {})}
+          >
+            {t("mcp.detail.scopeHint")}
+          </p>
+        </div>
       </Section>
       <Section title={t("mcp.detail.secrets")} testId="mcp-detail-secrets">
         <SecretBlock

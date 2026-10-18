@@ -48,6 +48,7 @@ const mcpSheet = defineSheet(
     "registryTitle",
     "registryMono",
     "registryResults",
+    "scopeControl",
     "jsonPreview",
     "pasteRows",
     "pasteRow",
@@ -114,6 +115,8 @@ const mcpSheet = defineSheet(
     ".chmcp_registryTitle{margin:0;font-size:14px;font-weight:500;color:var(--dsw-alias-label-primary)}",
     // 搜索结果框：固定高度 + 内部滚动（与技能页的搜索框同一思路），结果再多也不会把对话框撑破。
     ".chmcp_registryResults{max-height:320px;overflow-y:auto;border-radius:10px}",
+    // 详情里的「进程」两段控件：只占一行该有的宽度，别拉满抽屉。
+    ".chmcp_scopeControl{max-width:240px}",
     '.chmcp_registryMono{margin:0;font-family:var(--ds-font-family-code,"Cascadia Mono",Consolas,Menlo,ui-monospace,monospace);font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}',
     '.chmcp_jsonPreview{margin:0;max-height:260px;overflow:auto;padding:10px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-family:var(--ds-font-family-code,"Cascadia Mono",Consolas,Menlo,ui-monospace,monospace);font-size:12px;line-height:18px;white-space:pre-wrap;overflow-wrap:anywhere}',
     ".chmcp_resultOk{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}",

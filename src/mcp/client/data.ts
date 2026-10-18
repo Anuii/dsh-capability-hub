@@ -30,6 +30,7 @@ export const serversApi: ServersAdapter = {
   toggle: (name, disabled) => toggleServer(name, disabled),
   reorder: (names) => reorderServers(names),
   remove: (name) => deleteServer(name),
+  upsert: async (name, values) => (await upsertServer(name, values)).server,
 };
 
 /** POST mcp/servers/upsert { originalName?, server } → { server, warnings }。 */

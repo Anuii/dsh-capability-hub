@@ -19,13 +19,16 @@ import { createStore, type Store } from "../../kit/store.ts";
 import { reorderNames } from "./view-model.ts";
 import { t } from "./strings.ts";
 import { errorText } from "../../shared/error-text.ts";
-import type { ConfigPayload, ServerView } from "../contract/config.ts";
+import type { ConfigPayload, ServerScope, ServerView } from "../contract/config.ts";
+import { serverJsonValues } from "./json-model.ts";
 
 export interface ServersAdapter {
   load(): Promise<ConfigPayload>;
   toggle(name: string, disabled: boolean): Promise<ServerView>;
   reorder(names: readonly string[]): Promise<ServerView[]>;
   remove(name: string): Promise<void>;
+  /** 整条写回（改进程归属用：只带显式设置过的字段，与服务端一致的 upsert 语义）。 */
+  upsert(name: string, values: Record<string, unknown>): Promise<ServerView>;
 }
 
 /** 页面底部的一条提示（Toast）。seq 递增：同样的文字再提示一次也会重新出现。 */
@@ -54,6 +57,8 @@ export interface ServersStore {
   move(from: number, to: number): Promise<void>;
   /** 删除；成功返回 true（界面据此关掉指向它的抽屉） */
   remove(name: string): Promise<boolean>;
+  /** 改进程归属：全局一份 ↔ 按会话（仍然只走 upsert，不新增接口）。 */
+  setScope(view: ServerView, scope: ServerScope): Promise<void>;
   /** JSON 编辑保存了一个服务器 */
   serverSaved(server: ServerView, warnings: readonly string[]): void;
   /** 粘贴 JSON 批量保存之后 */
@@ -121,6 +126,25 @@ export function createServersStore(adapter: ServersAdapter): ServersStore {
         notify(t("mcp.toast.reordered"), "success");
       } catch (failure) {
         failed(failure);
+      }
+    },
+    async setScope(view, scope) {
+      const name = view.serverName;
+      if (view.scope === scope) return;
+      state.patch({ busy: withName(state.get().busy, name, true) });
+      try {
+        // 只搬显式设置过的字段（与 JSON 编辑同一份白名单），再覆盖 scope：服务端按 upsert 语义整条写回。
+        const values = { ...serverJsonValues(view), scope };
+        const server = await adapter.upsert(name, values);
+        updateConfig((config) => ({
+          ...config,
+          servers: config.servers.map((item) => (item.serverName === server.serverName ? server : item)),
+        }));
+        notify(scope === "session" ? t("mcp.toast.scopeSession") : t("mcp.toast.scopeGlobal"), "success");
+      } catch (failure) {
+        failed(failure);
+      } finally {
+        state.patch({ busy: withName(state.get().busy, name, false) });
       }
     },
     async remove(name) {

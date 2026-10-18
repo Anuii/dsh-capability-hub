@@ -294,7 +294,12 @@ function McpTabInner(): React.ReactElement {
             })}
       >
         {detailView !== undefined ? (
-          <ServerDetailBody view={detailView} showToast={notify} />
+          <ServerDetailBody
+            view={detailView}
+            showToast={notify}
+            scopeBusy={busy.has(detailView.serverName)}
+            onScopeChange={(scope) => void store.setScope(detailView, scope)}
+          />
         ) : panel !== undefined && panel.kind === "json" ? (
           <JsonEditor
             originalName={panel.name}

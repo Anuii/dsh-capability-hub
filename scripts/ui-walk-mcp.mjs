@@ -79,6 +79,34 @@ try {
     "抽屉里没有重新连接",
   );
 
+  // 3b. 进程归属：详情里就地切换（0.9.3 新增），改完接口里也是 session
+  check(await hub.waitFor(sel("mcp-detail-scope"), 8000), "详情里有进程归属控件");
+  check(
+    (await hub.evaluate("!!document.getElementById('mcp-detail-scope-control-session')")) === true,
+    "控件有「按会话」分段",
+  );
+  await hub.evaluate("document.getElementById('mcp-detail-scope-control-session').click()");
+  // 提示出现 = 请求已经落地（不然后面切开关会撞上在途置灰）。
+  check(await hub.waitFor(text("已改为按会话"), 15000), "切到按会话后给出提示");
+  check(
+    await hub.waitFor(
+      "document.getElementById('mcp-detail-scope-control-session')?.getAttribute('aria-selected') === 'true'",
+      8000,
+    ),
+    "控件选中「按会话」",
+  );
+  let scopeNow = "";
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    scopeNow = await hub.evaluate(
+      "fetch('api/dsh-capability-hub/mcp/config').then((r) => r.json()).then((b) => (b.data.servers.find((s) => s.serverName === " +
+        JSON.stringify(NAME) +
+        ") || {}).scope)",
+    );
+    if (scopeNow === "session") break;
+    await sleep(300);
+  }
+  check(scopeNow === "session", "接口里也是按会话", String(scopeNow));
+
   // 4. 抽屉里停用
   await hub.evaluate(
     "(() => { const s = document.querySelector('[data-testid=mcp-drawer] [role=switch]'); if (s) s.click(); return !!s; })()",
@@ -93,10 +121,15 @@ try {
   await hub.clickTestId("mcp-json-save");
   check(await hub.waitFor(sel("mcp-json-errors")), "废弃字段 lifecycle 被拦下");
   check(await hub.waitFor(text("已废弃")), "错误里说明字段已废弃");
-  await hub.setInput("mcp-json-textarea", JSON.stringify({ ...current, scope: "session" }, null, 2));
+  await hub.setInput("mcp-json-textarea", JSON.stringify({ ...current, toolCallTimeoutMs: 12345 }, null, 2));
   await hub.clickTestId("mcp-json-save");
-  check(await hub.waitFor("!" + sel("mcp-json-textarea"), 8000), "改成按会话后保存成功（回到详情）");
-  check(await hub.waitFor(sel("mcp-detail-scope") + "?.innerText.includes('按会话')", 5000), "详情里显示按会话");
+  check(await hub.waitFor("!" + sel("mcp-json-textarea"), 8000), "改超时后保存成功（回到详情）");
+  const timeoutNow = await hub.evaluate(
+    "fetch('api/dsh-capability-hub/mcp/config').then((r) => r.json()).then((b) => (b.data.servers.find((s) => s.serverName === " +
+      JSON.stringify(NAME) +
+      ") || {}).toolCallTimeoutMs)",
+  );
+  check(timeoutNow === 12345, "接口里超时已更新", String(timeoutNow));
 
   // 6. 删除
   await hub.waitFor(sel("mcp-detail-delete"));

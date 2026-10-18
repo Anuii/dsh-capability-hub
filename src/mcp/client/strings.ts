@@ -85,6 +85,11 @@ export const zh = {
   "mcp.detail.deleteTitle": "删除「{name}」",
   "mcp.detail.jsonTitle": "用 JSON 编辑「{name}」",
   "mcp.detail.scope": "进程",
+  "mcp.detail.scopeHint": "全局一份：所有会话共用一个进程；按会话：每个会话与子代理各一个进程。",
+  "mcp.scope.globalShort": "全局一份",
+  "mcp.scope.sessionShort": "按会话",
+  "mcp.toast.scopeSession": "已改为按会话：每个会话、子代理各一个进程。",
+  "mcp.toast.scopeGlobal": "已改为全局一份：所有会话共用一个进程。",
 
   /* ---- 单服务器 JSON 编辑 ---- */
   "mcp.json.title": "JSON 编辑「{name}」",

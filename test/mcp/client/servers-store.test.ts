@@ -32,6 +32,14 @@ function setup(initial: ServerView[] = [makeServerView({ serverName: "a" }), mak
       if (name === "broken") throw new Error("找不到服务器「broken」。");
       config = makeConfig(config.servers.filter((server) => server.serverName !== name));
     },
+    async upsert(name, values) {
+      calls.push("upsert " + name + " " + JSON.stringify(values));
+      if (name === "broken") throw new Error("磁盘满了");
+      const scope = values.scope === "session" ? "session" : "global";
+      const server = makeServerView({ serverName: name, scope });
+      config = makeConfig(config.servers.map((item) => (item.serverName === name ? server : item)));
+      return server;
+    },
   };
   const store = createServersStore(adapter);
   return { store, calls };
@@ -54,6 +62,22 @@ test("读取：成功后有配置；失败给中文原因", async () => {
   await broken.reload();
   assert.equal(broken.state.get().loadError, "接口 500");
   assert.equal(broken.state.get().loading, false);
+});
+
+test("改进程归属：走 upsert、只换那一行、给中文提示；已经是那个值就不发请求", async () => {
+  const { store, calls } = setup();
+  await store.reload();
+  const first = store.state.get().config!.servers[0]!;
+  await store.setScope(first, "session");
+  assert.equal(calls.filter((call) => call.startsWith("upsert a ")).length, 1, "改进程归属走 upsert");
+  assert.equal(store.state.get().config?.servers[0]?.scope, "session");
+  assert.match(store.state.get().notice?.text ?? "", /按会话/);
+  assert.equal(store.state.get().busy.size, 0, "在途标记要清掉");
+  const before = calls.length;
+  await store.setScope(store.state.get().config!.servers[0]!, "session");
+  assert.equal(calls.length, before, "同值不请求");
+  await store.setScope(store.state.get().config!.servers[0]!, "global");
+  assert.match(store.state.get().notice?.text ?? "", /全局一份/);
 });
 
 test("启停：在途置灰，成功只换那一行并给中性提示；失败给提示", async () => {
