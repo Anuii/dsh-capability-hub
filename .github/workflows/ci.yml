@@ -1,0 +1,33 @@
+# 每次 push / PR 都跑：排版、类型、全部单测（D-B19 之后新增的闸门）。
+#
+# 为什么是 windows-latest：宿主半按 Windows 实现（Win32 进程树、路径与权限假设），
+# ubuntu 上跑会有一批与平台相关的假失败，得不偿失。
+#
+# 与 publish.yml 的分工：这里只做检查；推 v* tag 时由 publish.yml 再跑一遍同样的三道闸门后发布。
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: 安装依赖
+        run: npm ci
+      - name: 排版检查
+        run: npm run format:check
+      - name: 类型检查
+        run: npm run typecheck
+      - name: 全部单测
+        run: npm test

@@ -31,13 +31,37 @@ import {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
+/**
+ * 从启动日志里等一个 token（最多 timeoutMs，每 250ms 重试一次）。
+ * 日志还不存在、或此刻正好被清空/重写，都当作「还没好」继续等。
+ */
+async function waitForToken(outLog, timeoutMs) {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const match = /token=([A-Za-z0-9_\-]+)/.exec(readFileSync(outLog, "utf8"));
+      if (match !== null) return match[1];
+    } catch {
+      // 日志还没写出来
+    }
+    if (Date.now() >= until) {
+      throw new Error(
+        "启动日志里 " + timeoutMs / 1000 + " 秒内没有出现 token=…：测试 profile 可能没起来（先跑 scripts\\dev-profile.ps1 start，再看 .dev\\logs\\dev-profile.err.log）。",
+      );
+    }
+    await sleep(250);
+  }
+}
+
 export async function launchHubBrowser(options = {}) {
   const edgePath = process.env.DSH_EDGE || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
   if (!existsSync(edgePath)) throw new Error("找不到 Edge：用 $env:DSH_EDGE 指定 msedge.exe 的路径。");
   const port = options.port ?? 19411;
   const debugPort = options.debugPort ?? 9200 + (process.pid % 500);
   const outLog = join(repoRoot, ".dev", "logs", "dev-profile.out.log");
-  const token = /token=([A-Za-z0-9_\-]+)/.exec(readFileSync(outLog, "utf8"))[1];
+  // DSH 的令牌是每进程随机、启动几秒后才写进日志：刚 restart 就跑走查会读到空日志。
+  // 这里最多等 15 秒（跑起来那次只需几百毫秒），而不是立刻抛「Cannot read properties of null」。
+  const token = await waitForToken(outLog, 15_000);
   const profileDir = join(repoRoot, ".dev", "tmp", "edge-profile-" + (options.name ?? "walk"));
   mkdirSync(profileDir, { recursive: true });
 

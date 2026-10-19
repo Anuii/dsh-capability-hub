@@ -25,7 +25,8 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    # 与 ci.yml 同一个 runner：宿主半按 Windows 实现，单测也按 Windows 跑（发布步骤本身跨平台）。
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -41,8 +42,14 @@ jobs:
         run: |
           node -e "const p=require('./package.json');const t=process.env.GITHUB_REF_NAME.replace(/^v/,'');if(p.version!==t){console.error('tag ' + process.env.GITHUB_REF_NAME + ' 与 package.json 版本 ' + p.version + ' 不一致');process.exit(1)}"
 
+      - name: 排版检查
+        run: npm run format:check
+
       - name: 类型检查
         run: npm run typecheck
+
+      - name: 全部单测（红了就不发布）
+        run: npm test
 
       - name: 构建（正式构建，产物里没有开发用代码）
         run: npm run build
