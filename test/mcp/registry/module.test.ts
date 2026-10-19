@@ -3,8 +3,15 @@
  *
  * **绝不联网**：每个用例都注入假 fetch；没注入时默认的假 fetch 直接抛错，
  * 所以任何一次真实请求都会让用例失败。
+ *
+ * 搜索缓存（D-B19）：harness 给每个用例一个临时目录当缓存文件，绝不写真实数据目录
+ * （makeContext 里的 hubHome 只是个假路径，谁都不该往里写）。
  */
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, it } from "node:test";
 
 import {
@@ -13,7 +20,7 @@ import {
   REGISTRY_SEARCH_LIMIT,
   REGISTRY_TIMEOUT_MS,
 } from "../../../src/mcp/registry/module.ts";
-import type { RegistryDetail, RegistrySearchResult } from "../../../src/mcp/contract/registry.ts";
+import type { RegistryDetail, RegistryItem, RegistrySearchResult } from "../../../src/mcp/contract/registry.ts";
 import type { HubContext, HubLogger, RouteRequest } from "../../../src/platform/contract/host.ts";
 
 type Routes = Record<string, (req: RouteRequest) => Promise<unknown>>;
@@ -79,10 +86,52 @@ const noNetworkFetch = (async () => {
 const jsonResponse = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 
+function makeTempDir(prefix = "cap-hub-registry-"): string {
+  return mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+/** 预置一份搜索缓存（形状与 shared/node/search-cache.ts 一致）。 */
+async function writeCacheFile(
+  file: string,
+  entries: { query: string; at: string; payload?: unknown }[],
+): Promise<void> {
+  const order: string[] = [];
+  const map: Record<string, unknown> = {};
+  for (const item of entries) {
+    const key = "registry\u0000" + item.query.trim().toLowerCase();
+    order.push(key);
+    map[key] = {
+      source: "registry",
+      query: item.query,
+      at: item.at,
+      route: "direct",
+      payload: item.payload ?? { items: [cachedItem] },
+    };
+  }
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify({ version: 1, order, entries: map }, null, 2));
+}
+
+/** 预置缓存里的那条结果（用来断言「返回的正是缓存里的 items」）。 */
+const cachedItem: RegistryItem = {
+  name: "io.example/cached",
+  title: "缓存里的示例",
+  version: "0.9.9",
+  kinds: ["remotes"],
+  requiresEnv: [],
+};
+
+/** 让 fetch 一定超时失败（复用现有超时用例的写法）。 */
+const timeoutFetch = (async () => {
+  throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+}) as unknown as typeof fetch;
+
 interface Harness {
   module: { routes: Routes };
   logger: HubLogger & { text(): string };
   calls: FetchCall[];
+  /** 这个用例专用的搜索缓存文件（临时目录）。 */
+  cacheFile: string;
   call(key: string, query: Record<string, string>): Promise<unknown>;
 }
 
@@ -94,21 +143,26 @@ function harness(
     fixture?: boolean;
     fetchImpl?: typeof fetch;
     signal?: AbortSignal;
+    /** 缓存文件；缺省给一个临时目录里的新文件。 */
+    cacheFile?: string;
   } = {},
 ): Harness {
   const logger = recordingLogger();
   const fake = options.handler === undefined ? undefined : fakeFetch(options.handler);
   const fetchImpl = options.fetchImpl ?? fake?.impl ?? noNetworkFetch;
+  const cacheFile = options.cacheFile ?? path.join(makeTempDir(), "search-cache.json");
   const module = createMcpRegistryModule(makeContext(logger), {
     fetchImpl,
     baseUrl: options.baseUrl ?? "https://registry.test",
     existingNames: options.existingNames ?? (() => []),
+    searchCacheFile: cacheFile,
     ...(options.fixture === undefined ? {} : { fixture: options.fixture }),
   });
   return {
     module,
     logger,
     calls: fake?.calls ?? [],
+    cacheFile,
     call: async (key, query) => {
       const handler = module.routes[key];
       assert.ok(handler !== undefined, "路由不存在：" + key);
@@ -216,8 +270,10 @@ describe("registry/module: search", () => {
   it("没给 nextCursor 时结果里不出现这个字段", async () => {
     const h = harness({ handler: () => jsonResponse({ servers: [], metadata: {} }) });
     const data = (await h.call("GET mcp/registry/search", { q: "demo" })) as RegistrySearchResult;
-    assert.deepEqual(data, { items: [] });
+    assert.deepEqual(data.items, []);
     assert.equal("nextCursor" in data, false);
+    // D-B19：成功结果一律带 provenance（缓存只影响失败回落）
+    assert.equal(data.provenance?.route, "direct");
   });
 
   it("q 缺失 / 只有空白 → 400，中文错误，且不发请求", async () => {
@@ -412,5 +468,141 @@ describe("registry/module: fixture 模式（不联网）", () => {
     const detailError = await expectRejection(() => h.call("GET mcp/registry/detail", {}));
     assert.equal(detailError.status, 400);
     assert.equal(h.calls.length, 0);
+  });
+});
+
+describe("registry/module: 搜索缓存（D-B19）", () => {
+  it("搜索成功：响应带 provenance.direct，并把第一页结果写进缓存", async () => {
+    const h = harness({
+      handler: () => jsonResponse({ servers: [{ server: context7Server }], metadata: { nextCursor: "next-1" } }),
+    });
+    const data = (await h.call("GET mcp/registry/search", { q: "  Context7 " })) as RegistrySearchResult;
+    assert.equal(data.provenance?.route, "direct");
+    assert.match(data.provenance?.at ?? "", /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    assert.deepEqual(
+      data.items.map((item) => item.name),
+      ["io.github.upstash/context7"],
+    );
+
+    const file = JSON.parse(await fs.readFile(h.cacheFile, "utf8")) as {
+      version: number;
+      order: string[];
+      entries: Record<
+        string,
+        { source: string; query: string; at: string; route: string; payload: RegistrySearchResult }
+      >;
+    };
+    assert.equal(file.version, 1);
+    assert.deepEqual(file.order, ["registry\u0000context7"], "键 = registry + NUL + 归一化关键词");
+    const cached = file.entries["registry\u0000context7"];
+    assert.ok(cached !== undefined, "缓存里必须有这条");
+    assert.equal(cached.source, "registry");
+    assert.equal(cached.query, "Context7", "query 原样保留（归一化只用于键）");
+    assert.equal(cached.at, data.provenance?.at, "缓存写入时刻就是响应里的 at");
+    assert.equal(cached.route, "direct");
+    assert.deepEqual(
+      cached.payload.items.map((item) => item.name),
+      ["io.github.upstash/context7"],
+    );
+    assert.equal(cached.payload.nextCursor, "next-1");
+    assert.equal("provenance" in cached.payload, false, "provenance 是每次现算的，不进缓存");
+  });
+
+  it("超时 / 429 / 5xx 但有缓存 → 返回缓存的 items 与 provenance.cache，不抛错", async () => {
+    const failures: { label: string; options: Parameters<typeof harness>[0] }[] = [
+      { label: "超时", options: { fetchImpl: timeoutFetch } },
+      { label: "429", options: { handler: () => jsonResponse({ error: "slow down" }, 429) } },
+      { label: "500", options: { handler: () => jsonResponse({ error: "boom" }, 500) } },
+    ];
+    for (const failure of failures) {
+      const h = harness(failure.options);
+      await writeCacheFile(h.cacheFile, [{ query: "Jira", at: "2026-10-18T02:00:00.000Z" }]);
+      const data = (await h.call("GET mcp/registry/search", { q: "  jira " })) as RegistrySearchResult;
+      assert.deepEqual(data.items, [cachedItem], failure.label + " 应当回落缓存");
+      assert.deepEqual(
+        data.provenance,
+        { route: "cache", at: "2026-10-18T02:00:00.000Z" },
+        failure.label + " 的 provenance 要标缓存与写入时刻",
+      );
+      assert.equal("nextCursor" in data, false, "回落只给缓存的 items，不给过时的游标");
+    }
+  });
+
+  it("没有缓存时仍照旧抛原来的中文错误（不造空结果）", async () => {
+    const h = harness({ fetchImpl: timeoutFetch });
+    const error = await expectRejection(() => h.call("GET mcp/registry/search", { q: "filesystem" }));
+    assert.equal(error.status, 502);
+    assert.equal(error.code, "UPSTREAM");
+    assert.match(error.message, /请求 MCP Registry 超时/);
+    assert.match(error.message, /45 秒/);
+  });
+
+  it("缓存里是别的关键词 → 不复用", async () => {
+    const h = harness({ fetchImpl: timeoutFetch });
+    await writeCacheFile(h.cacheFile, [{ query: "github", at: "2026-10-18T02:00:00.000Z" }]);
+    const error = await expectRejection(() => h.call("GET mcp/registry/search", { q: "jira" }));
+    assert.equal(error.status, 502);
+    assert.match(error.message, /超时/);
+  });
+
+  it("缓存文件坏了 → 按无缓存处理，仍抛原来的错", async () => {
+    const h = harness({ fetchImpl: timeoutFetch });
+    await fs.mkdir(path.dirname(h.cacheFile), { recursive: true });
+    await fs.writeFile(h.cacheFile, "{ 这不是 JSON");
+    const error = await expectRejection(() => h.call("GET mcp/registry/search", { q: "jira" }));
+    assert.equal(error.status, 502);
+    assert.match(error.message, /超时/);
+  });
+
+  it("缓存条目的 payload 形状不对 → 不复用", async () => {
+    const h = harness({ fetchImpl: timeoutFetch });
+    await writeCacheFile(h.cacheFile, [
+      { query: "jira", at: "2026-10-18T02:00:00.000Z", payload: { items: "不是数组" } },
+    ]);
+    const error = await expectRejection(() => h.call("GET mcp/registry/search", { q: "jira" }));
+    assert.equal(error.status, 502);
+  });
+
+  it("带 cursor 的翻页成功不写缓存（避免第 2 页覆盖第 1 页）", async () => {
+    const h = harness({
+      handler: () => jsonResponse({ servers: [{ server: context7Server }], metadata: { nextCursor: "c2" } }),
+    });
+    const data = (await h.call("GET mcp/registry/search", { q: "jira", cursor: "abc" })) as RegistrySearchResult;
+    assert.equal(data.provenance?.route, "direct", "翻页结果照样标直连");
+    await assert.rejects(fs.readFile(h.cacheFile, "utf8"), /ENOENT/, "翻页结果不该写缓存");
+  });
+
+  it("带 cursor 的翻页失败不回落（缓存只对应第一页）", async () => {
+    const h = harness({ fetchImpl: timeoutFetch });
+    await writeCacheFile(h.cacheFile, [{ query: "jira", at: "2026-10-18T02:00:00.000Z" }]);
+    const error = await expectRejection(() => h.call("GET mcp/registry/search", { q: "jira", cursor: "abc" }));
+    assert.equal(error.status, 502);
+  });
+
+  it("写缓存失败不影响搜索结果（缓存只是「有更好」）", async () => {
+    const dir = makeTempDir();
+    const blocker = path.join(dir, "blocked");
+    await fs.writeFile(blocker, "我是普通文件，不是目录");
+    const h = harness({
+      cacheFile: path.join(blocker, "search-cache.json"),
+      handler: () => jsonResponse({ servers: [], metadata: {} }),
+    });
+    const data = (await h.call("GET mcp/registry/search", { q: "jira" })) as RegistrySearchResult;
+    assert.equal(data.provenance?.route, "direct");
+    assert.match(h.logger.text(), /写搜索缓存失败/, "要留一条 warning，而不是让请求失败");
+  });
+
+  it("fixture 模式不读也不写缓存", async () => {
+    const h = harness({ fixture: true });
+    await writeCacheFile(h.cacheFile, [{ query: "jira", at: "2026-10-18T02:00:00.000Z" }]);
+    const before = await fs.readFile(h.cacheFile, "utf8");
+    const data = (await h.call("GET mcp/registry/search", { q: "jira" })) as RegistrySearchResult;
+    assert.deepEqual(
+      data.items.map((item) => item.name),
+      [...FIXTURE_SERVER_NAMES],
+      "夹具模式返回固定夹具，不拿缓存顶",
+    );
+    assert.equal(data.provenance, undefined, "夹具不是「刚联网取回」，也没有缓存时刻");
+    assert.equal(await fs.readFile(h.cacheFile, "utf8"), before, "夹具模式不得改写缓存文件");
   });
 });

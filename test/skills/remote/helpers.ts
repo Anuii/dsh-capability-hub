@@ -341,7 +341,7 @@ export function jsonResponse(
   });
 }
 
-/** 造一个 codeload 形态的 tar.gz 响应字节 */
+/** 造一个 GitHub 归档形态（archive tar.gz）的响应字节 */
 export function tarGzOf(entries: FixtureEntry[], root = "demo-main"): Buffer {
   return repoArchive(entries, { root });
 }

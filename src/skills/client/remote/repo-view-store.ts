@@ -17,8 +17,10 @@ import type {
   DiscoveryView,
   InstallItemResult,
   InstallTarget,
+  SearchResponse,
   SearchResultItem,
 } from "../../contract/remote.ts";
+import type { DataProvenance } from "../../../shared/network.ts";
 
 import { t } from "../strings.ts";
 import {
@@ -43,7 +45,8 @@ export interface RepoViewAdapter {
   /** 联网扫描（不给 repos = 全部仓库） */
   scan(workspace: string | undefined, repos?: readonly string[]): Promise<DiscoveryView>;
   browse(repo: string, ref: string | undefined, workspace: string | undefined): Promise<BrowseResult>;
-  search(query: string): Promise<SearchResultItem[]>;
+  /** skills.sh 搜索：0.10.0 起连来源一起回来（网络失败但拿到缓存时，结果与「缓存于 X」都要显示） */
+  search(query: string): Promise<SearchResponse>;
   addRepo(repo: string, ref: string | undefined, workspace: string | undefined): Promise<DiscoveryView>;
   updateRepo(
     repo: string,
@@ -86,6 +89,8 @@ export interface RepoViewState {
   browseFieldErrors: readonly FieldError[];
   searching: boolean;
   searchResults?: SearchResultItem[];
+  /** 这批搜索结果是怎么来的（D-B19）：cache 标「缓存于 X」、mirror 标「经镜像 X」、direct 不显示 */
+  searchProvenance?: DataProvenance;
   searchError?: string;
   /** 搜索结果是否展开：从结果里浏览或加入仓库后自动收起 */
   searchOpen: boolean;
@@ -284,15 +289,32 @@ export function createRepoViewStore(adapter: RepoViewAdapter): RepoViewStore {
     async search() {
       const query = get().entry.trim();
       if (query.length < 2) {
-        patch({ searchError: t("skills.remote.search.tooShort"), searchResults: undefined });
+        patch({
+          searchError: t("skills.remote.search.tooShort"),
+          searchResults: undefined,
+          searchProvenance: undefined,
+        });
         return;
       }
       patch({ searching: true, searchError: undefined });
       try {
-        const searchResults = await adapter.search(query);
-        patch({ searchResults, searchOpen: true, searching: false });
+        const response = await adapter.search(query);
+        // 宿主在联网失败但拿到缓存时会照常返回结果（provenance.route = "cache"），
+        // 所以这时**不弹错误**：结果照常列出来，只用一行小字说明缓存时间（D-B19）。
+        patch({
+          searchResults: response.results,
+          searchProvenance: response.provenance,
+          searchOpen: true,
+          searching: false,
+          searchError: undefined,
+        });
       } catch (failure) {
-        patch({ searchResults: undefined, searchError: errorText(failure), searching: false });
+        patch({
+          searchResults: undefined,
+          searchProvenance: undefined,
+          searchError: errorText(failure),
+          searching: false,
+        });
       }
     },
     toggleSearchOpen: () => patch({ searchOpen: !get().searchOpen }),

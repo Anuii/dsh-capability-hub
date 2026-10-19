@@ -228,6 +228,12 @@ export const zh = {
   "skills.remote.search.installs": "安装数 {count}",
   "skills.remote.search.browse": "浏览这个仓库",
 
+  /* ---- 远程 · 搜索结果是怎么来的（D-B19）---- */
+  "skills.remote.provenance.cache": "缓存于 {time}",
+  "skills.remote.provenance.cacheNoTime": "缓存结果",
+  "skills.remote.provenance.mirror": "经镜像 {host}",
+  "skills.remote.provenance.mirrorNoHost": "经镜像",
+
   /* ---- 远程 · 来源 ---- */
   "skills.remote.source.origin": "来源",
   "skills.remote.source.loading": "来源读取中…",
@@ -297,6 +303,21 @@ export const zh = {
   "skills.remote.mirror.saving": "保存中…",
   "skills.remote.mirror.saved": "已保存 GitHub 镜像",
   "skills.remote.mirror.cleared": "已清除 GitHub 镜像，改为直连 GitHub",
+
+  /* ---- 远程 · 网络状态两行（D-B19：直连 / 镜像各一行，网络问题不弹错误框）---- */
+  "skills.remote.mirror.directLine": "直连：{value}",
+  "skills.remote.mirror.directOk": "可用",
+  "skills.remote.mirror.directHttp": "HTTP {status}",
+  "skills.remote.mirror.directTimeout": "超时",
+  "skills.remote.mirror.directFailed": "失败",
+  "skills.remote.mirror.reason": "（{message}）",
+  "skills.remote.mirror.mirrorLine": "镜像：{value}",
+  "skills.remote.mirror.mirrorUnconfigured": "未配置",
+  "skills.remote.mirror.capDownloads": "下载",
+  "skills.remote.mirror.capApi": "API",
+  "skills.remote.mirror.capYes": "✓",
+  "skills.remote.mirror.capNo": "✗",
+  "skills.remote.mirror.capUnknown": "未探测",
 
   "skills.remote.bar.checkSummary": "检查完成：有更新 {available} · 最新 {upToDate} · 无来源 {noSource} · 出错 {error}",
   "skills.remote.bar.updateSummary": "更新完成：成功 {ok} · 失败 {failed}",

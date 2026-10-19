@@ -186,6 +186,12 @@ export const zh = {
   "mcp.registry.saveFailed": "保存失败：{message}",
   "mcp.registry.saveConflict": "服务器名「{name}」已经存在（宿主返回 409），换一个名字再保存。",
 
+  /* ---- 结果是怎么来的（D-B19：缓存 / 镜像只占一行小字，网络错误不弹横幅） ---- */
+  "mcp.registry.provenance.cache": "缓存于 {time} · 点「重试」刷新",
+  "mcp.registry.provenance.cacheNoTime": "缓存结果 · 点「重试」刷新",
+  "mcp.registry.provenance.mirror": "经镜像 {host}",
+  "mcp.registry.provenance.mirrorNoHost": "经镜像",
+
   /* ---- 进程放在哪（scope） ---- */
   "mcp.scope.global": "全局一份（所有会话共用一个进程）",
   "mcp.scope.session": "按会话（每个会话、子代理各一个进程）",

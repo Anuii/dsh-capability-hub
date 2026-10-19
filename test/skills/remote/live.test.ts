@@ -1,7 +1,7 @@
 /**
  * 在线只读测试（RUN_LIVE=1 才执行）。
  *
- * 只做只读访问：api.github.com / codeload.github.com / skills.sh。
+ * 只做只读访问：api.github.com / github.com（archive 归档）/ skills.sh。
  * 只读 ~/.agents/.skill-lock.json 用于哈希比对，绝不写入真实用户目录。
  */
 

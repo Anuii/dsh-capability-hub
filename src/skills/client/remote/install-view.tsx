@@ -48,6 +48,7 @@ import {
   type InstalledFilter,
 } from "./discovery-model.ts";
 import { createRepoViewStore, filterScope, groupLimit, type Picked } from "./repo-view-store.ts";
+import { provenanceNote } from "./provenance.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
 import type { DiscoveryRepoView } from "../../contract/remote.ts";
@@ -84,6 +85,7 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
     browseFieldErrors: browseErrors,
     searching,
     searchResults,
+    searchProvenance,
     searchError,
     searchOpen,
     discovery,
@@ -142,6 +144,8 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
         ));
 
   const intent = inputIntent(entry);
+  // D-B19：结果是怎么来的（缓存 / 镜像）只占一行小字；直连不显示。
+  const searchNote = provenanceNote(searchProvenance);
   const browseEntry = (): void => void store.browseEntry();
   const topRow = (
     <div className={styles.form} data-testid="skills-repo-input">
@@ -229,6 +233,11 @@ export function AddSkillDrawer(props: AddSkillDrawerProps): React.ReactElement {
           {/* 一行摘要 + 展开 / 收起：结果再多也只占一个固定高度的滚动框，不把下面的内容顶出视野。 */}
           <div className={styles.inlineRow}>
             <span className={styles.note}>{t("skills.repoView.searchSummary", { count: searchResults.length })}</span>
+            {searchNote === undefined ? null : (
+              <span className={styles.note} data-testid="skills-remote-search-provenance">
+                {searchNote}
+              </span>
+            )}
             <span className={styles.grow} />
             <Button
               size="sm"

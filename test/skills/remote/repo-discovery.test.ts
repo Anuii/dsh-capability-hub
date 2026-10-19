@@ -63,8 +63,8 @@ const ARCHIVES: Record<string, Buffer> = {
   ),
 };
 
-/** codeload 路由：按仓库返回归档；没登记的仓库 404（= 该仓库扫描失败） */
-function codeloadRoutes(
+/** 归档路由（D-B19：https://github.com/{repo}/archive/{ref}.tar.gz）：按仓库返回归档；没登记的仓库 404（= 该仓库扫描失败） */
+function archiveRoutes(
   downloads: string[],
   options: { delayMs?: number; inFlight?: { now: number; max: number } } = {},
 ): FakeFetchRoute[] {
@@ -78,9 +78,9 @@ function codeloadRoutes(
         }),
     },
     {
-      match: (u) => u.includes("codeload.github.com/"),
+      match: (u) => u.includes("/archive/"),
       response: async (u) => {
-        const repo = u.split("codeload.github.com/")[1]!.split("/tar.gz/")[0]!;
+        const repo = u.split("github.com/")[1]!.split("/archive/")[0]!;
         downloads.push(repo);
         if (options.inFlight) {
           options.inFlight.now++;
@@ -140,7 +140,7 @@ async function build(
 
 test("从未扫描：GET 只读、不联网，cached=false，列出预置仓库", async () => {
   const downloads: string[] = [];
-  const env = await build({ routes: codeloadRoutes(downloads) });
+  const env = await build({ routes: archiveRoutes(downloads) });
   const view = (await env.call("GET skills/discovery")) as unknown as View;
   assert.equal(view.cached, false);
   assert.equal(view.lastScannedAt, undefined);
@@ -152,7 +152,7 @@ test("从未扫描：GET 只读、不联网，cached=false，列出预置仓库"
 
 test("全部刷新：逐仓库独立成败，汇总技能带仓库与分支，已安装现算且不进缓存", async () => {
   const downloads: string[] = [];
-  const env = await build({ routes: codeloadRoutes(downloads), local: [{ dirName: "tdd" }] });
+  const env = await build({ routes: archiveRoutes(downloads), local: [{ dirName: "tdd" }] });
   const view = (await env.call("POST skills/discovery/refresh", { body: {} })) as unknown as View;
   assert.equal(view.cached, true);
   assert.ok(view.lastScannedAt);
@@ -181,7 +181,7 @@ test("全部刷新：逐仓库独立成败，汇总技能带仓库与分支，�
 test("扫描并发不超过 2", async () => {
   const downloads: string[] = [];
   const inFlight = { now: 0, max: 0 };
-  const env = await build({ routes: codeloadRoutes(downloads, { delayMs: 30, inFlight }) });
+  const env = await build({ routes: archiveRoutes(downloads, { delayMs: 30, inFlight }) });
   await env.call("POST skills/discovery/refresh", { body: {} });
   assert.ok(downloads.length >= 4);
   assert.ok(inFlight.max <= 2, "同时下载数 " + inFlight.max);
@@ -189,7 +189,7 @@ test("扫描并发不超过 2", async () => {
 
 test("只刷新指定仓库；不在列表里的仓库 NOT_FOUND", async () => {
   const downloads: string[] = [];
-  const env = await build({ routes: codeloadRoutes(downloads) });
+  const env = await build({ routes: archiveRoutes(downloads) });
   const view = (await env.call("POST skills/discovery/refresh", {
     body: { repos: ["MATTPOCOCK/skills"] },
   })) as unknown as View;
@@ -203,7 +203,7 @@ test("只刷新指定仓库；不在列表里的仓库 NOT_FOUND", async () => {
 
 test("加入仓库：只补扫这一个；链接里的分支与子目录被拆出；扫描失败不让 add 失败", async () => {
   const downloads: string[] = [];
-  const env = await build({ routes: codeloadRoutes(downloads) });
+  const env = await build({ routes: archiveRoutes(downloads) });
   const added = await env.call("POST skills/repos/add", {
     body: { repo: "https://github.com/acme/extra/tree/main/skills/b" },
   });
@@ -224,7 +224,7 @@ test("加入仓库：只补扫这一个；链接里的分支与子目录被拆�
 
 test("修改分支或子目录：变了才重扫该仓库；没变不联网", async () => {
   const downloads: string[] = [];
-  const env = await build({ routes: codeloadRoutes(downloads) });
+  const env = await build({ routes: archiveRoutes(downloads) });
   await env.call("POST skills/repos/add", { body: { repo: "acme/extra", ref: "main" } });
   assert.equal(
     ((await env.call("GET skills/discovery")) as unknown as View).skills.filter((s) => s.repo === "acme/extra").length,
@@ -253,7 +253,7 @@ test("修改分支或子目录：变了才重扫该仓库；没变不联网", as
 
 test("移出仓库：缓存条目一起删掉，汇总里不再有它的技能", async () => {
   const downloads: string[] = [];
-  const env = await build({ routes: codeloadRoutes(downloads) });
+  const env = await build({ routes: archiveRoutes(downloads) });
   await env.call("POST skills/discovery/refresh", { body: {} });
   const removed = await env.call("POST skills/repos/remove", { body: { repo: "mattpocock/skills" } });
   const view = removed.discovery as View;
@@ -280,7 +280,7 @@ test("兼容：旧 repos.json 没有 subPath 照常读；坏的缓存文件当�
     "discovery.json": "{ not json",
   });
   const downloads: string[] = [];
-  const env = await build({ routes: codeloadRoutes(downloads), hubHome });
+  const env = await build({ routes: archiveRoutes(downloads), hubHome });
   const list = await env.call("GET skills/repos");
   assert.deepEqual(list.repos, [{ repo: "acme/extra", ref: "main", preset: false }]);
   const view = (await env.call("GET skills/discovery")) as unknown as View;
@@ -294,7 +294,7 @@ test("令牌不进缓存与错误信息", async () => {
   const routes: FakeFetchRoute[] = [
     { match: (u) => u.includes("api.github.com/repos/"), response: () => new Response("{}", { status: 200 }) },
     {
-      match: (u) => u.includes("codeload.github.com/"),
+      match: (u) => u.includes("/archive/"),
       response: () => new Response("upstream says " + SECRET, { status: 500 }),
     },
   ];

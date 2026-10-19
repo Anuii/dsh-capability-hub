@@ -27,11 +27,13 @@ import {
   initialEnvValues,
   nameIssueText,
   previewConfigText,
+  provenanceNote,
   registryRowView,
   saveGate,
   serverNameIssue,
 } from "./pure.ts";
 import type { RegistryDetail, RegistryItem } from "../../contract/registry.ts";
+import type { DataProvenance } from "../../../shared/network.ts";
 
 export interface RegistrySearchViewProps {
   /** 当前配置里的服务器名（重名判定用）。 */
@@ -57,6 +59,8 @@ export function RegistrySearchView(props: RegistrySearchViewProps): React.ReactE
   const [searchError, setSearchError] = React.useState<string | undefined>(undefined);
   const [items, setItems] = React.useState<RegistryItem[] | undefined>(undefined);
   const [nextCursor, setNextCursor] = React.useState<string | undefined>(undefined);
+  /** 这批结果是怎么来的（D-B19）：cache 标「缓存于 X · 点「重试」刷新」、mirror 标「经镜像」、direct 不显示 */
+  const [provenance, setProvenance] = React.useState<DataProvenance | undefined>(undefined);
   const [moreLoading, setMoreLoading] = React.useState<boolean>(false);
   /** 上一次真正发出去的搜索词（重试 / 加载更多用它，而不是输入框里后来改过的内容）。 */
   const [lastQuery, setLastQuery] = React.useState<string | undefined>(undefined);
@@ -87,6 +91,7 @@ export function RegistrySearchView(props: RegistrySearchViewProps): React.ReactE
       setSearching(true);
       setItems(undefined);
       setNextCursor(undefined);
+      setProvenance(undefined);
       // 重新搜索就离开预览，免得旧详情挂在新结果上
       setPreview(undefined);
       setDetail(undefined);
@@ -100,6 +105,8 @@ export function RegistrySearchView(props: RegistrySearchViewProps): React.ReactE
         setMoreLoading(false);
         setRetryCursor(undefined);
         setNextCursor(payload.nextCursor);
+        // 逐页刷新：当前这一屏就以最后一页的来源为准（同一关键词通常一致）
+        setProvenance(payload.provenance);
         setItems((current) => (append ? [...(current ?? []), ...payload.items] : payload.items));
       },
       (error: unknown) => {
@@ -341,6 +348,7 @@ export function RegistrySearchView(props: RegistrySearchViewProps): React.ReactE
   /* ---------------- 搜索态 ---------------- */
 
   const list = items ?? [];
+  const provenanceText = provenanceNote(provenance);
   return (
     <div className={styles.intakeBody} data-testid="mcp-registry">
       <p className={styles.intakeHint}>{t("mcp.registry.hint")}</p>
@@ -400,6 +408,25 @@ export function RegistrySearchView(props: RegistrySearchViewProps): React.ReactE
           <p className={styles.small} data-testid="mcp-registry-count">
             {t("mcp.registry.results", { count: list.length })}
           </p>
+          {/* D-B19：来源标注。缓存时给一个「重试」——联网失败但拿到缓存也照样显示结果，不弹错误横幅。 */}
+          {provenanceText === undefined ? null : (
+            <div className={styles.intakeToolbar} data-testid="mcp-registry-provenance-row">
+              <span className={styles.small} data-testid="mcp-registry-provenance">
+                {provenanceText}
+              </span>
+              {provenance?.route !== "cache" ? null : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  data-testid="mcp-registry-provenance-retry"
+                  disabled={searching || moreLoading}
+                  onClick={() => runSearch(lastQuery ?? query)}
+                >
+                  {t("mcp.registry.retry")}
+                </Button>
+              )}
+            </div>
+          )}
           <div className={styles.registryResults} data-testid="mcp-registry-results-scroll">
             <ListSurface testId="mcp-registry-results">
               <ListGroup>

@@ -8,6 +8,8 @@
 
 import { api } from "../../../platform/client/api.ts";
 import { listSkills, workspaceQuery } from "../data.ts";
+import { normalizeDirectStatus, normalizeMirrorCapabilities } from "./mirror-model.ts";
+import { normalizeProvenance } from "./provenance.ts";
 import type { MirrorAdapter } from "./mirror-model.ts";
 import type { RepoViewAdapter } from "./repo-view-store.ts";
 import type {
@@ -19,7 +21,7 @@ import type {
   MirrorTestResult,
   RepoChange,
   RepoRecord,
-  SearchResultItem,
+  SearchResponse,
   SkillsRemoteSettings,
   SourceEntry,
   UpdateApplyResult,
@@ -180,10 +182,18 @@ export async function browseRepo(
   return { repo: data.repo, ref: data.ref, skills: Array.isArray(data.skills) ? data.skills : [] };
 }
 
-/** GET skills/search ?q=&limit= → { results } */
-export async function searchSkills(query: string, limit = 20): Promise<SearchResultItem[]> {
-  const data = await api.get<{ results?: SearchResultItem[] }>("skills/search", { q: query, limit });
-  return Array.isArray(data?.results) ? data.results : [];
+/**
+ * GET skills/search ?q=&limit= → { results, provenance? }（0.10.0 起带来源，D-B19）。
+ *
+ * 结果照常取；provenance 只在形状对的时候带上——界面据此标「缓存于 X / 经镜像」，
+ * 直连时它本来就是 undefined，界面上什么都不显示。
+ */
+export async function searchSkills(query: string, limit = 20): Promise<SearchResponse> {
+  const data = await api.get<Partial<SearchResponse>>("skills/search", { q: query, limit });
+  const response: SearchResponse = { results: Array.isArray(data?.results) ? data.results : [] };
+  const provenance = normalizeProvenance(data?.provenance);
+  if (provenance !== undefined) response.provenance = provenance;
+  return response;
 }
 
 export interface InstallInput {
@@ -207,34 +217,46 @@ export async function installSkills(input: InstallInput, workspace: string | und
 
 /* ---------------- GitHub 镜像设置（D-B18） ---------------- */
 
-/** GET skills/settings → 只读设置（读不到镜像时只有 version）。 */
-export async function fetchSettings(): Promise<SkillsRemoteSettings> {
-  const data = await api.get<Partial<SkillsRemoteSettings>>("skills/settings");
+/**
+ * 设置响应 → 契约形状。0.10.0（D-B19）加了上次探测到的两项：形状不对就按「没探测过」丢掉，
+ * 镜像地址读不到时只留 version（标签就按「没设置」显示）。
+ */
+function normalizeSettings(data: Partial<SkillsRemoteSettings> | undefined): SkillsRemoteSettings {
   const settings: SkillsRemoteSettings = { version: typeof data?.version === "number" ? data.version : 0 };
   if (typeof data?.githubMirror === "string" && data.githubMirror.trim() !== "") {
     settings.githubMirror = data.githubMirror.trim();
   }
+  const capabilities = normalizeMirrorCapabilities(data?.mirrorCapabilities);
+  if (capabilities !== undefined) settings.mirrorCapabilities = capabilities;
+  const direct = normalizeDirectStatus(data?.directStatus);
+  if (direct !== undefined) settings.directStatus = direct;
   return settings;
+}
+
+/** GET skills/settings → 只读设置（读不到镜像时只有 version）。 */
+export async function fetchSettings(): Promise<SkillsRemoteSettings> {
+  return normalizeSettings(await api.get<Partial<SkillsRemoteSettings>>("skills/settings"));
 }
 
 /** POST skills/settings { githubMirror } → 保存后的设置（空串 = 清除；非法地址抛 422）。 */
 export async function saveSettings(githubMirror: string): Promise<SkillsRemoteSettings> {
-  const data = await api.post<Partial<SkillsRemoteSettings>>("skills/settings", { githubMirror });
-  const settings: SkillsRemoteSettings = { version: typeof data?.version === "number" ? data.version : 0 };
-  if (typeof data?.githubMirror === "string" && data.githubMirror.trim() !== "") {
-    settings.githubMirror = data.githubMirror.trim();
-  }
-  return settings;
+  return normalizeSettings(await api.post<Partial<SkillsRemoteSettings>>("skills/settings", { githubMirror }));
 }
 
-/** POST skills/settings/test-mirror { githubMirror } → { ok, ms?, message? }（不保存；失败不抛错）。 */
+/**
+ * POST skills/settings/test-mirror { githubMirror } → { ok, ms?, message?, direct?, mirror? }
+ * （不保存；失败不抛错）。0.10.0 起同时报告直连与镜像两路能力，对话框两行都显示。
+ */
 export async function testMirror(githubMirror: string): Promise<MirrorTestResult> {
   const data = await api.post<Partial<MirrorTestResult>>("skills/settings/test-mirror", { githubMirror });
-  return {
-    ok: data?.ok === true,
-    ...(typeof data?.ms === "number" ? { ms: data.ms } : {}),
-    ...(typeof data?.message === "string" ? { message: data.message } : {}),
-  };
+  const result: MirrorTestResult = { ok: data?.ok === true };
+  if (typeof data?.ms === "number") result.ms = data.ms;
+  if (typeof data?.message === "string") result.message = data.message;
+  const direct = normalizeDirectStatus(data?.direct);
+  if (direct !== undefined) result.direct = direct;
+  const mirror = normalizeMirrorCapabilities(data?.mirror);
+  if (mirror !== undefined) result.mirror = mirror;
+  return result;
 }
 
 /** 「GitHub 镜像」对话框（mirror-model.ts）的 HTTP adapter。 */

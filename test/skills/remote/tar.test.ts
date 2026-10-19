@@ -68,7 +68,7 @@ test("截断的归档不会抛错，安全返回已读到的条目", () => {
   assert.ok(entries.length >= 1);
 });
 
-test("gzip 解压后可直接读取（codeload 形态）", () => {
+test("gzip 解压后可直接读取（GitHub 归档形态）", () => {
   const gz = buildTarGz([
     { path: "demo-main/", type: "dir" },
     { path: "demo-main/SKILL.md", data: "gzipped" },

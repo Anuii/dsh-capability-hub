@@ -5,6 +5,7 @@
 
 import type { SkillsLocalApi as LocalApi } from "../contract/local.ts";
 import type { RepoRecord, DiscoverySkill, InstallTarget } from "../contract/remote.ts";
+import type { NetworkEvent } from "./github.ts";
 
 /** 远程技能模块用到的本地技能接口子集（外壳注入；测试用假实现）。 */
 export type SkillsLocalPort = Pick<LocalApi, "list" | "get" | "setEnabled" | "moveToTrash" | "rootPath" | "restore">;
@@ -103,4 +104,9 @@ export interface RemoteOptions {
   now?: () => Date;
   /** 凭据缓存开关，默认 true */
   cacheAuth?: boolean;
+  /**
+   * 网络事件回调（D-B19）：apiRequest / downloadRequest / searchSkillsSh 各发一次。
+   * 只保证事件发得出来；聚合与缓存（下一批）在路由层做，不在这里。
+   */
+  onNetworkEvent?: (event: NetworkEvent) => void;
 }

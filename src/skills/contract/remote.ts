@@ -2,6 +2,8 @@
  * 远程技能（skills-remote）的 HTTP 契约（ADR-0002）：只有类型，宿主路由与客户端共用。
  */
 
+import type { DataProvenance, DirectStatus, MirrorCapabilities } from "../../shared/network.ts";
+
 /** 来源记录存在哪：npx skills 的 lock（~/.agents/.skill-lock.json）或插件自己的 sources.json。 */
 export type SourceStoreKind = "skill-lock" | "hub";
 
@@ -155,6 +157,10 @@ export interface SkillsRemoteSettings {
   version: number;
   /** GitHub 镜像（前缀式，结尾带 "/"）：实际请求 = 前缀 + 原始完整 URL */
   githubMirror?: string;
+  /** 0.10.0（D-B19）：上次探测到的镜像能力（换镜像后重新探测；坏数据按「没探测过」处理） */
+  mirrorCapabilities?: MirrorCapabilities;
+  /** 0.10.0（D-B19）：上次探测到的直连状态 */
+  directStatus?: DirectStatus;
 }
 
 /** POST skills/settings/test-mirror 的 data：经该镜像取一个小文件的结果（失败不抛错）。 */
@@ -164,4 +170,14 @@ export interface MirrorTestResult {
   ms?: number;
   /** 失败的中文原因 */
   message?: string;
+  /** 0.10.0（D-B19）：同时报告直连探测结果（镜像坏不代表直连坏） */
+  direct?: DirectStatus;
+  /** 0.10.0（D-B19）：镜像能力（下载 / API 各一项） */
+  mirror?: MirrorCapabilities;
+}
+
+/** 0.10.0（D-B19）：GET skills/search 的 data（带来源，界面据此标「缓存于 X / 经镜像」）。 */
+export interface SearchResponse {
+  results: SearchResultItem[];
+  provenance?: DataProvenance;
 }

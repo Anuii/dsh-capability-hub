@@ -14,10 +14,25 @@
  *
  * 失败一律抛带 status / code 的中文错误（shared/errors.ts），由平台路由器转成 { ok:false, error }：
  * 400 参数缺失、404 详情里没有这条 server、429 限流、502 超时 / 网络 / 上游返回异常。
+ *
+ * 搜索缓存（0.10.0，D-B19）：搜索**成功**时把第一页结果写进共享搜索缓存 <hubHome>/search-cache.json
+ * （shared/node/search-cache.ts，键 = "registry" + \u0000 + 归一化关键词），响应带
+ * provenance: { route: "direct", at }（registry 不走镜像，路线固定直连）。搜索**失败**（超时 / 网络异常 /
+ * 429 / 5xx）时若同一关键词有缓存，就返回缓存的 items 与 provenance: { route: "cache", at: 缓存写入时刻 }，
+ * 不报错；没有缓存才照旧抛原来的中文错误。缓存出问题只降级（记 warning），绝不影响搜索结果。
+ * fixture 模式（devOverrides.registryFixture）完全不碰缓存：不读、也不写。
  */
 
 import { badRequest, notFound, rateLimited, upstream } from "../../shared/errors.ts";
 import { errorText } from "../../shared/error-text.ts";
+import {
+  lookup,
+  readSearchCache,
+  searchCacheFilePath,
+  store,
+  writeSearchCache,
+  type SearchCacheEntry,
+} from "../../shared/node/search-cache.ts";
 import { mapRegistryServer, registryItemOf, type MapRegistryServerResult } from "../rules/registry-map.ts";
 import type { RegistryDetail, RegistryItem, RegistrySearchResult } from "../contract/registry.ts";
 import type { HubContext, HubModule, RouteHandler, RouteRequest } from "../../platform/contract/host.ts";
@@ -42,13 +57,27 @@ export interface McpRegistryModuleOptions {
   baseUrl?: string;
   /** 已占用的 DSH 服务器名（活值：每次生成建议名时现读，避免用启动那一刻的快照）。 */
   existingNames: () => readonly string[];
-  /** true = 返回固定夹具、完全不联网（只由 devOverrides.registryFixture 打开）。 */
+  /** true = 返回固定夹具、完全不联网、也不读写搜索缓存（只由 devOverrides.registryFixture 打开）。 */
   fixture?: boolean;
+  /**
+   * 搜索缓存文件（缺省 <hubHome>/search-cache.json）。
+   * 单测注入临时目录，绝不碰真实数据目录；传空串 = 用缺省值。
+   */
+  searchCacheFile?: string;
 }
 
 type Rec = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is Rec => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * 这些失败才用缓存顶（D-B19：超时 / 网络异常 / 429 / 5xx / 上游返回异常）。
+ * 其余错误（例如路由层自己的 400）照旧原样抛。
+ */
+function isCacheableSearchFailure(error: unknown): boolean {
+  const code = isRecord(error) ? error.code : undefined;
+  return code === "UPSTREAM" || code === "RATE_LIMITED";
+}
 
 /**
  * 夹具数据。两条覆盖「一键生成」的两条主路：
@@ -124,6 +153,11 @@ export function createMcpRegistryModule(ctx: HubContext, opts: McpRegistryModule
   const fixture = opts.fixture === true;
   const baseUrl = opts.baseUrl ?? REGISTRY_BASE_URL;
   const doFetch: typeof fetch = opts.fetchImpl ?? ((input, init) => fetch(input, init));
+  /** 搜索缓存文件；测试注入临时目录。fixture 模式下这个路径一次也不会被碰。 */
+  const searchCacheFile =
+    opts.searchCacheFile === undefined || opts.searchCacheFile === ""
+      ? searchCacheFilePath(ctx.hubHome)
+      : opts.searchCacheFile;
 
   /** 读已占用的服务器名：注入的回调抛错也不该让整条请求 500（建议名只是锦上添花）。 */
   function existingNames(): readonly string[] {
@@ -201,6 +235,47 @@ export function createMcpRegistryModule(ctx: HubContext, opts: McpRegistryModule
     return result;
   }
 
+  /** 进缓存的那份结果：只留 items 与 nextCursor（provenance 是每次现算的，不进缓存）。 */
+  function cachePayload(result: RegistrySearchResult): RegistrySearchResult {
+    const payload: RegistrySearchResult = { items: result.items };
+    if (result.nextCursor !== undefined) payload.nextCursor = result.nextCursor;
+    return payload;
+  }
+
+  /**
+   * 把一次成功的第一页搜索结果写进缓存。
+   * 缓存只是「有更好」：读写失败只记 warning，本次响应照常返回。
+   */
+  async function rememberSearch(q: string, result: RegistrySearchResult, at: string): Promise<void> {
+    try {
+      const cache = await readSearchCache(searchCacheFile);
+      const entry: SearchCacheEntry = {
+        source: "registry",
+        query: q,
+        at,
+        // registry 不走 GitHub 镜像（D-B19 的镜像只代理 GitHub）：实际路线固定是直连。
+        route: "direct",
+        payload: cachePayload(result),
+      };
+      await writeSearchCache(searchCacheFile, store(cache, entry));
+      ctx.logger.debug("mcp-registry: 搜索「" + q + "」的结果已写入搜索缓存");
+    } catch (error) {
+      ctx.logger.warn("mcp-registry: 写搜索缓存失败（本次搜索结果照常返回）：" + errorText(error));
+    }
+  }
+
+  /** 失败回落：同一关键词有缓存就返回缓存的 items，provenance 标「缓存写入时刻」。 */
+  async function cachedSearch(q: string): Promise<RegistrySearchResult | undefined> {
+    const cache = await readSearchCache(searchCacheFile);
+    const entry = lookup(cache, "registry", q);
+    if (entry === undefined) return undefined;
+    const payload = isRecord(entry.payload) ? entry.payload : undefined;
+    const items = payload !== undefined && Array.isArray(payload.items) ? payload.items : undefined;
+    if (items === undefined) return undefined;
+    // 缓存内容是我们自己写进去的（形状见 cachePayload），这里只兜「文件被手改坏」的情况。
+    return { items: items as RegistryItem[], provenance: { route: "cache", at: entry.at } };
+  }
+
   /** registry 的一条 server → RegistryDetail（能生成就给 raw + notes，不能就给 unsupported）。 */
   function toDetail(server: unknown): RegistryDetail {
     const item = registryItemOf(server);
@@ -242,7 +317,7 @@ export function createMcpRegistryModule(ctx: HubContext, opts: McpRegistryModule
       const q = requiredQuery(req, "q", "搜索关键词");
       const cursor = optionalQuery(req, "cursor");
       if (fixture) {
-        ctx.logger.debug("mcp-registry: fixture 打开，搜索「" + q + "」返回固定夹具（不联网）");
+        ctx.logger.debug("mcp-registry: fixture 打开，搜索「" + q + "」返回固定夹具（不联网、不读写缓存）");
         return fixtureSearchResult(q);
       }
       const url = endpoint("v0.1/servers");
@@ -252,12 +327,32 @@ export function createMcpRegistryModule(ctx: HubContext, opts: McpRegistryModule
       if (cursor !== undefined) url.searchParams.set("cursor", cursor);
       ctx.logger.debug("mcp-registry: 搜索「" + q + "」（超时 " + REGISTRY_TIMEOUT_MS + " ms）");
       const started = Date.now();
-      const body = await requestJson(url, { label: "搜索", signal: req.signal });
+      let body: unknown;
+      try {
+        body = await requestJson(url, { label: "搜索", signal: req.signal });
+      } catch (error) {
+        // D-B19：网络失败不直接摆到界面上。带 cursor 的翻页不回落（缓存只对应第一页）。
+        const fallback = cursor === undefined && isCacheableSearchFailure(error) ? await cachedSearch(q) : undefined;
+        if (fallback === undefined) throw error;
+        ctx.logger.warn(
+          "mcp-registry: 搜索「" +
+            q +
+            "」失败，改用 " +
+            (fallback.provenance?.at ?? "上次") +
+            " 的缓存结果（" +
+            fallback.items.length +
+            " 条）：" +
+            errorText(error),
+        );
+        return fallback;
+      }
       const result = toSearchResult(body);
+      const at = new Date().toISOString();
+      if (cursor === undefined) await rememberSearch(q, result, at);
       ctx.logger.debug(
         "mcp-registry: 搜索「" + q + "」返回 " + result.items.length + " 条（" + (Date.now() - started) + " ms）",
       );
-      return result;
+      return { ...result, provenance: { route: "direct", at } };
     },
 
     "GET mcp/registry/detail": async (req) => {

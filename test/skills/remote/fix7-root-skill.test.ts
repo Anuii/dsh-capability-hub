@@ -104,7 +104,7 @@ async function buildModule(options: EnvOptions = {}) {
   const routes: FakeRoutes = options.routes ?? [
     { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
     {
-      match: (u) => u.includes("/tar.gz/"),
+      match: (u) => u.includes(".tar.gz"),
       response: () => new Response(new Uint8Array(options.archive ?? Buffer.alloc(0)), { status: 200 }),
     },
   ];
@@ -302,7 +302,7 @@ test("FIX-7 J2 安装后检查更新 = 「最新」；上游内容一变就报�
     rootPaths: { "user-agents": userAgents },
     routes: [
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
-      { match: (u) => u.includes("/tar.gz/"), response: () => new Response(new Uint8Array(archive), { status: 200 }) },
+      { match: (u) => u.includes(".tar.gz"), response: () => new Response(new Uint8Array(archive), { status: 200 }) },
     ],
   });
 

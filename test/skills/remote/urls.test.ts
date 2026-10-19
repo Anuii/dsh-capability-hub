@@ -59,7 +59,7 @@ test("assertRepoShape 校验 owner/name 形态", () => {
   assert.throws(() => assertRepoShape("a/b c"), /格式/);
 });
 
-test('FIX-5：仓库名 "." 与 ".." 被拒（会把 codeload / api 的 URL 路径改写）', () => {
+test('FIX-5：仓库名 "." 与 ".." 被拒（会把归档 / api 的 URL 路径改写）', () => {
   assert.throws(() => parseRepoRef("a/."), /仓库名不能是/);
   assert.throws(() => parseRepoRef("a/.."), /仓库名不能是/);
   assert.throws(() => parseRepoRef("./b"), /[一-龥]/);

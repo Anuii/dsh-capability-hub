@@ -2,16 +2,17 @@
  * 「⋯ → GitHub 镜像…」对话框（D-B18）：技能页的工具栏菜单里打开。
  *
  * 自上而下：一句说明（三层意思：只作用于下载 / 检查更新不走镜像 / 镜像可见可改且不带令牌）、
- * 一个输入框（打开时填入当前值）、输入框下方的自检结果、底部「测试 / 保存 / 取消」。
+ * 一个输入框（打开时填入当前值）、输入框下方的两行网络状态（D-B19：直连 / 镜像能力，网络问题
+ * 只在这里如实写出，不往外弹错误横幅）、自检结果、底部「测试 / 保存 / 取消」。
  *
- * 规则全在 mirror-model.ts（可单测）：菜单标签、自检文案、Toast 文案、首尾空白。
+ * 规则全在 mirror-model.ts（可单测）：菜单标签、自检文案、两行状态文案、Toast 文案、首尾空白。
  * 本文件只渲染；任何异常由 index.tsx 的错误边界兜住，这里不主动 throw。
  */
 
 import * as React from "react";
 import { Button, Input, Modal } from "@deepseek-ai/dsh-client-ui-primitives";
 import { useStoreState } from "../../../kit/index.ts";
-import { mirrorTestText } from "./mirror-model.ts";
+import { directStatusLine, mirrorCapabilityLine, mirrorTestText } from "./mirror-model.ts";
 import type { MirrorStore } from "./mirror-model.ts";
 import { styles } from "../styles.ts";
 import { t } from "../strings.ts";
@@ -29,6 +30,7 @@ export function MirrorDialog(props: MirrorDialogProps): React.ReactElement | nul
   if (!state.open) return null;
 
   const resultText = state.result === undefined ? undefined : mirrorTestText(state.result);
+  const directLine = directStatusLine(state.directStatus);
 
   return (
     <Modal
@@ -78,6 +80,15 @@ export function MirrorDialog(props: MirrorDialogProps): React.ReactElement | nul
         </label>
         {/* 空输入 = 清除镜像（改回直连）：不额外加说明行，一句就够 */}
         <p className={styles.note}>{t("skills.remote.mirror.emptyHint")}</p>
+        {/* D-B19：两行网络状态。直连只在探测过之后出现；镜像恒有一行（未探测 / 未配置就照实写）。 */}
+        {directLine === undefined ? null : (
+          <p className={styles.note} data-testid="skills-mirror-direct">
+            {directLine}
+          </p>
+        )}
+        <p className={styles.note} data-testid="skills-mirror-capability">
+          {mirrorCapabilityLine(state.mirrorCapabilities)}
+        </p>
         {resultText === undefined ? null : (
           <p className={state.result?.ok === true ? styles.note : styles.errorBox} data-testid="skills-mirror-result">
             {resultText}

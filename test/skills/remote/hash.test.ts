@@ -103,7 +103,7 @@ test("hashesEqual：raw 或 normalized 任一相等即视为无变化", () => {
 
 test("真实数据回归：6 条 lock 条目与「上游 tar + CRLF 规范化」逐条吻合", async (t) => {
   if (process.env["RUN_LIVE"] !== "1") {
-    t.skip("设置 RUN_LIVE=1 才执行（需要访问 codeload.github.com）");
+    t.skip("设置 RUN_LIVE=1 才执行（需要访问 github.com 的 archive 归档）");
     return;
   }
   const os = await import("node:os");
@@ -122,7 +122,7 @@ test("真实数据回归：6 条 lock 条目与「上游 tar + CRLF 规范化」
     const [owner, repo] = entry.source.split("/");
     let entries = cache.get(entry.source);
     if (!entries) {
-      const response = await fetch(`https://codeload.github.com/${owner}/${repo}/tar.gz/HEAD`, {
+      const response = await fetch(`https://github.com/${owner}/${repo}/archive/HEAD.tar.gz`, {
         signal: AbortSignal.timeout(60000),
       });
       assert.equal(response.status, 200, `下载 ${entry.source} 失败`);

@@ -72,7 +72,8 @@ test/         与 src/ 同构；test/architecture/ 守 import 规则
 | MCP Registry 的搜索、详情与「一键生成配置」       | 宿主 `mcp/registry/module.ts`（两条只读路由、45 秒超时、夹具开关）；接入方式优先级与建议名在 `mcp/rules/registry-map.ts`            |
 | 技能「来源」的手动登记                           | `skills/client/remote/source-flow.ts`                                                                                               |
 | 检查更新怎么判断「有没有更新」                   | `skills/remote/updates.ts`（比目录指纹）+ `skills/remote/skilltree.ts`（trees + raw，回退 tar.gz）+ `skills/remote/fingerprints.ts` |
-| GitHub 镜像（前缀式，只用于下载）                | `skills/remote/settings.ts`（校验与落盘）+ `skills/remote/github.ts`（applyMirror / downloadRequest）                               |
+| GitHub 镜像（前缀式）与直连降级                   | `skills/remote/settings.ts`（校验、落盘、能力探测结果）+ `skills/remote/github.ts`（applyMirror / archiveUrl / apiRequest 直连→镜像降级 / probeDirect / probeMirror，D-B19） |
+| 搜索缓存（skills.sh / Registry 回落）             | `shared/node/search-cache.ts`（每关键词 1 条、20 条 LRU、原子写）；接入在 `skills/remote/routes.ts` 与 `mcp/registry/module.ts` |
 | DSH 会加载哪些提示词、提示词怎么编辑/启停         | 宿主 `prompts/files/`（发现在 `discover.ts`，读写在 `api.ts`）；候选名与预算规则在 `prompts/rules/`；读 DSH 组合配置在 `platform/host/prompt-settings.ts` |
 | 新接口                                           | 宿主模块的 routes + `contract/` 里的形状 + 客户端 `data.ts`                                                                         |
 

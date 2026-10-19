@@ -87,7 +87,7 @@ export function buildTarGz(entries: FixtureEntry[]): Buffer {
   return gzipSync(buildTar(entries));
 }
 
-/** 造一个仓库归档：带 codeload 风格的 <repo>-<ref>/ 根前缀。 */
+/** 造一个仓库归档：带 GitHub 归档风格的 <repo>-<ref>/ 根前缀（与 codeload 产出的同一形态）。 */
 export function repoArchive(entries: FixtureEntry[], options: { root?: string } = {}): Buffer {
   const root = options.root ?? "demo-main";
   const prefixed: FixtureEntry[] = [

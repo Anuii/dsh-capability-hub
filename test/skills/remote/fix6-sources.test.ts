@@ -160,7 +160,10 @@ test("FIX-6 D-1：根级 skillPath 的登记、列表与反查一致（register 
     rootPaths: { "user-agents": userAgents },
     routes: [
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
-      { match: (u) => u.includes("codeload"), response: () => new Response(new Uint8Array(upstream), { status: 200 }) },
+      {
+        match: (u) => u.includes("/archive/"),
+        response: () => new Response(new Uint8Array(upstream), { status: 200 }),
+      },
     ],
   });
 
@@ -344,7 +347,7 @@ test("FIX-6 D-3：成功响应也记录 x-ratelimit-*（默认分支 / 下载 / 
         ),
     },
     {
-      match: (u) => u.includes("codeload"),
+      match: (u) => u.includes("/archive/"),
       response: () =>
         new Response(new Uint8Array(archive), { status: 200, headers: { "x-ratelimit-remaining": "4321" } }),
     },
@@ -439,7 +442,7 @@ test("FIX-6 D-3：检查更新的响应带数字形式的剩余配额（成功�
         response: () => jsonResponse({ default_branch: "main" }, { headers: { "x-ratelimit-remaining": "4998" } }),
       },
       {
-        match: (u) => u.includes("codeload"),
+        match: (u) => u.includes("/archive/"),
         response: () =>
           new Response(new Uint8Array(archive), { status: 200, headers: { "x-ratelimit-remaining": "4997" } }),
       },

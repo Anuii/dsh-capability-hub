@@ -13,6 +13,7 @@
  */
 
 import type { RegistryDetail, RegistryItem, RegistryKind, RegistrySuggestedConfig } from "../../contract/registry.ts";
+import type { DataProvenance } from "../../../shared/network.ts";
 import { SERVER_NAME_RE } from "../../rules/server.ts";
 import { rawToSubmit } from "../intake/pure.ts";
 import { t } from "../strings.ts";
@@ -251,6 +252,63 @@ export function buildSubmitConfig(
   if (Object.keys(env).length === 0) delete server.env;
   else server.env = env;
   return rawToSubmit(server);
+}
+
+/* ---------------- 结果是怎么来的（D-B19） ---------------- */
+
+const PROVENANCE_ROUTES: readonly string[] = ["direct", "mirror", "cache"];
+
+/**
+ * ISO 时间 → 本地「YYYY-MM-DD HH:mm」（解析不了就原样返回）。
+ *
+ * 技能页的 format.ts 里有一份同样的实现：客户端功能之间不能互相 import（架构规则 5），
+ * 而 kit 里没有日期工具，所以这里只能留一份短的（改动时两处一起看）。
+ */
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const pad = (input: number): string => String(input).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * 宿主给的 provenance → 契约形状：形状不对（不是对象、route 不认识）就整条丢掉，
+ * 按「没标来源」处理——界面上少一行小字，绝不让搜索结果显示不出来。
+ */
+export function normalizeProvenance(raw: unknown): DataProvenance | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  const route = record["route"];
+  if (typeof route !== "string" || !PROVENANCE_ROUTES.includes(route)) return undefined;
+  const at = typeof record["at"] === "string" ? record["at"].trim() : "";
+  const provenance: DataProvenance = { route: route as DataProvenance["route"], at };
+  const host = typeof record["mirrorHost"] === "string" ? record["mirrorHost"].trim() : "";
+  if (host !== "") provenance.mirrorHost = host;
+  return provenance;
+}
+
+/**
+ * 结果区那一行小字；undefined = 不显示（直连，或没有来源信息）。
+ *
+ * cache  → 「缓存于 2026-01-02 03:04 · 点「重试」刷新」（联网失败但拿到缓存时宿主照常返回结果）
+ * mirror → 「经镜像 ghfast.top」
+ * direct → 不显示（刚联网取到就是正常结果，安静）
+ */
+export function provenanceNote(provenance: DataProvenance | undefined): string | undefined {
+  if (provenance === undefined) return undefined;
+  if (provenance.route === "cache") {
+    const at = typeof provenance.at === "string" ? provenance.at.trim() : "";
+    // 时间缺失或解析不了就只说「缓存结果」，不显示「缓存于 不是时间」这种半句。
+    const known = at !== "" && !Number.isNaN(Date.parse(at));
+    return known
+      ? t("mcp.registry.provenance.cache", { time: formatDateTime(at) })
+      : t("mcp.registry.provenance.cacheNoTime");
+  }
+  if (provenance.route === "mirror") {
+    const host = typeof provenance.mirrorHost === "string" ? provenance.mirrorHost.trim() : "";
+    return host === "" ? t("mcp.registry.provenance.mirrorNoHost") : t("mcp.registry.provenance.mirror", { host });
+  }
+  return undefined;
 }
 
 /** 预览区那份只读 JSON：与提交体完全一致（两格缩进）。 */

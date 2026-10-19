@@ -10,9 +10,12 @@
  * 而且走镜像时宿主不会发送 GitHub 令牌。
  *
  * 宿主路由（src/skills/remote/routes.ts，契约在 contract/remote.ts）：
- *   GET  skills/settings              → { version, githubMirror? }
+ *   GET  skills/settings              → { version, githubMirror?, mirrorCapabilities?, directStatus? }
  *   POST skills/settings              → 保存后的设置（空串 = 清除；非法地址 422 + 中文 message）
- *   POST skills/settings/test-mirror  → { ok, ms?, message? }（不保存；失败不抛错）
+ *   POST skills/settings/test-mirror  → { ok, ms?, message?, direct?, mirror? }（不保存；失败不抛错）
+ *
+ * D-B19（网络无感）：对话框除了自检结果，还要如实显示两行状态——直连（可用 / HTTP 403 / 超时（原因））
+ * 与镜像能力（下载 ✓ · API ✗）。两行的文案都是本文件的纯函数，网络错误不再当成横幅往外弹。
  */
 
 import { createStore, type Store } from "../../../kit/store.ts";
@@ -21,6 +24,7 @@ import { errorText } from "../../../shared/error-text.ts";
 import { fieldErrorsOf } from "../../../platform/client/api.ts";
 import type { FieldError } from "../../../platform/contract/host.ts";
 import type { MirrorTestResult, SkillsRemoteSettings } from "../../contract/remote.ts";
+import type { DirectStatus, MirrorCapabilities } from "../../../shared/network.ts";
 
 /* ---------------- 纯规则 ---------------- */
 
@@ -61,6 +65,90 @@ export function mirrorTestText(result: MirrorTestResult): string {
   return message === "" ? t("skills.remote.mirror.testFailed") : message;
 }
 
+/* ---------------- 网络状态两行（D-B19） ---------------- */
+
+function textOf(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** 直连状态 → 契约形状；形状不对（ok 不是布尔 / 没有 checkedAt）就整条丢掉，按「没探测过」处理。 */
+export function normalizeDirectStatus(raw: unknown): DirectStatus | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  if (typeof record["ok"] !== "boolean") return undefined;
+  const checkedAt = textOf(record["checkedAt"]);
+  if (checkedAt === "") return undefined;
+  const status: DirectStatus = { ok: record["ok"], checkedAt };
+  if (typeof record["status"] === "number" && Number.isFinite(record["status"])) status.status = record["status"];
+  const message = textOf(record["message"]);
+  if (message !== "") status.message = message;
+  return status;
+}
+
+/** 镜像能力 → 契约形状；形状不对（configured 不是布尔）就整条丢掉。 */
+export function normalizeMirrorCapabilities(raw: unknown): MirrorCapabilities | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  if (typeof record["configured"] !== "boolean") return undefined;
+  const capabilities: MirrorCapabilities = { configured: record["configured"] };
+  if (typeof record["downloads"] === "boolean") capabilities.downloads = record["downloads"];
+  if (typeof record["api"] === "boolean") capabilities.api = record["api"];
+  const probedAt = textOf(record["probedAt"]);
+  if (probedAt !== "") capabilities.probedAt = probedAt;
+  const error = textOf(record["error"]);
+  if (error !== "") capabilities.error = error;
+  return capabilities;
+}
+
+/**
+ * 「直连：可用 / HTTP 403 / 超时（原因）」那一行；undefined = 没有直连状态（从不显示半行）。
+ *
+ * 有状态码时只显示状态码（状态码本身就是结论，宿主的 message 往往重复它）；
+ * 网络层失败（没有状态码）才把中文原因括在括号里——超时 / 其它失败按 message 里的字样分。
+ */
+export function directStatusLine(status: DirectStatus | undefined): string | undefined {
+  if (status === undefined) return undefined;
+  const message = textOf(status.message);
+  const value = status.ok
+    ? t("skills.remote.mirror.directOk")
+    : typeof status.status === "number"
+      ? t("skills.remote.mirror.directHttp", { status: status.status })
+      : /超时|timeout/i.test(message)
+        ? t("skills.remote.mirror.directTimeout")
+        : t("skills.remote.mirror.directFailed");
+  const reason =
+    !status.ok && message !== "" && typeof status.status !== "number"
+      ? t("skills.remote.mirror.reason", { message })
+      : "";
+  return t("skills.remote.mirror.directLine", { value: value + reason });
+}
+
+function capabilityState(value: boolean | undefined): string {
+  if (value === true) return t("skills.remote.mirror.capYes");
+  if (value === false) return t("skills.remote.mirror.capNo");
+  return t("skills.remote.mirror.capUnknown");
+}
+
+/**
+ * 「镜像：下载 ✓ · API ✗」那一行（下载与 API 的能力并不一致，所以分两项写）。
+ * 没探测过 → 「镜像：未探测」；没配置镜像 → 「镜像：未配置」。
+ */
+export function mirrorCapabilityLine(capabilities: MirrorCapabilities | undefined): string {
+  const line = (value: string): string => t("skills.remote.mirror.mirrorLine", { value });
+  if (capabilities === undefined) return line(t("skills.remote.mirror.capUnknown"));
+  if (!capabilities.configured) return line(t("skills.remote.mirror.mirrorUnconfigured"));
+  const pair =
+    t("skills.remote.mirror.capDownloads") +
+    " " +
+    capabilityState(capabilities.downloads) +
+    " · " +
+    t("skills.remote.mirror.capApi") +
+    " " +
+    capabilityState(capabilities.api);
+  const reason = textOf(capabilities.error);
+  return line(reason === "" ? pair : pair + t("skills.remote.mirror.reason", { message: reason }));
+}
+
 /** 保存成功后的 Toast：清空 = 改回直连 GitHub。 */
 export function mirrorToastText(value: string): string {
   return trimMirrorInput(value) === "" ? t("skills.remote.mirror.cleared") : t("skills.remote.mirror.saved");
@@ -89,6 +177,10 @@ export interface MirrorState {
   testing: boolean;
   /** 保存在途 */
   busy: boolean;
+  /** 上次探测到的直连状态（D-B19；没探测过就是 undefined = 不显示那一行） */
+  directStatus: DirectStatus | undefined;
+  /** 上次探测到的镜像能力（D-B19） */
+  mirrorCapabilities: MirrorCapabilities | undefined;
   result: MirrorTestResult | undefined;
   /** 保存失败的原因（宿主的中文 message），显示在对话框里且不关闭 */
   error: string | undefined;
@@ -108,6 +200,20 @@ export interface MirrorStore {
   save(): Promise<string | undefined>;
 }
 
+/**
+ * 一次读取 / 自检带回来的两路状态：只覆盖宿主这次真的给了的那一项。
+ * 没给的那一路保留上一次的结论（旧事实比没有事实有用，界面也不会半行跳变）。
+ */
+function statusPatch(source: {
+  directStatus?: DirectStatus | undefined;
+  mirrorCapabilities?: MirrorCapabilities | undefined;
+}): Partial<MirrorState> {
+  const patch: Partial<MirrorState> = {};
+  if (source.directStatus !== undefined) patch.directStatus = source.directStatus;
+  if (source.mirrorCapabilities !== undefined) patch.mirrorCapabilities = source.mirrorCapabilities;
+  return patch;
+}
+
 export function createMirrorStore(adapter: MirrorAdapter): MirrorStore {
   const state = createStore<MirrorState>({
     loaded: false,
@@ -117,6 +223,8 @@ export function createMirrorStore(adapter: MirrorAdapter): MirrorStore {
     input: "",
     testing: false,
     busy: false,
+    directStatus: undefined,
+    mirrorCapabilities: undefined,
     result: undefined,
     error: undefined,
     errors: [],
@@ -134,7 +242,13 @@ export function createMirrorStore(adapter: MirrorAdapter): MirrorStore {
     state.patch({ loading: true });
     inFlight = adapter.load().then(
       (settings) => {
-        state.patch({ loading: false, loaded: true, current: settings.githubMirror });
+        // D-B19：设置里带着上次探测到的两路状态，读回来就显示（没有 = 没探测过）
+        state.patch({
+          loading: false,
+          loaded: true,
+          current: settings.githubMirror,
+          ...statusPatch(settings),
+        });
         // 打开对话框时设置还没读回来（输入框是空的）→ 补填当前值，别让用户对着空框猜。
         const snapshot = state.get();
         if (snapshot.open && openSeq === seqAtStart && snapshot.input === "") {
@@ -174,7 +288,12 @@ export function createMirrorStore(adapter: MirrorAdapter): MirrorStore {
       const result = await adapter
         .test(trimMirrorInput(state.get().input))
         .catch((failure: unknown): MirrorTestResult => ({ ok: false, message: errorText(failure) }));
-      state.patch({ testing: false, result });
+      // D-B19：这次探测到的两路结果一并换上（宿主没给的那一路保留上一次的结论）
+      state.patch({
+        testing: false,
+        result,
+        ...statusPatch({ directStatus: result.direct, mirrorCapabilities: result.mirror }),
+      });
     },
     async save() {
       if (state.get().busy) return undefined;
@@ -188,6 +307,8 @@ export function createMirrorStore(adapter: MirrorAdapter): MirrorStore {
           loaded: true,
           current: saved.githubMirror,
           input: saved.githubMirror ?? "",
+          // 保存后宿主会顺手探测一次并回写设置：拿到新的两路状态就换上
+          ...statusPatch(saved),
         });
         return mirrorToastText(value);
       } catch (failure) {

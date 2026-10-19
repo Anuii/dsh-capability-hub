@@ -1,20 +1,28 @@
 /**
  * GitHub 访问层：凭据链、默认分支查询、目录树（trees API）、raw 文件下载、
- * codeload tar.gz 下载、skills.sh 搜索、GitHub 镜像。
+ * 仓库归档（archive tar.gz）下载、skills.sh 搜索、GitHub 镜像、镜像能力探测。
  *
  * 凭据链（D-B9）：GITHUB_TOKEN → 子进程 `gh auth token`（5 秒超时，失败静默）→ 匿名。
  * `gh` 不在 PATH 里时（ENOENT）在 Windows 上依次试常见安装位置（ghCandidatePaths）。
  * 令牌只在 GitHubClient 内部持有，不进日志、不进响应、不落盘；日志经 redactor 二次兜底。
  *
- * GitHub 镜像（D-B18）：前缀式，只作用于**下载类**地址（raw.githubusercontent.com /
- * codeload.github.com）—— 实际请求 = 镜像前缀 + 原始完整 URL。走镜像的请求绝不带
- * Authorization（令牌不给第三方）；api.github.com 与 skills.sh 永不走镜像。
+ * 下载（D-B19）：整包一律用 `https://github.com/{repo}/archive/{ref}.tar.gz`
+ * （实测镜像普遍支持它；codeload.github.com 的 tar.gz 地址多数镜像直接 403）。
+ * 内容与目录哈希口径不变 —— 得到的就是同一份 codeload 产出的 tar.gz。
+ *
+ * GitHub 镜像（D-B18 / D-B19）：前缀式，实际请求 = 镜像前缀 + 原始完整 URL。
+ *   - **下载类**地址（raw.githubusercontent.com / github.com）在设置镜像后直接走镜像，
+ *     走镜像的请求绝不带 Authorization（令牌不给第三方）。
+ *   - **api.github.com** 先直连（有令牌就带）；直连失败（网络异常 / 超时 / 403 / 429 / 5xx）
+ *     才用**无令牌**经镜像重试同一个 URL；镜像也失败时抛最初那条错误（见 apiRequest）。
+ *   - skills.sh 永不走镜像。
  *
  * fetch 可注入（RemoteOptions.fetchImpl），单测用假 fetch 全覆盖。
  */
 
 import path from "node:path";
 import type { AuthMode } from "../contract/remote.ts";
+import type { DirectStatus, MirrorCapabilities, NetworkRoute } from "../../shared/network.ts";
 
 import { execFile } from "node:child_process";
 import { gunzipSync } from "node:zlib";
@@ -24,7 +32,8 @@ import { mapLimited } from "./limited.ts";
 import type { HubLogger } from "../../platform/contract/host.ts";
 
 export const API_TIMEOUT_MS = 15_000;
-export const CODELOAD_TIMEOUT_MS = 60_000;
+/** 整包归档下载（github.com/{repo}/archive/{ref}.tar.gz，大仓库慢，给足时间） */
+export const ARCHIVE_TIMEOUT_MS = 60_000;
 export const SKILLS_SH_TIMEOUT_MS = 10_000;
 export const GH_TOKEN_TIMEOUT_MS = 5_000;
 /** 目录树查询（trees API，一次给出整棵树的 sha） */
@@ -33,6 +42,8 @@ export const TREES_TIMEOUT_MS = 30_000;
 export const RAW_TIMEOUT_MS = 30_000;
 /** 镜像自检（取一个很小的公开文件） */
 export const MIRROR_TEST_TIMEOUT_MS = 15_000;
+/** 镜像能力探测（下载 / API 各一次；要求 15 秒内给出结论） */
+export const PROBE_TIMEOUT_MS = 15_000;
 /** 镜像自检用的公开文件（raw.githubusercontent.com 上的小文件） */
 export const MIRROR_TEST_URL = "https://raw.githubusercontent.com/vercel-labs/skills/main/README.md";
 /**
@@ -42,8 +53,12 @@ export const MIRROR_TEST_URL = "https://raw.githubusercontent.com/vercel-labs/sk
  * raw 文件，各算各的上限会被乘开（4 组 × 每组 12 个 = 48 个在途）。整次操作共用这一个数。
  */
 export const OPERATION_CONCURRENCY = 12;
-/** 下载类地址的 host —— 只有这两个走镜像 */
-export const MIRRORED_HOSTS: readonly string[] = ["raw.githubusercontent.com", "codeload.github.com"];
+/**
+ * 下载类地址的 host —— 只有这两个走镜像（D-B19：整包下载改走 github.com 的 archive 形态）
+ */
+export const MIRRORED_HOSTS: readonly string[] = ["raw.githubusercontent.com", "github.com"];
+/** API 主机：直连失败后允许无令牌经镜像重试（D-B19）；它**不在** MIRRORED_HOSTS 里 */
+export const API_HOST = "api.github.com";
 export const SKILLS_SH_SEARCH_URL = "https://skills.sh/api/search";
 /** 查询剩余额度用的端点；GitHub 明确说明它**不消耗配额** */
 export const RATE_LIMIT_URL = "https://api.github.com/rate_limit";
@@ -65,6 +80,21 @@ export interface RateLimitInfo {
   limit?: number;
 }
 
+/**
+ * 一次网络请求实际走的路（D-B19）：路由层下一批做聚合，这里只保证事件发得出来。
+ * 绝不包含 URL 之外的敏感信息（令牌永不出现在 url 里）。
+ */
+export interface NetworkEvent {
+  /** api = api.github.com；download = raw / archive；search = skills.sh */
+  kind: "api" | "download" | "search";
+  /** 这一条请求实际用的路：直连，或经镜像 */
+  route: NetworkRoute;
+  /** 原始地址（**未**加镜像前缀） */
+  url: string;
+  /** 经镜像时的镜像主机名（例如 ghfast.top） */
+  mirrorHost?: string;
+}
+
 export interface GitHubClientOptions {
   fetchImpl?: typeof fetch;
   logger: HubLogger;
@@ -78,6 +108,11 @@ export interface GitHubClientOptions {
    * （设置页保存后无需重建客户端）。undefined / 空串 = 不走镜像。
    */
   mirrorProvider?: string | (() => string | undefined | Promise<string | undefined>);
+  /**
+   * 网络事件回调（D-B19）：apiRequest / downloadRequest / searchSkillsSh 各发一次。
+   * 回调抛出的异常会被吞掉 —— 事件上报绝不影响请求本身。
+   */
+  onNetworkEvent?: (event: NetworkEvent) => void;
 }
 
 export interface TarballResult {
@@ -109,7 +144,18 @@ export interface TreeSnapshot {
   truncated: boolean;
 }
 
-/** 镜像是否作用于这个地址（只有下载类地址走镜像；api.github.com 与 skills.sh 永不） */
+/**
+ * 仓库归档地址（D-B19）：`https://github.com/{repo}/archive/{ref}.tar.gz`。
+ *
+ * 不再用 `codeload.github.com/{repo}/tar.gz/{ref}`：实测多数镜像对它直接 403，
+ * 而 archive 形态镜像普遍支持；两者返回的是同一份 tar.gz（同样的 <repo>-<ref>/ 根前缀），
+ * 所以 tar 解析与目录哈希口径都不变。
+ */
+export function archiveUrl(repo: string, ref: string): string {
+  return `https://github.com/${repo}/archive/${encodeURIComponent(ref)}.tar.gz`;
+}
+
+/** 镜像是否作用于下载类地址（raw.githubusercontent.com / github.com） */
 export function isMirroredUrl(url: string): boolean {
   try {
     return MIRRORED_HOSTS.includes(new URL(url).hostname.toLowerCase());
@@ -118,11 +164,37 @@ export function isMirroredUrl(url: string): boolean {
   }
 }
 
-/** 实际请求地址 = 镜像前缀 + 原始完整 URL（例：https://ghfast.top/https://raw.githubusercontent.com/...） */
+/** 这个地址是不是 api.github.com（只有它允许「直连失败后再经镜像重试」） */
+export function isApiUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase() === API_HOST;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 实际请求地址 = 镜像前缀 + 原始完整 URL
+ * （例：https://ghfast.top/https://raw.githubusercontent.com/...）。
+ *
+ * 下载类地址与 api.github.com 都可以镜像；其余（skills.sh）原样返回。
+ */
 export function applyMirror(url: string, mirror: string | undefined): string {
   const prefix = (mirror ?? "").trim();
-  if (prefix === "" || !isMirroredUrl(url)) return url;
+  if (prefix === "" || !(isMirroredUrl(url) || isApiUrl(url))) return url;
   return prefix.endsWith("/") ? prefix + url : `${prefix}/${url}`;
+}
+
+/** 镜像前缀的主机名（界面展示与事件上报用；解析不出来时 undefined） */
+export function mirrorHostOf(mirror: string | undefined): string | undefined {
+  const prefix = (mirror ?? "").trim();
+  if (prefix === "") return undefined;
+  try {
+    const hostname = new URL(prefix).hostname;
+    return hostname === "" ? undefined : hostname;
+  } catch {
+    return undefined;
+  }
 }
 
 /** 镜像失败时的中文说明：说清是哪个镜像、怎么清掉重试（绝不静默回退直连）。 */
@@ -293,6 +365,15 @@ export function isRateLimitResponse(status: number, headers: Headers): boolean {
   return status === 429;
 }
 
+/**
+ * API 直连的结果是否值得换路（镜像）重试（D-B19）：403 / 429 / 5xx。
+ * 网络异常与超时走的是 apiRequest 的 catch 分支，最终落到同一条降级链。
+ * 404 / 401 这类是确定答复，不换路 —— 换路只会把一个真实的「找不到」说成「镜像坏了」。
+ */
+export function isDegradableApiStatus(status: number): boolean {
+  return status === 403 || status === 429 || status >= 500;
+}
+
 export class GitHubClient {
   private readonly fetchImpl: typeof fetch;
   private readonly logger: HubLogger;
@@ -304,6 +385,7 @@ export class GitHubClient {
   /** setMirror 显式设过（优先于 mirrorProvider 的每次现读） */
   private mirrorExplicit = false;
   private readonly mirrorProvider?: string | (() => string | undefined | Promise<string | undefined>);
+  private readonly onNetworkEvent?: (event: NetworkEvent) => void;
   private cached?: AuthState;
   private lastRateLimit?: RateLimitInfo;
 
@@ -315,6 +397,7 @@ export class GitHubClient {
     this.cacheAuth = options.cacheAuth ?? true;
     this.onSecret = options.onSecret ?? (() => {});
     this.mirrorProvider = options.mirrorProvider;
+    this.onNetworkEvent = options.onNetworkEvent;
     this.mirror = typeof options.mirrorProvider === "string" ? options.mirrorProvider : undefined;
   }
 
@@ -373,7 +456,7 @@ export class GitHubClient {
   async rateLimit(): Promise<RateLimitInfo | undefined> {
     let response: Response;
     try {
-      response = await this.request(RATE_LIMIT_URL, {
+      response = await this.apiRequest(RATE_LIMIT_URL, {
         accept: "application/vnd.github+json",
         timeoutMs: API_TIMEOUT_MS,
       });
@@ -398,40 +481,127 @@ export class GitHubClient {
     return headers;
   }
 
-  private async request(
+  /**
+   * 发一次请求（超时 / 外部取消 / 定向跟随都在这里）。token 为 undefined 时不带 Authorization。
+   * request / apiRequest / downloadRequest 共用它 —— 走镜像的分支因此天然拿不到令牌。
+   */
+  private async fetchOnce(
     url: string,
-    init: { accept: string; timeoutMs: number; method?: string; signal?: AbortSignal },
+    init: { accept: string; timeoutMs: number; method?: string; signal?: AbortSignal; token?: string },
   ): Promise<Response> {
-    const auth = await this.auth();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), init.timeoutMs);
     const onAbort = () => controller.abort();
     init.signal?.addEventListener("abort", onAbort, { once: true });
     try {
-      const response = await this.fetchImpl(url, {
+      return await this.fetchImpl(url, {
         method: init.method ?? "GET",
-        headers: this.headers(auth.token, init.accept),
+        headers: this.headers(init.token, init.accept),
         signal: controller.signal,
         redirect: "follow",
       });
-      // FIX-6（D-3）：**每一个** GitHub 响应（成功或失败）都读一次 x-ratelimit-*。
-      // 旧实现只在 throwForResponse（错误路径）里记，于是成功路径永远拿不到配额，
-      // GET skills/github-auth 与 skills/updates/check 的 rateLimitRemaining 恒为 undefined。
-      this.noteRateLimit(response);
-      return response;
     } finally {
       clearTimeout(timer);
       init.signal?.removeEventListener("abort", onAbort);
     }
   }
 
+  /** 发出网络事件（回调异常一律吞掉；没装回调时零开销） */
+  private emitNetworkEvent(event: NetworkEvent): void {
+    const listener = this.onNetworkEvent;
+    if (listener === undefined) return;
+    try {
+      listener(event);
+    } catch {
+      // 事件上报绝不影响请求本身
+    }
+  }
+
+  /** 直连请求（带令牌；不走镜像）。**API 调用请用 apiRequest**。 */
+  private async request(
+    url: string,
+    init: { accept: string; timeoutMs: number; method?: string; signal?: AbortSignal },
+  ): Promise<Response> {
+    const auth = await this.auth();
+    const response = await this.fetchOnce(url, { ...init, token: auth.token });
+    // FIX-6（D-3）：**每一个** GitHub 响应（成功或失败）都读一次 x-ratelimit-*。
+    // 旧实现只在 throwForResponse（错误路径）里记，于是成功路径永远拿不到配额，
+    // GET skills/github-auth 与 skills/updates/check 的 rateLimitRemaining 恒为 undefined。
+    this.noteRateLimit(response);
+    return response;
+  }
+
   /**
-   * **下载类**请求（D-B18）：raw.githubusercontent.com / codeload.github.com 会按设置
-   * 走 GitHub 镜像；走镜像时**绝不带 Authorization 头**（令牌不给第三方），也不读
+   * **API 请求**（D-B19）：api.github.com 的访问链条 = 直连（有令牌就带）→ 镜像（无令牌）。
+   *
+   * 直连的「失败」判据：网络异常 / 超时 / 403 / 429 / 5xx（404、401 这类是**确定的答复**，
+   * 不再换路重试）。失败且设了镜像时，用**无令牌**经镜像重试同一个 URL（镜像可能代 API）。
+   *
+   * 镜像也没救回来时，**抛最初那条错误** —— 直连是网络异常就重抛那个异常，
+   * 直连是 HTTP 状态就原样返回那次 Response（调用方既有的 throwForResponse 会产出
+   * 与旧实现逐字相同的中文文案与错误码）。镜像的错误绝不覆盖直连的错误：
+   * 直连 403 仍然是「被 GitHub 拒绝」，不会被说成「镜像坏了」。
+   *
+   * 调用方已取消（signal 已 abort）时不换路：那不是在降级，是这次请求不要了。
+   */
+  private async apiRequest(
+    url: string,
+    init: { accept: string; timeoutMs: number; signal?: AbortSignal },
+  ): Promise<Response> {
+    const mirror = await this.currentMirror();
+    const host = mirrorHostOf(mirror);
+    let directResponse: Response | undefined;
+    let directError: unknown;
+    try {
+      const response = await this.request(url, init);
+      if (!isDegradableApiStatus(response.status) || mirror === undefined) {
+        // 直连就是这一条的最终答案 → 事件如实报「直连」，不带镜像主机名
+        this.emitNetworkEvent({ kind: "api", route: "direct", url });
+        return response;
+      }
+      directResponse = response;
+    } catch (error) {
+      directError = error;
+      if (mirror === undefined || init.signal?.aborted === true) {
+        this.emitNetworkEvent({ kind: "api", route: "direct", url });
+        throw error;
+      }
+    }
+
+    // 直连失败 → 镜像（无令牌）重试同一个 URL
+    try {
+      const mirroredUrl = applyMirror(url, mirror);
+      const response = await this.fetchOnce(mirroredUrl, {
+        accept: init.accept,
+        timeoutMs: init.timeoutMs,
+        signal: init.signal,
+        token: undefined,
+      });
+      if (response.ok) {
+        this.emitNetworkEvent({
+          kind: "api",
+          route: "mirror",
+          url,
+          ...(host === undefined ? {} : { mirrorHost: host }),
+        });
+        return response;
+      }
+    } catch {
+      // 镜像的错误不覆盖直连错误：下面统一抛直连那次
+    }
+    this.emitNetworkEvent({ kind: "api", route: "direct", url });
+    if (directResponse !== undefined) return directResponse;
+    throw directError;
+  }
+
+  /**
+   * **下载类**请求（D-B18 / D-B19）：raw.githubusercontent.com 与 github.com 的 archive
+   * 地址按设置走 GitHub 镜像；走镜像时**绝不带 Authorization 头**（令牌不给第三方），也不读
    * x-ratelimit-*（那是镜像的响应头，与 GitHub 配额无关）。
    *
-   * 镜像失败不静默回退直连：抛 UPSTREAM，文案写明「通过镜像 … 下载失败：…；可在技能页
-   * 「⋯ → GitHub 镜像」里清空镜像后重试」。
+   * 下载不降级：设了镜像就直接走镜像，失败**不静默回退直连**，抛 UPSTREAM，文案写明
+   * 「通过镜像 … 下载失败：…；可在技能页「⋯ → GitHub 镜像」里清空镜像后重试」。
+   * （API 才有「直连 → 镜像」的链条，见 apiRequest。）
    */
   private async downloadRequest(
     url: string,
@@ -440,33 +610,29 @@ export class GitHubClient {
     const mirror = await this.currentMirror();
     const effective = applyMirror(url, mirror);
     const mirrored = effective !== url;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), init.timeoutMs);
-    const onAbort = () => controller.abort();
-    init.signal?.addEventListener("abort", onAbort, { once: true });
-    try {
-      const headers: Record<string, string> = { Accept: init.accept, "User-Agent": USER_AGENT };
-      if (!mirrored) {
-        const auth = await this.auth();
-        if (auth.token) headers["Authorization"] = `Bearer ${auth.token}`;
-      }
-      const response = await this.fetchImpl(effective, {
-        method: "GET",
-        headers,
-        signal: controller.signal,
-        redirect: "follow",
+    const host = mirrored ? mirrorHostOf(mirror) : undefined;
+    const emit = (): void => {
+      this.emitNetworkEvent({
+        kind: "download",
+        route: mirrored ? "mirror" : "direct",
+        url,
+        ...(host === undefined ? {} : { mirrorHost: host }),
       });
-      if (mirrored) {
-        // 镜像不负责「这个文件不存在」的语义：非 2xx 一律按镜像失败报，绝不给用户
-        // 一个「上游删了技能」的错觉，也绝不悄悄回退直连。
-        if (!response.ok) {
-          throw upstream(mirrorFailureMessage(mirror!, `镜像返回 HTTP ${response.status}`), { url, mirror });
-        }
-      } else {
-        this.noteRateLimit(response);
-      }
-      return response;
+    };
+    let response: Response;
+    try {
+      // 走镜像时不带令牌（token 传 undefined）；直连才用凭据链里的令牌。
+      const token = mirrored ? undefined : (await this.auth()).token;
+      response = await this.fetchOnce(effective, {
+        accept: init.accept,
+        timeoutMs: init.timeoutMs,
+        signal: init.signal,
+        token,
+      });
     } catch (error) {
+      emit();
+      // 镜像不负责「这个文件不存在」的语义：非 2xx 一律按镜像失败报，绝不给用户
+      // 一个「上游删了技能」的错觉，也绝不悄悄回退直连。
       if (mirrored) {
         throw upstream(mirrorFailureMessage(mirror!, `网络错误（${(error as Error).message}）`), {
           url,
@@ -474,10 +640,14 @@ export class GitHubClient {
         });
       }
       throw error;
-    } finally {
-      clearTimeout(timer);
-      init.signal?.removeEventListener("abort", onAbort);
     }
+    if (mirrored && !response.ok) {
+      emit();
+      throw upstream(mirrorFailureMessage(mirror!, `镜像返回 HTTP ${response.status}`), { url, mirror });
+    }
+    if (!mirrored) this.noteRateLimit(response);
+    emit();
+    return response;
   }
 
   private noteRateLimit(response: Response): void {
@@ -515,7 +685,7 @@ export class GitHubClient {
   async defaultBranch(repo: string): Promise<string | undefined> {
     let response: Response;
     try {
-      response = await this.request(`https://api.github.com/repos/${repo}`, {
+      response = await this.apiRequest(`https://api.github.com/repos/${repo}`, {
         accept: "application/vnd.github+json",
         timeoutMs: API_TIMEOUT_MS,
       });
@@ -532,7 +702,7 @@ export class GitHubClient {
     }
   }
 
-  /** 下载并解析 codeload tar.gz。ref 缺省时按 HEAD → 默认分支 → main → master 依次尝试。 */
+  /** 下载并解析仓库归档（archive tar.gz）。ref 缺省时按默认分支 → main → master → HEAD 依次尝试。 */
   async downloadTarball(repo: string, ref?: string, signal?: AbortSignal): Promise<TarballResult> {
     const candidates = await this.candidateRefs(repo, ref);
     let lastError: unknown;
@@ -567,12 +737,12 @@ export class GitHubClient {
   }
 
   private async fetchTarball(repo: string, ref: string, signal?: AbortSignal): Promise<TarballResult> {
-    const url = `https://codeload.github.com/${repo}/tar.gz/${encodeURIComponent(ref)}`;
+    const url = archiveUrl(repo, ref);
     let response: Response;
     try {
       response = await this.downloadRequest(url, {
         accept: "application/x-gzip",
-        timeoutMs: CODELOAD_TIMEOUT_MS,
+        timeoutMs: ARCHIVE_TIMEOUT_MS,
         signal,
       });
     } catch (error) {
@@ -616,7 +786,7 @@ export class GitHubClient {
     const url = `https://api.github.com/repos/${repo}/git/trees/${encodeURIComponent(useRef)}?recursive=1`;
     let response: Response;
     try {
-      response = await this.request(url, {
+      response = await this.apiRequest(url, {
         accept: "application/vnd.github+json",
         timeoutMs: TREES_TIMEOUT_MS,
         signal,
@@ -724,15 +894,34 @@ export class GitHubClient {
     }
   }
 
+  /**
+   * 探测直连状态（D-B19，设置页用）：用当前凭据（没令牌就匿名）GET /rate_limit。
+   * 失败不抛错，返回带中文原因的 DirectStatus。
+   */
+  async probeDirectStatus(): Promise<DirectStatus> {
+    const auth = await this.auth();
+    // 模块级的 probeDirect（导出给设置页与单测）；同名的类方法名刻意不同，免得看起来像递归
+    return await probeDirect(this.fetchImpl, auth.token);
+  }
+
+  /** 探测镜像能力（D-B19，设置页用）：下载 / API 各一次，都不抛错。 */
+  async probeMirrorCapabilities(mirror: string): Promise<MirrorCapabilities> {
+    return await probeMirror(mirror, this.fetchImpl);
+  }
+
   /** skills.sh 公共搜索接口。拿不到就抛 UPSTREAM（docs 有说明）。 */
   async searchSkillsSh(query: string, limit = 20, offset = 0): Promise<unknown> {
     const url = `${SKILLS_SH_SEARCH_URL}?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`;
+    // skills.sh 永不走镜像：路由恒为直连
+    const emit = (): void => this.emitNetworkEvent({ kind: "search", route: "direct", url });
     let response: Response;
     try {
       response = await this.request(url, { accept: "application/json", timeoutMs: SKILLS_SH_TIMEOUT_MS });
     } catch (error) {
+      emit();
       throw upstream(`搜索 skills.sh 失败：网络错误（${(error as Error).message}）。`, { url });
     }
+    emit();
     if (isRateLimitResponse(response.status, response.headers)) {
       throw rateLimited(rateLimitMessage(parseRateLimit(response.headers)), { url });
     }
@@ -745,6 +934,113 @@ export class GitHubClient {
       throw upstream(`搜索 skills.sh 失败：响应不是合法 JSON（${(error as Error).message}）。`, { url });
     }
   }
+}
+
+/* ---------- 网络能力探测（D-B19；导出给设置页与单测） ---------- */
+
+/** 一次探测的原始结论（三个探测点共用；reason 是中文原因片） */
+interface ProbeOutcome {
+  /** 2xx */
+  ok: boolean;
+  /** HTTP 状态码；网络层失败（超时 / DNS / 连接被拒）时没有 */
+  status?: number;
+  reason?: string;
+}
+
+/** 发一次探测请求（15 秒超时，读掉响应体确保确实传完）。任何失败都折成 ProbeOutcome，绝不抛错。 */
+async function probeOnce(
+  fetchImpl: typeof fetch,
+  url: string,
+  accept: string,
+  token: string | undefined,
+): Promise<ProbeOutcome> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const headers: Record<string, string> = { Accept: accept, "User-Agent": USER_AGENT };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const response = await fetchImpl(url, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    try {
+      await response.arrayBuffer();
+    } catch {
+      // 读不出响应体不影响「状态码」这个结论
+    }
+    return {
+      ok: response.status >= 200 && response.status <= 299,
+      status: response.status,
+    };
+  } catch (error) {
+    const reason = (error as Error).name === "AbortError" ? "请求超时" : `网络错误（${(error as Error).message}）`;
+    return { ok: false, reason };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 把探测结论折成中文原因片：带状态码，或网络错误文字（界面直接展示） */
+function describeProbeFailure(outcome: ProbeOutcome): string {
+  if (outcome.status !== undefined) return `HTTP ${outcome.status}`;
+  return outcome.reason ?? "网络错误";
+}
+
+/**
+ * 探测直连（D-B19）：GET `https://api.github.com/rate_limit`（该端点不消耗配额）。
+ *
+ * 有令牌（环境变量 / gh）就带 Authorization，与真实请求同一条链路。
+ * 任何失败都不抛错 —— 返回 `{ ok:false, status?, message, checkedAt }` 供设置页显示
+ * 「可用 / 403 / 超时」。**这是探测，不是请求**：调用方不要拿它当访问是否可用的唯一依据。
+ */
+export async function probeDirect(fetchImpl: typeof fetch, token?: string): Promise<DirectStatus> {
+  const checkedAt = new Date().toISOString();
+  const outcome = await probeOnce(fetchImpl, RATE_LIMIT_URL, "application/vnd.github+json", token?.trim() || undefined);
+  if (outcome.ok) {
+    return { ok: true, status: outcome.status, checkedAt };
+  }
+  const status = outcome.status;
+  const message =
+    status === undefined
+      ? `连接 api.github.com 失败：${outcome.reason ?? "网络错误"}。`
+      : status === 403
+        ? "直连 api.github.com 被拒绝（HTTP 403）：可能是未登录额度已用尽，或该地址在本机网络下被拦截。"
+        : status === 429
+          ? "直连 api.github.com 触发速率限制（HTTP 429），稍后会重置。"
+          : `直连 api.github.com 返回 HTTP ${status}。`;
+  return { ok: false, ...(status === undefined ? {} : { status }), message, checkedAt };
+}
+
+/**
+ * 探测镜像能力（D-B19）：同一个镜像对「下载类地址」与「api.github.com」的支持并不一致，
+ * 所以分别探两次（并行，各 15 秒超时）：
+ *   - downloads：经镜像取 MIRROR_TEST_URL（raw 上的小文件）是否 2xx；
+ *   - api：经镜像**无令牌** GET `https://api.github.com/rate_limit` 是否正好 200
+ *     （部分镜像代 API，部分直接 403 —— 这正是要探出来的差别）。
+ * 两项都失败时 error 给中文原因（带状态码或网络错误文字）；只失败一项时不算整体不可用。
+ * 绝不抛错。
+ */
+export async function probeMirror(prefix: string, fetchImpl: typeof fetch): Promise<MirrorCapabilities> {
+  const normalized = (prefix ?? "").trim();
+  const probedAt = new Date().toISOString();
+  if (normalized === "") return { configured: false, probedAt };
+  const [downloads, api] = await Promise.all([
+    probeOnce(fetchImpl, applyMirror(MIRROR_TEST_URL, normalized), "application/octet-stream", undefined),
+    probeOnce(fetchImpl, applyMirror(RATE_LIMIT_URL, normalized), "application/vnd.github+json", undefined),
+  ]);
+  const capabilities: MirrorCapabilities = {
+    configured: true,
+    downloads: downloads.ok,
+    api: api.status === 200,
+    probedAt,
+  };
+  if (!downloads.ok && api.status !== 200) {
+    const host = mirrorHostOf(normalized) ?? normalized;
+    capabilities.error = `镜像 ${host} 不可用：下载 ${describeProbeFailure(downloads)}，API ${describeProbeFailure(api)}。`;
+  }
+  return capabilities;
 }
 
 /** 解析 skills.sh 的响应（字段名与 CC Switch 实测一致：query / searchType / skills / count）。 */

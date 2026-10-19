@@ -139,11 +139,11 @@ function tarRoutes(gz: Buffer): Parameters<typeof makeFakeFetch>[0] {
   return [
     ...routesFromArchive(gz),
     { match: (u: string) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
-    { match: (u: string) => u.includes("/tar.gz/"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
+    { match: (u: string) => u.includes(".tar.gz"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
   ];
 }
 
-/** 造带 codeload 风格根前缀的 pax 归档（buildTarWithPax 不提供根前缀包装）。 */
+/** 造带 GitHub 归档风格根前缀的 pax 归档（buildTarWithPax 不提供根前缀包装）。 */
 function paxArchive(entries: FixtureEntry[], root = "demo-main"): Buffer {
   const prefixed: FixtureEntry[] = [
     { path: root + "/", type: "dir" },
@@ -169,7 +169,7 @@ function symlinkBlock(name: string, target: string): Buffer {
   return block;
 }
 
-/** 造 codeload 形态归档，并在末尾（零块之前）插入一条符号链接条目。 */
+/** 造 GitHub 归档形态的归档，并在末尾（零块之前）插入一条符号链接条目。 */
 function archiveWithSymlink(
   entries: FixtureEntry[],
   link: { path: string; target: string },

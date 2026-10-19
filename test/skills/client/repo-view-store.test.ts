@@ -47,7 +47,7 @@ function fake(overrides: Partial<RepoViewAdapter> = {}): RepoViewAdapter & { cal
     },
     search: async (query) => {
       calls.push("search:" + query);
-      return [{ name: "pdf", repo: "b/two" }];
+      return { results: [{ name: "pdf", repo: "b/two" }] };
     },
     addRepo: async (repo, ref) => {
       calls.push("add:" + repo + "@" + (ref ?? ""));
@@ -119,6 +119,42 @@ test("输入框：像仓库地址就浏览（带分支、github.com 补协议）
   await store.search();
   assert.equal(store.state.get().searchOpen, true);
   assert.equal(store.state.get().searchError, undefined);
+});
+
+test("搜索带上来源（D-B19）：缓存也照常显示结果、不弹错误；直连不标来源", async () => {
+  const cached = createRepoViewStore(
+    fake({
+      search: async () => ({
+        results: [{ name: "pdf", repo: "b/two" }],
+        provenance: { route: "cache", at: "2026-01-02T03:04:05.000Z" },
+      }),
+    }),
+  );
+  cached.setEntry("pdf");
+  await cached.search();
+  const withCache = cached.state.get();
+  assert.equal(withCache.searchError, undefined, "拿到缓存不是错误：不弹错误");
+  assert.equal(withCache.searchResults?.length, 1, "结果照常显示");
+  assert.equal(withCache.searchProvenance?.route, "cache");
+
+  const direct = createRepoViewStore(
+    fake({
+      search: async () => ({
+        results: [{ name: "pdf", repo: "b/two" }],
+        provenance: { route: "direct", at: "2026-01-02T03:04:05.000Z" },
+      }),
+    }),
+  );
+  direct.setEntry("pdf");
+  await direct.search();
+  assert.equal(direct.state.get().searchProvenance?.route, "direct");
+
+  // 重新搜索失败：结果与来源都清掉（错误路径不走缓存逻辑）
+  const failing = createRepoViewStore(fake({ search: async () => Promise.reject(new Error("请求超时")) }));
+  failing.setEntry("docx");
+  await failing.search();
+  assert.equal(failing.state.get().searchError, "请求超时");
+  assert.equal(failing.state.get().searchProvenance, undefined);
 });
 
 test("从搜索结果浏览：预先勾上那个技能，并收起搜索结果；浏览失败给错误", async () => {

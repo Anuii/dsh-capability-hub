@@ -12,6 +12,7 @@
 import { api } from "../../platform/client/api.ts";
 import type { ConfigPayload, ParseResult, RevealResult, ServerView, UpsertResult } from "../contract/config.ts";
 import type { RegistryDetail, RegistrySearchResult } from "../contract/registry.ts";
+import { normalizeProvenance } from "./registry/pure.ts";
 import type { ServersAdapter } from "./servers-store.ts";
 import { t } from "./strings.ts";
 
@@ -70,16 +71,21 @@ export async function revealServer(name: string): Promise<ServerView> {
 /* ---------------- Official MCP Registry（0.9.0，只读） ---------------- */
 
 /**
- * GET mcp/registry/search?q=&cursor= → { items, nextCursor }。
+ * GET mcp/registry/search?q=&cursor= → { items, nextCursor?, provenance? }。
  *
  * registry 的 search 实测很慢（jira 约 14 秒、filesystem 超过 60 秒），宿主的请求超时是 45 秒，
  * 超时由宿主返回中文错误 —— 这里只把 data 取出来，界面负责「加载中」与重试。
+ *
+ * 0.10.0（D-B19）：联网失败但同一关键词有缓存时，宿主照常返回缓存的 items，并把
+ * provenance 标成 { route: "cache", at }；界面据此只显示一行「缓存于 X」，不弹错误横幅。
  */
 export async function searchRegistry(query: string, cursor?: string): Promise<RegistrySearchResult> {
   const data = await api.get<Partial<RegistrySearchResult>>("mcp/registry/search", { q: query, cursor });
+  const provenance = normalizeProvenance(data?.provenance);
   return {
     items: Array.isArray(data?.items) ? data.items : [],
     ...(typeof data?.nextCursor === "string" && data.nextCursor !== "" ? { nextCursor: data.nextCursor } : {}),
+    ...(provenance === undefined ? {} : { provenance }),
   };
 }
 

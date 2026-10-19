@@ -49,7 +49,7 @@ _Avoid_: 单文件技能
 _Avoid_: 哈希、缓存、校验和
 
 **GitHub 镜像**：
-一个前缀式的 GitHub 加速地址（如 `https://ghfast.top/`），实际请求 = 镜像前缀 + 原始完整 URL。只作用于**下载类**地址（`raw.githubusercontent.com`、`codeload.github.com`），`api.github.com` 与 skills.sh 永不走镜像；走镜像的请求不带令牌。存在 `<hubHome>/skills/settings.json`，在技能页「⋯ → GitHub 镜像」里设置。
+一个前缀式的 GitHub 加速地址（如 `https://ghfast.top/`），实际请求 = 镜像前缀 + 原始完整 URL。**0.10.0（D-B19）起**：下载类地址（`raw.githubusercontent.com`、`github.com` 的 archive 形态）走镜像；**`api.github.com` 允许在直连失败后无令牌经镜像重试**（仅公开仓库）；skills.sh 不走镜像。走镜像的请求**一律不带令牌**。镜像能力（下载 / API）由插件探测后存在设置里。存在 `<hubHome>/skills/settings.json`，在技能页「⋯ → GitHub 镜像」里设置。
 _Avoid_: 代理、加速器、反代
 
 ## MCP

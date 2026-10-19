@@ -3,10 +3,26 @@
  *
  * 返回值的错误码与中文文案遵循 §3.1：BAD_REQUEST(400) / VALIDATION(422) /
  * NOT_FOUND(404) / CONFLICT(409) / UPSTREAM(502) / RATE_LIMITED(429) / INTERNAL(500)。
+ *
+ * skills.sh 搜索缓存（0.10.0，D-B19）：搜索**成功**时把结果写进共享搜索缓存
+ * <hubHome>/search-cache.json（shared/node/search-cache.ts，键 = "skills.sh" + \u0000 + 归一化关键词），
+ * 响应带 provenance: { route: "direct", at }——skills.sh 不走镜像，路线固定直连。
+ * 搜索**失败**（网络异常 / 超时 / 429 / 5xx）且同一关键词有缓存时，返回缓存的 results 与
+ * provenance: { route: "cache", at: 缓存写入时刻 }，不报错；没有缓存才抛原来的中文错误。
+ * 缓存读写失败只降级（记 warning），绝不影响搜索结果。
  */
 
 import { parseRepoRef } from "./sourceurl.ts";
 import { badRequest, validation } from "../../shared/errors.ts";
+import { errorText } from "../../shared/error-text.ts";
+import {
+  lookup,
+  readSearchCache,
+  searchCacheFilePath,
+  store,
+  writeSearchCache,
+  type SearchCacheEntry,
+} from "../../shared/node/search-cache.ts";
 import { optionalInput, optionalInputList, patchInput, recordOrEmpty, requireInput } from "../../shared/request.ts";
 import { assertMirrorInput, normalizeMirror, readSettings, writeSettings } from "./settings.ts";
 import { assertRepoShape } from "./repos.ts";
@@ -23,7 +39,13 @@ import type { SourceStore } from "./lockstore.ts";
 import type { FingerprintStore } from "./fingerprints.ts";
 import type { RemoteOptions, SkillsLocalPort } from "./types.ts";
 import type { HubContext, RouteHandler } from "../../platform/contract/host.ts";
-import type { InstallTarget, MirrorTestResult, SkillsRemoteSettings } from "../contract/remote.ts";
+import type {
+  InstallTarget,
+  MirrorTestResult,
+  SearchResponse,
+  SearchResultItem,
+  SkillsRemoteSettings,
+} from "../contract/remote.ts";
 
 export interface RoutesDeps {
   ctx: HubContext;
@@ -51,11 +73,66 @@ function resolveRepoInput(raw: string, explicitRef?: string): { repo: string; re
   return out;
 }
 
+/** 记录形状的兜底判断（缓存里的 payload 是 unknown）。 */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * 这些失败才用缓存顶（D-B19：网络异常 / 超时 / 429 / 5xx）。
+ * 其余错误（例如路由层自己的 400 / 422）照旧原样抛——参数错误不该被一份旧结果掩盖。
+ */
+function isCacheableSearchFailure(error: unknown): boolean {
+  const code = isRecord(error) ? error.code : undefined;
+  return code === "UPSTREAM" || code === "RATE_LIMITED";
+}
+
 export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, RouteHandler> {
   const { ctx, skills, github, sources, repos, catalog, meta, fingerprints } = deps;
   const now = deps.now;
 
   const routes: Record<string, RouteHandler> = {};
+
+  /* ---------- skills.sh 搜索缓存（0.10.0，D-B19） ---------- */
+
+  /** 缓存文件：<hubHome>/search-cache.json（与 mcp-registry 共用一份，键带来源前缀）。 */
+  const searchCacheFile = searchCacheFilePath(ctx.hubHome);
+
+  /**
+   * 把一次成功的搜索结果写进缓存（同一个关键词只留最近 1 条）。
+   * 缓存只是「有更好」：读写失败只记 warning，本次响应照常返回，绝不因此报错。
+   */
+  async function rememberSearch(query: string, results: SearchResultItem[], at: string): Promise<void> {
+    try {
+      const cache = await readSearchCache(searchCacheFile);
+      const entry: SearchCacheEntry = {
+        source: "skills.sh",
+        query,
+        at,
+        // skills.sh 永不走 GitHub 镜像（D-B19）：实际路线固定是直连
+        route: "direct",
+        payload: { results },
+      };
+      await writeSearchCache(searchCacheFile, store(cache, entry));
+      ctx.logger.debug("skills-remote: 搜索「" + query + "」的结果已写入搜索缓存");
+    } catch (error) {
+      ctx.logger.warn("skills-remote: 写搜索缓存失败（本次搜索结果照常返回）：" + errorText(error));
+    }
+  }
+
+  /**
+   * 失败回落：同一关键词（trim + 小写后）有缓存就返回缓存的 results，
+   * provenance 标的是**缓存写入时刻**（界面上显示「缓存于 X」）。
+   */
+  async function cachedSearch(query: string): Promise<SearchResponse | undefined> {
+    const cache = await readSearchCache(searchCacheFile);
+    const entry = lookup(cache, "skills.sh", query);
+    if (entry === undefined) return undefined;
+    // payload 是我们自己写进去的（形状见 rememberSearch）；这里只兜「文件被手改坏」的情况
+    const payload = isRecord(entry.payload) ? entry.payload : undefined;
+    const results = payload !== undefined && Array.isArray(payload.results) ? payload.results : undefined;
+    if (results === undefined) return undefined;
+    return { results: results as SearchResultItem[], provenance: { route: "cache", at: entry.at } };
+  }
 
   routes["GET skills/sources"] = async (req) => {
     const workspace = req.query["workspace"];
@@ -128,10 +205,22 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
       throw validation("参数 githubMirror 必须是字符串。", [{ path: "githubMirror", message: "必须是字符串" }]);
     }
     const mirror = assertMirrorInput(typeof raw === "string" ? raw : "");
-    const saved = await writeSettings(ctx, mirror);
     // 即时生效：不必重建客户端
     github.setMirror(mirror);
-    return saved;
+    // **先保存**：探测只是「顺带」，任何探测失败都不影响保存成功（D-B19）
+    const saved = await writeSettings(ctx, mirror === undefined ? {} : { mirror });
+    if (mirror === undefined) return saved;
+    try {
+      const [direct, mirrorCapabilities] = await Promise.all([
+        github.probeDirectStatus(),
+        github.probeMirrorCapabilities(mirror),
+      ]);
+      // 探测结果写回设置（设置页下次打开就能看到「上次探测于 X」）
+      return await writeSettings(ctx, { mirror, mirrorCapabilities, directStatus: direct });
+    } catch (error) {
+      ctx.logger.warn("保存镜像后探测失败（设置已保存）", (error as Error).message);
+      return saved;
+    }
   };
 
   routes["POST skills/settings/test-mirror"] = async (req): Promise<MirrorTestResult> => {
@@ -147,7 +236,16 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
     if (normalized.mirror === undefined) {
       return { ok: false, message: "镜像地址是空的，请先填写（例如 https://ghfast.top/）。" };
     }
-    return await github.testMirror(normalized.mirror);
+    // 三件事互不依赖，并发做：
+    //   test       —— 经镜像取小文件（ok / ms / message，ok 仍表示「下载可用」）
+    //   direct     —— 直连 api.github.com 的状态（镜像坏不代表直连坏）
+    //   mirror     —— 镜像能力：下载 / API 各一项
+    const [test, direct, mirror] = await Promise.all([
+      github.testMirror(normalized.mirror),
+      github.probeDirectStatus(),
+      github.probeMirrorCapabilities(normalized.mirror),
+    ]);
+    return { ...test, direct, mirror };
   };
 
   routes["GET skills/repos"] = async () => ({ repos: await catalog.list() });
@@ -211,7 +309,7 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
     );
   };
 
-  routes["GET skills/search"] = async (req) => {
+  routes["GET skills/search"] = async (req): Promise<SearchResponse> => {
     const q = (req.query["q"] ?? "").trim();
     if (q.length < 2) throw badRequest("搜索关键词至少需要 2 个字符。");
     const limitText = req.query["limit"];
@@ -223,7 +321,25 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
       }
       limit = parsed;
     }
-    const payload = await github.searchSkillsSh(q, limit, 0);
+    let payload: unknown;
+    try {
+      payload = await github.searchSkillsSh(q, limit, 0);
+    } catch (error) {
+      // D-B19：网络问题不该直接摆到界面上——同一关键词有缓存就先给缓存（标注缓存时刻）
+      const fallback = isCacheableSearchFailure(error) ? await cachedSearch(q) : undefined;
+      if (fallback === undefined) throw error;
+      ctx.logger.warn(
+        "skills-remote: 搜索「" +
+          q +
+          "」失败，改用 " +
+          (fallback.provenance?.at ?? "上次") +
+          " 的缓存结果（" +
+          fallback.results.length +
+          " 条）：" +
+          errorText(error),
+      );
+      return fallback;
+    }
     // 已知来源里能找到同名技能时，顺手补上 skillPath（便于 UI 直接跳安装）
     const known = new Map(
       (await sources.list()).map((entry) => [
@@ -231,10 +347,12 @@ export function createSkillsRemoteRoutes(deps: RoutesDeps): Record<string, Route
         entry.skillPath,
       ]),
     );
-    const results = normalizeSkillsShResponse(payload, {
+    const results: SearchResultItem[] = normalizeSkillsShResponse(payload, {
       skillPathLookup: (repo, skillId) => known.get(`${repo.toLowerCase()}|${skillId.toLowerCase()}`),
     });
-    return { results };
+    const at = (now?.() ?? new Date()).toISOString();
+    await rememberSearch(q, results, at);
+    return { results, provenance: { route: "direct", at } };
   };
 
   routes["POST skills/install"] = async (req) => {

@@ -13,6 +13,7 @@
  */
 
 import type { RawMcpServer } from "./config.ts";
+import type { DataProvenance } from "../../shared/network.ts";
 
 /** 这条 server 支持的接入方式。远程优先，其次包管理器；不支持的形态不列。 */
 export type RegistryKind = "remotes" | "npm" | "pypi" | "oci";
@@ -37,6 +38,11 @@ export interface RegistrySearchResult {
   items: RegistryItem[];
   /** 下一页游标；没有更多时不出现。 */
   nextCursor?: string;
+  /**
+   * 0.10.0（D-B19）：这批结果是怎么来的——刚联网（直连 / 镜像），还是来自缓存。
+   * 界面据此标「缓存于 X」或「经镜像」，不再把网络错误直接摆到界面上。
+   */
+  provenance?: DataProvenance;
 }
 
 /** 生成好的一份配置：直接可以进 upsert（serverName 一定有）。 */

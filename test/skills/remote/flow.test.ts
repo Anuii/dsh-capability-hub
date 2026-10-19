@@ -101,7 +101,7 @@ test("安装：写盘、写来源，lock 的 skillFolderHash = 上游目录哈�
       ...archiveRoutes(archiveEntries),
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
       {
-        match: (u) => u.includes("/tar.gz/main"),
+        match: (u) => u.includes("/archive/main.tar.gz"),
         response: () =>
           new Response(
             new Uint8Array(
@@ -156,7 +156,7 @@ test("安装：目标已存在时该项失败并说明，不覆盖", async () =>
       ...archiveRoutes(skillFixture("x", "grilling")),
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () => new Response(new Uint8Array(tarGzOf(skillFixture("x", "grilling"))), { status: 200 }),
       },
     ],
@@ -199,7 +199,7 @@ test("安装到 user-dsh 写 sources.json 而非 lock", async () => {
     routes: [
       ...archiveRoutes(skillFixture("x", "tool", { description: "工具" })),
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () =>
           new Response(new Uint8Array(tarGzOf(skillFixture("x", "tool", { description: "工具" }))), { status: 200 }),
       },
@@ -282,7 +282,7 @@ test("检查更新：无来源 → no-source；上游一致 → up-to-date；不
       ...archiveRoutes(skillFixture("productivity", "grilling", { description: "v1" })),
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () => new Response(new Uint8Array(upstreamGz), { status: 200 }),
       },
     ],
@@ -333,7 +333,7 @@ test("检查更新：上游找不到该技能 → error（逐项，不影响其�
     rootPaths: { "user-agents": userAgents },
     routes: [
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () => new Response(new Uint8Array(tarGzOf(skillFixture("x", "other"))), { status: 200 }),
       },
     ],
@@ -368,7 +368,7 @@ test("检查更新：下载失败 → error，其余技能继续", async () => {
   const env = await buildModule({
     skills: [{ rootId: "user-agents", dirName: "x", path: dir, name: "x" }],
     rootPaths: { "user-agents": userAgents },
-    routes: [{ match: (u) => u.includes("codeload"), response: () => new Response("nope", { status: 500 }) }],
+    routes: [{ match: (u) => u.includes("/archive/"), response: () => new Response("nope", { status: 500 }) }],
   });
   await fs.mkdir(path.dirname(lockFilePath(env.ctx)), { recursive: true });
   await fs.writeFile(
@@ -411,7 +411,7 @@ test("applyUpdate：按契约五步顺序执行，并写回新哈希（installed
       ),
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () => new Response(new Uint8Array(upstreamGz), { status: 200 }),
       },
     ],
@@ -476,7 +476,7 @@ test("applyUpdate：原本启用则不改启停状态", async () => {
     routes: [
       ...archiveRoutes(skillFixture("x", "foo", { description: "v2" })),
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () => new Response(new Uint8Array(upstreamGz), { status: 200 }),
       },
     ],
@@ -515,7 +515,7 @@ test("applyUpdate 回滚：moveToTrash 失败 → 目录原样、lock 未改、o
     routes: [
       ...archiveRoutes(skillFixture("x", "foo", { description: "v2" })),
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () => new Response(new Uint8Array(upstreamGz), { status: 200 }),
       },
     ],
@@ -558,7 +558,7 @@ test("applyUpdate 回滚：恢复启停状态失败 → 目录从回收站拿回
     routes: [
       ...archiveRoutes(skillFixture("x", "foo", { description: "v2" })),
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () => new Response(new Uint8Array(upstreamGz), { status: 200 }),
       },
     ],
@@ -669,7 +669,7 @@ test("浏览仓库：列出技能、解析 name/description、标出已安装", 
     rootPaths: { "user-agents": userAgents },
     routes: [
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
-      { match: (u) => u.includes("/tar.gz/"), response: () => new Response(new Uint8Array(archive), { status: 200 }) },
+      { match: (u) => u.includes(".tar.gz"), response: () => new Response(new Uint8Array(archive), { status: 200 }) },
     ],
   });
   const result = await call(env.module as never, "POST skills/repo/browse", { body: { repo: "mattpocock/skills" } });
@@ -697,7 +697,7 @@ test("浏览仓库：/tree/<ref>/<path> 只列出该子路径下的技能", asyn
   ]);
   const env = await buildModule({
     routes: [
-      { match: (u) => u.includes("/tar.gz/"), response: () => new Response(new Uint8Array(archive), { status: 200 }) },
+      { match: (u) => u.includes(".tar.gz"), response: () => new Response(new Uint8Array(archive), { status: 200 }) },
     ],
   });
   const result = await call(env.module as never, "POST skills/repo/browse", {
@@ -715,7 +715,7 @@ test("浏览仓库：没有技能时 UPSTREAM 且中文说明", async () => {
   const env = await buildModule({
     routes: [
       {
-        match: (u) => u.includes("/tar.gz/"),
+        match: (u) => u.includes(".tar.gz"),
         response: () => new Response(new Uint8Array(tarGzOf([{ path: "README.md", data: "hi" }])), { status: 200 }),
       },
     ],
@@ -781,7 +781,7 @@ test("令牌不泄漏（C4）：配置 GITHUB_TOKEN 后逐路由检查响应与�
     envToken: SECRET,
     routes: [
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
-      { match: (u) => u.includes("codeload"), response: () => new Response(new Uint8Array(archive), { status: 200 }) },
+      { match: (u) => u.includes("/archive/"), response: () => new Response(new Uint8Array(archive), { status: 200 }) },
       {
         match: (u) => u.includes("skills.sh"),
         response: () =>

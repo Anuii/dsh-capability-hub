@@ -52,6 +52,8 @@ export function createSkillsRemoteModule(
   if (options.envTokenProvider) githubOptions.envTokenProvider = options.envTokenProvider;
   if (options.ghTokenProvider) githubOptions.ghTokenProvider = options.ghTokenProvider;
   if (options.cacheAuth !== undefined) githubOptions.cacheAuth = options.cacheAuth;
+  // D-B19：网络事件只透传（路由层下一批做聚合），这里不加工
+  if (options.onNetworkEvent) githubOptions.onNetworkEvent = options.onNetworkEvent;
 
   const github = new GitHubClient(githubOptions);
   const sources: SourceStore = createSourceStore(scopedCtx);

@@ -45,7 +45,7 @@ function treeShaOf(children: { name: string; sha: string }[]): string {
 }
 
 /**
- * 由仓库内的条目（相对路径，不含 codeload 的根前缀）造出树 + raw 表。
+ * 由仓库内的条目（相对路径，不含归档的 <repo>-<ref>/ 根前缀）造出树 + raw 表。
  * options.truncated = true 时响应体里 truncated 为 true（模拟 GitHub 截断大仓库的树）。
  */
 export function buildTreeFixture(entries: FixtureEntry[], options: { truncated?: boolean } = {}): TreeFixture {
@@ -143,9 +143,9 @@ export function rawRoutes(
 }
 
 /**
- * 给「只 stub 了 codeload 的旧测试」补上 trees + raw 路由：同一份条目集既当归档又当目录树。
+ * 给「只 stub 了归档下载的旧测试」补上 trees + raw 路由：同一份条目集既当归档又当目录树。
  *
- * 行为变化（D-B18）后安装/更新走 trees+raw，旧的「只 stub codeload」测试必须补上这两条路由
+ * 行为变化（D-B18）后安装/更新走 trees+raw，旧的「只 stub 归档下载」测试必须补上这两条路由
  * 才走得到落盘逻辑 —— 这正是「与下载整个仓库相关」的那一处改动。
  */
 export function archiveRoutes(entries: FixtureEntry[], options: { truncated?: boolean } = {}): FakeFetchRoute[] {
@@ -154,7 +154,7 @@ export function archiveRoutes(entries: FixtureEntry[], options: { truncated?: bo
 }
 
 /**
- * 从一份 codeload 形态的 tar.gz 直接造出 trees + raw 路由（顺序：trees 在前，避免被
+ * 从一份归档形态的 tar.gz 直接造出 trees + raw 路由（顺序：trees 在前，避免被
  * 「/repos/ 通配」吃掉）。给「只准备了一份归档的旧安全回归测试」用：同一批条目既当归档又当树。
  */
 export function routesFromArchive(gz: Buffer): FakeFetchRoute[] {

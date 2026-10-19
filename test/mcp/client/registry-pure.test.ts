@@ -17,11 +17,14 @@ import {
   kindLabel,
   missingRequiredEnv,
   nameIssueText,
+  normalizeProvenance,
   previewConfigText,
+  provenanceNote,
   registryRowView,
   saveGate,
   serverNameIssue,
 } from "../../../src/mcp/client/registry/pure.ts";
+import { t } from "../../../src/mcp/client/strings.ts";
 import type {
   RegistryDetail,
   RegistryItem,
@@ -219,4 +222,53 @@ test("previewConfigText：预览就是提交体本身，能解析回来", () => 
   const text = previewConfigText(detail, "context7", {});
   assert.deepEqual(JSON.parse(text), buildSubmitConfig(detail, "context7", {}));
   assert.equal(previewConfigText(undefined, "context7", {}), "");
+});
+
+/* ---------------- 结果是怎么来的（D-B19） ---------------- */
+
+const AT = new Date(2026, 0, 2, 3, 4, 5).toISOString();
+
+test("provenance：缓存标出时刻并提示「重试」刷新", () => {
+  assert.equal(provenanceNote({ route: "cache", at: AT }), "缓存于 2026-01-02 03:04 · 点「重试」刷新");
+  // 时间缺失 / 解析不了：只说缓存，不显示半句
+  assert.equal(provenanceNote({ route: "cache", at: "" }), "缓存结果 · 点「重试」刷新");
+  assert.equal(provenanceNote({ route: "cache", at: "不是时间" }), "缓存结果 · 点「重试」刷新");
+  assert.equal(provenanceNote({ route: "cache", at: undefined as unknown as string }), "缓存结果 · 点「重试」刷新");
+});
+
+test("provenance：镜像标出主机名（没有主机名就只说「经镜像」）", () => {
+  assert.equal(provenanceNote({ route: "mirror", at: AT, mirrorHost: "ghfast.top" }), "经镜像 ghfast.top");
+  assert.equal(provenanceNote({ route: "mirror", at: AT, mirrorHost: " ghfast.top " }), "经镜像 ghfast.top");
+  assert.equal(provenanceNote({ route: "mirror", at: AT }), "经镜像");
+});
+
+test("provenance：直连安静；没有来源信息也不显示", () => {
+  assert.equal(provenanceNote({ route: "direct", at: AT }), undefined);
+  assert.equal(provenanceNote(undefined), undefined);
+});
+
+test("normalizeProvenance：形状不对就整条丢掉，脏字段不崩", () => {
+  assert.deepEqual(normalizeProvenance({ route: "direct", at: AT }), { route: "direct", at: AT });
+  assert.deepEqual(normalizeProvenance({ route: "cache" }), { route: "cache", at: "" });
+  assert.deepEqual(normalizeProvenance({ route: "mirror", at: AT, mirrorHost: "  " }), { route: "mirror", at: AT });
+  assert.equal(normalizeProvenance({ route: "卫星" }), undefined);
+  assert.equal(normalizeProvenance({ at: AT }), undefined);
+  assert.equal(normalizeProvenance(null), undefined);
+  assert.equal(normalizeProvenance("cache"), undefined);
+
+  const dirty: unknown[] = [{ route: "cache", at: 1 }, { route: "mirror", at: AT, mirrorHost: {} }, 0, []];
+  for (const raw of dirty) assert.doesNotThrow(() => provenanceNote(normalizeProvenance(raw)));
+});
+
+test("provenanceNote 的文案都进字典（不出现 key 原样）", () => {
+  const notes = [
+    provenanceNote({ route: "cache", at: AT }),
+    provenanceNote({ route: "cache", at: "" }),
+    provenanceNote({ route: "mirror", at: AT, mirrorHost: "ghfast.top" }),
+    provenanceNote({ route: "mirror", at: AT }),
+  ];
+  for (const note of notes) {
+    assert.equal(note?.includes("mcp.registry."), false, "界面上不该出现字典 key：" + note);
+  }
+  assert.equal(provenanceNote({ route: "mirror", at: AT }), t("mcp.registry.provenance.mirrorNoHost"));
 });

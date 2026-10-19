@@ -72,7 +72,7 @@ test("令牌不出现在返回值、日志与错误信息里（C4）", async () 
   const { gh, redactor, logger } = client(
     [
       { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
-      { match: (u) => u.includes("codeload"), response: () => new Response("boom", { status: 500 }) },
+      { match: (u) => u.includes("/archive/"), response: () => new Response("boom", { status: 500 }) },
     ],
     { envToken: SECRET, sink: { logger: rawLogger, sink } },
   );
@@ -128,20 +128,20 @@ test("下载 tar.gz：默认分支优先、按 ref/main/master/HEAD 回退", asy
   const { gh, fake } = client([
     { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "develop" }) },
     {
-      match: (u) => u.includes("/tar.gz/develop"),
+      match: (u) => u.includes("/archive/develop.tar.gz"),
       response: () => gzipResponse(tarGzOf(skillFixture("x", "foo"))),
     },
-    { match: (u) => u.includes("/tar.gz/main"), response: () => new Response("no", { status: 404 }) },
+    { match: (u) => u.includes("/archive/main.tar.gz"), response: () => new Response("no", { status: 404 }) },
   ]);
   const result = await gh.downloadTarball("demo/repo");
   assert.equal(result.ref, "develop");
   assert.ok(result.entries.some((e) => e.path === "skills/x/foo/SKILL.md"));
-  assert.equal(fake.calls.filter((c) => c.url.includes("codeload")).length, 1);
+  assert.equal(fake.calls.filter((c) => c.url.includes("/archive/")).length, 1);
 });
 
 test("显式 ref 时不查询默认分支，只请求该 ref", async () => {
   const { gh, fake } = client([
-    { match: (u) => u.includes("/tar.gz/v1"), response: () => gzipResponse(tarGzOf(skillFixture("x", "foo"))) },
+    { match: (u) => u.includes("/archive/v1.tar.gz"), response: () => gzipResponse(tarGzOf(skillFixture("x", "foo"))) },
   ]);
   const result = await gh.downloadTarball("demo/repo", "v1");
   assert.equal(result.ref, "v1");
@@ -153,7 +153,7 @@ test("速率限制返回 RATE_LIMITED，附带剩余额度与重置时间的中�
   const { gh } = client([
     { match: (u) => u.includes("/repos/"), response: () => jsonResponse({ default_branch: "main" }) },
     {
-      match: (u) => u.includes("codeload"),
+      match: (u) => u.includes("/archive/"),
       response: () =>
         new Response("rate limited", {
           status: 403,
@@ -177,7 +177,7 @@ test("速率限制返回 RATE_LIMITED，附带剩余额度与重置时间的中�
 
 test("其他网络/HTTP 错误返回 UPSTREAM", async () => {
   const { gh } = client([
-    { match: (u) => u.includes("codeload"), response: () => new Response("boom", { status: 500 }) },
+    { match: (u) => u.includes("/archive/"), response: () => new Response("boom", { status: 500 }) },
   ]);
   await assert.rejects(
     gh.downloadTarball("demo/repo", "main"),
@@ -206,7 +206,7 @@ test("其他网络/HTTP 错误返回 UPSTREAM", async () => {
 
 test("非 gzip 内容返回 UPSTREAM（中文说明）", async () => {
   const { gh } = client([
-    { match: (u) => u.includes("codeload"), response: () => gzipResponse(Buffer.from("not gzip")) },
+    { match: (u) => u.includes("/archive/"), response: () => gzipResponse(Buffer.from("not gzip")) },
   ]);
   await assert.rejects(gh.downloadTarball("demo/repo", "main"), /gzip/);
 });

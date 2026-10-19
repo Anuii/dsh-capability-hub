@@ -15,6 +15,7 @@ import {
   applyMirror,
   ghCandidatePaths,
   ghAuthToken,
+  isApiUrl,
   isExecutableMissing,
   isMirroredUrl,
 } from "../../../src/skills/remote/github.ts";
@@ -67,7 +68,7 @@ function waitFor(condition: () => boolean, timeoutMs = 1000): Promise<void> {
 
 /* =========================== a. 指纹命中：只发 trees =========================== */
 
-test("D-B18 a：有有效指纹且 treeSha 相同 → 只发 trees 请求，没有任何 raw / codeload 请求", async () => {
+test("D-B18 a：有有效指纹且 treeSha 相同 → 只发 trees 请求，没有任何 raw / archive 请求", async () => {
   const entries = entriesV1();
   const fixture = buildTreeFixture(entries);
   const env = await buildRemoteEnv({ routes: [...treeRoutes({ [REPO]: fixture }), ...rawRoutes({ [REPO]: fixture })] });
@@ -91,7 +92,7 @@ test("D-B18 a：有有效指纹且 treeSha 相同 → 只发 trees 请求，没�
   assert.equal(items[0]!.status, "up-to-date");
   assert.equal(callsMatching(env, "/git/trees/").length, 1, "每个仓库只发一次 trees 请求");
   assert.equal(callsMatching(env, "raw.githubusercontent.com").length, 0, "指纹命中时不得请求任何 raw 文件");
-  assert.equal(callsMatching(env, "codeload").length, 0, "指纹命中时不得下载归档");
+  assert.equal(callsMatching(env, "/archive/").length, 0, "指纹命中时不得下载归档");
 });
 
 /* =========================== b. 首次检查与指纹写入 =========================== */
@@ -104,7 +105,7 @@ test("D-B18 b：首次（无指纹）只请求该技能目录下的 raw；哈希
 
   const first = await env.call("POST skills/updates/check", { body: {} });
   assert.equal((first.results as { status: string }[])[0]!.status, "up-to-date");
-  assert.equal(callsMatching(env, "codeload").length, 0, "不得下载整个仓库");
+  assert.equal(callsMatching(env, "/archive/").length, 0, "不得下载整个仓库");
 
   const raws = callsMatching(env, "raw.githubusercontent.com").map((call) => call.url);
   assert.deepEqual(
@@ -240,14 +241,14 @@ test("D-B18 e2：trees 响应 truncated → 回退下载整份 tar.gz", async ()
   const env = await buildRemoteEnv({
     routes: [
       ...treeRoutes({ [REPO]: fixture }),
-      { match: (u) => u.includes("codeload"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
+      { match: (u) => u.includes("/archive/"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
     ],
   });
   await seedSkill(env, { hash: fixtureHash(entries, SKILL_DIR) });
 
   const result = await env.call("POST skills/updates/check", { body: {} });
   assert.equal((result.results as { status: string }[])[0]!.status, "up-to-date");
-  assert.equal(callsMatching(env, "codeload").length, 1, "截断时必须回退下载整份归档");
+  assert.equal(callsMatching(env, "/archive/").length, 1, "截断时必须回退下载整份归档");
   assert.equal(callsMatching(env, "raw.githubusercontent.com").length, 0);
 });
 
@@ -261,14 +262,14 @@ test("D-B18 e3：根级技能（skillPath = SKILL.md）→ 回退下载整份 ta
   const env = await buildRemoteEnv({
     routes: [
       ...treeRoutes({ [REPO]: fixture }),
-      { match: (u) => u.includes("codeload"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
+      { match: (u) => u.includes("/archive/"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
     ],
   });
   await seedSkill(env, { dirName: "rooty", hash: fixtureHash(entries, ""), skillPath: "SKILL.md" });
 
   const result = await env.call("POST skills/updates/check", { body: {} });
   assert.equal((result.results as { status: string }[])[0]!.status, "up-to-date");
-  assert.equal(callsMatching(env, "codeload").length, 1);
+  assert.equal(callsMatching(env, "/archive/").length, 1);
   assert.equal(callsMatching(env, "raw.githubusercontent.com").length, 0, "根级技能不走逐文件 raw");
 });
 
@@ -279,7 +280,7 @@ test("D-B18 e3b：根级技能的指纹用根 tree sha，指纹有效且相同�
   const env = await buildRemoteEnv({
     routes: [
       ...treeRoutes({ [REPO]: fixture }),
-      { match: (u) => u.includes("codeload"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
+      { match: (u) => u.includes("/archive/"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
     ],
   });
   const hash = fixtureHash(entries, "");
@@ -300,7 +301,7 @@ test("D-B18 e3b：根级技能的指纹用根 tree sha，指纹有效且相同�
 
   const result = await env.call("POST skills/updates/check", { body: {} });
   assert.equal((result.results as { status: string }[])[0]!.status, "up-to-date");
-  assert.equal(callsMatching(env, "codeload").length, 0, "根 tree sha 相同 → 一个字节都不下载");
+  assert.equal(callsMatching(env, "/archive/").length, 0, "根 tree sha 相同 → 一个字节都不下载");
 });
 
 /* =========================== f. 各组并行 =========================== */
@@ -359,7 +360,7 @@ test("D-B18 g2：安装经 trees+raw 写出的文件与哈希，与经 tar.gz �
     routes: [
       ...treeRoutes({ [REPO]: fixture }),
       ...rawRoutes({ [REPO]: fixture }),
-      { match: (u) => u.includes("codeload"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
+      { match: (u) => u.includes("/archive/"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
     ],
   });
 
@@ -368,7 +369,7 @@ test("D-B18 g2：安装经 trees+raw 写出的文件与哈希，与经 tar.gz �
   });
   const item = (result.results as { ok: boolean; message?: string }[])[0]!;
   assert.equal(item.ok, true, item.message);
-  assert.equal(callsMatching(env, "codeload").length, 0, "安装也不下载整个仓库");
+  assert.equal(callsMatching(env, "/archive/").length, 0, "安装也不下载整个仓库");
 
   const onDisk = await readTree(path.join(env.userAgents, "grilling"));
   assert.ok(onDisk["SKILL.md"]?.includes("name: grilling"));
@@ -386,7 +387,7 @@ test("D-B18 g3：应用更新经新路径写出的文件与哈希，与旧路径
     routes: [
       ...treeRoutes({ [REPO]: fixture }),
       ...rawRoutes({ [REPO]: fixture }),
-      { match: (u) => u.includes("codeload"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
+      { match: (u) => u.includes("/archive/"), response: () => new Response(new Uint8Array(gz), { status: 200 }) },
     ],
   });
   await seedSkill(env, { hash: HASH("0") });
@@ -394,7 +395,7 @@ test("D-B18 g3：应用更新经新路径写出的文件与哈希，与旧路径
   const result = await env.call("POST skills/updates/apply", { body: { ids: ["user-agents:grilling"] } });
   const item = (result.results as { ok: boolean; message?: string }[])[0]!;
   assert.equal(item.ok, true, item.message);
-  assert.equal(callsMatching(env, "codeload").length, 0);
+  assert.equal(callsMatching(env, "/archive/").length, 0);
   const onDisk = await readTree(path.join(env.userAgents, "grilling"));
   assert.match(onDisk["SKILL.md"]!, /v2/);
   assert.equal(onDisk["extra.txt"], "new");
@@ -404,7 +405,7 @@ test("D-B18 g3：应用更新经新路径写出的文件与哈希，与旧路径
 
 /* =========================== h. GitHub 镜像 =========================== */
 
-test("D-B18 h1：raw 与 codeload 带镜像前缀，api.github.com 不带", async () => {
+test("D-B18 h1 / D-B19：raw 与 archive 带镜像前缀，api 直连成功时不带", async () => {
   const entries = entriesV1();
   const fixture = buildTreeFixture(entries, { truncated: true });
   const gz = tarGzOf(entries, "tools-main");
@@ -412,7 +413,7 @@ test("D-B18 h1：raw 与 codeload 带镜像前缀，api.github.com 不带", asyn
     routes: [
       ...treeRoutes({ [REPO]: fixture }),
       {
-        match: (u) => u.includes("codeload.github.com"),
+        match: (u) => u.includes("/archive/"),
         response: () => new Response(new Uint8Array(gz), { status: 200 }),
       },
       {
@@ -425,12 +426,14 @@ test("D-B18 h1：raw 与 codeload 带镜像前缀，api.github.com 不带", asyn
   await seedSkill(env, { hash: fixtureHash(entries, SKILL_DIR) });
 
   await env.call("POST skills/updates/check", { body: {} });
-  const codeload = callsMatching(env, "codeload.github.com");
-  assert.equal(codeload.length, 1);
-  assert.ok(codeload[0]!.url.startsWith("https://ghfast.top/https://codeload.github.com/"), codeload[0]!.url);
+  const archived = callsMatching(env, "/archive/");
+  assert.equal(archived.length, 1);
+  // D-B19：整包下载统一走 github.com 的 archive 形态（codeload 形式的地址镜像普遍 403）
+  assert.ok(archived[0]!.url.startsWith("https://ghfast.top/https://github.com/"), archived[0]!.url);
+  assert.ok(archived[0]!.url.endsWith(".tar.gz"), archived[0]!.url);
   const trees = callsMatching(env, "/git/trees/");
   assert.equal(trees.length, 1);
-  assert.ok(trees[0]!.url.startsWith("https://api.github.com/"), "api.github.com 永不走镜像");
+  assert.ok(trees[0]!.url.startsWith("https://api.github.com/"), "直连成功时不走镜像");
 });
 
 test("D-B18 h7：保存镜像后立刻生效（无需重建客户端），清空后恢复直连", async () => {
@@ -581,23 +584,34 @@ test("D-B18 h5：test-mirror 成功与失败两种都不抛错", async () => {
   assert.equal(typeof invalidResult.message, "string");
 });
 
-test("D-B18 h6：applyMirror / isMirroredUrl 的判据", () => {
+test("D-B18 h6 / D-B19：applyMirror / isMirroredUrl 的判据", () => {
+  // 下载类：archive 形态与 raw 都加前缀
   assert.equal(
-    applyMirror("https://codeload.github.com/a/b/tar.gz/main", "https://ghfast.top/"),
-    "https://ghfast.top/https://codeload.github.com/a/b/tar.gz/main",
+    applyMirror("https://github.com/a/b/archive/main.tar.gz", "https://ghfast.top/"),
+    "https://ghfast.top/https://github.com/a/b/archive/main.tar.gz",
   );
   assert.equal(
     applyMirror("https://raw.githubusercontent.com/a/b/main/SKILL.md", "https://ghfast.top"),
     "https://ghfast.top/https://raw.githubusercontent.com/a/b/main/SKILL.md",
   );
+  // D-B19：api.github.com 允许「直连失败后无令牌经镜像重试」→ 前缀对它同样适用
   assert.equal(
     applyMirror("https://api.github.com/repos/a/b", "https://ghfast.top/"),
-    "https://api.github.com/repos/a/b",
+    "https://ghfast.top/https://api.github.com/repos/a/b",
   );
+  // skills.sh 永不走镜像
   assert.equal(applyMirror("https://skills.sh/api/search", "https://ghfast.top/"), "https://skills.sh/api/search");
-  assert.equal(applyMirror("https://codeload.github.com/a/b", undefined), "https://codeload.github.com/a/b");
+  // 没设镜像时一切原样返回
+  assert.equal(
+    applyMirror("https://github.com/a/b/archive/main.tar.gz", undefined),
+    "https://github.com/a/b/archive/main.tar.gz",
+  );
+  // isMirroredUrl 只表达「下载类」（api 的降级重试是另一条判据 isApiUrl，不在这个函数里）
   assert.equal(isMirroredUrl("https://raw.githubusercontent.com/x"), true);
+  assert.equal(isMirroredUrl("https://github.com/a/b/archive/x.tar.gz"), true);
   assert.equal(isMirroredUrl("https://api.github.com/x"), false);
+  assert.equal(isApiUrl("https://api.github.com/x"), true);
+  assert.equal(isApiUrl("https://github.com/x"), false);
 });
 
 /* =========================== j. 性能：指纹结论与并行下载 =========================== */
@@ -650,7 +664,7 @@ test("D-B18 j2：旧格式指纹（没有 upToDate 字段）按「最新」处�
   const result = await env.call("POST skills/updates/check", { body: {} });
   assert.equal((result.results as { status: string }[])[0]!.status, "up-to-date");
   assert.equal(callsMatching(env, "raw.githubusercontent.com").length, 0, "老指纹照旧命中，不下载");
-  assert.equal(callsMatching(env, "codeload").length, 0);
+  assert.equal(callsMatching(env, "/archive/").length, 0);
 });
 test("D-B18 j3：同一目录的 raw 并行下载 —— 第一个未返回时第二个已发出", async () => {
   const entries = skillFixture("productivity", "grilling", {
