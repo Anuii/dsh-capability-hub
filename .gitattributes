@@ -1,0 +1,10 @@
+# 统一用 LF：GitHub Actions 的 Windows runner 默认会把检出内容变成 CRLF，
+# 而 prettier 默认要求 LF——不钉住这一条，CI 的格式检查会把所有文件判成不合格（实测 297 个）。
+* text=auto eol=lf
+
+# 二进制明确排除（避免 git 以为该做换行归一）
+*.png binary
+*.jpg binary
+*.ico binary
+*.tgz binary
+*.woff2 binary
