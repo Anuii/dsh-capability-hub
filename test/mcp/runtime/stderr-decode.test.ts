@@ -20,6 +20,17 @@ const WIN = process.platform === "win32";
 const PHRASE = "不是内部或外部命令";
 
 /**
+ * 真实 cmd.exe 的「命令不存在」文案随**系统语言**变：中文系统是「不是内部或外部命令」，
+ * 英文系统（GitHub Actions 的 windows runner）是 "is not recognized as an internal or external command"。
+ * 端到端用例只断言「这是一句可读的本地报错」+「没有乱码」，不绑死某一种语言。
+ */
+const RECOGNIZED_PHRASES = [PHRASE, "not recognized as an internal or external command"];
+
+function looksLikeMissingCommand(text: string): boolean {
+  return RECOGNIZED_PHRASES.some((phrase) => text.includes(phrase));
+}
+
+/**
  * 「'xyz' 不是内部或外部命令，也不是可运行的程序」的 **GBK 字节**。
  * 由 TextDecoder('gbk') 逐字回查得到，并用 TextDecoder('gbk') 反解核对过（见 FIX-4 报告）。
  */
@@ -124,8 +135,13 @@ test("FIX-4 真实 cmd.exe：不存在的命令，stderr 尾部含中文报错�
     });
     child.on("close", () => resolve());
   });
-  assert.ok(tail.text().includes(PHRASE), "真实 stderr 尾部应含「" + PHRASE + "」，实际：" + tail.text());
+  // 语言无关：中文系统是「不是内部或外部命令」，英文 runner 是 "is not recognized…"。
+  assert.ok(
+    looksLikeMissingCommand(tail.text()),
+    "真实 stderr 尾部应是「命令不存在」的本地报错（中文或英文），实际：" + tail.text(),
+  );
   assert.match(tail.summary(), /definitely-not-a-real-command-xyz/);
+  assert.equal(tail.text().includes("\uFFFD"), false, "解码结果不允许出现替换字符（乱码）");
   const merged = Buffer.concat(raw);
   if (!utf8StrictOk(merged)) {
     assert.equal(merged.toString("utf8").includes(PHRASE), false, "按 UTF-8 硬解会乱码（这正是修复前的现象）");
@@ -137,6 +153,9 @@ test("FIX-4 envFrom 的诊断同样不乱码（真实 cmd.exe 走第二条 stder
   assert.equal(result.values.BROKEN, undefined);
   assert.equal(result.failures.length, 1);
   const message = result.failures[0].message;
-  assert.ok(message.includes(PHRASE), "envFrom 诊断应含「" + PHRASE + "」，实际：" + message);
+  assert.ok(
+    looksLikeMissingCommand(message),
+    "envFrom 诊断应是「命令不存在」的本地报错（中文或英文），实际：" + message,
+  );
   assert.ok(!message.includes("\uFFFD"));
 });
