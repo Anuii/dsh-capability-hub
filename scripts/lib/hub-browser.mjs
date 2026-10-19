@@ -46,7 +46,9 @@ async function waitForToken(outLog, timeoutMs) {
     }
     if (Date.now() >= until) {
       throw new Error(
-        "启动日志里 " + timeoutMs / 1000 + " 秒内没有出现 token=…：测试 profile 可能没起来（先跑 scripts\\dev-profile.ps1 start，再看 .dev\\logs\\dev-profile.err.log）。",
+        "启动日志里 " +
+          timeoutMs / 1000 +
+          " 秒内没有出现 token=…：测试 profile 可能没起来（先跑 scripts\\dev-profile.ps1 start，再看 .dev\\logs\\dev-profile.err.log）。",
       );
     }
     await sleep(250);
