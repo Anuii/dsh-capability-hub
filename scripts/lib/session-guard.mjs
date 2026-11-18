@@ -121,12 +121,32 @@ export function redactSession(key) {
 }
 
 /**
+ * 从 start 解出一个帧。以下一个魔数为候选帧尾；截短失败就尝试更后的边界，
+ * 因此压缩数据里碰巧出现魔数不会挡住真正的帧尾。返回 end 让调用者从下一帧继续。
+ *
+ * @param {Buffer} buffer
+ * @param {number} start
+ * @returns {{ text: string, end: number } | undefined}
+ */
+function decodeZstdFrame(buffer, start) {
+  let end = buffer.indexOf(ZSTD_MAGIC, start + 1);
+  for (;;) {
+    const frameEnd = end === -1 ? buffer.length : end;
+    try {
+      return { text: zstdDecompressSync(buffer.subarray(start, frameEnd)).toString("utf8"), end: frameEnd };
+    } catch {
+      if (end === -1) return undefined;
+      end = buffer.indexOf(ZSTD_MAGIC, end + 1);
+    }
+  }
+}
+
+/**
  * 解出会话日志的全部文本。
  *
- * DSH 的 session.v4.jsonl.zstd 是**多个 zstd 帧首尾相接**（每追加一批事件写一帧，一个真实会话可能上百帧），
- * 而 zstdDecompressSync 与 createZstdDecompress 流都**只解第一帧**（于是只剩会话头，turn/start 全看不见）。
- * 所以按魔数找出每个帧的起点，对每个起点单独解（它解完这一帧就停），再把各帧文本按顺序拼起来；
- * 某个起点解不动就跳过（魔数字节可能只是恰好出现在压缩数据里）。
+ * DSH 的 session.v4.jsonl.zstd 是**多个 zstd 帧首尾相接**（每追加一批事件写一帧，一个真实会话可能上百帧）。
+ * 不能把每个起点到文件末尾都交给解压器：Node 24.22.2 会把后续伪帧当作当前帧的坏输入，连当前帧也解不出来。
+ * 按候选帧尾逐帧解压再拼接；某个起点解不动就跳过（魔数字节可能只是恰好出现在压缩数据里）。
  *
  * @param {string} file
  * @returns {string} 全部帧的文本；一帧都解不出时是空串
@@ -141,15 +161,16 @@ function readSessionText(file) {
   let text = "";
   let at = buffer.indexOf(ZSTD_MAGIC);
   while (at !== -1) {
-    try {
-      const part = zstdDecompressSync(buffer.subarray(at)).toString("utf8");
-      // 帧尾通常带换行；万一没有，补一个，免得两帧的行粘成一条坏 JSON。
-      if (text !== "" && !text.endsWith("\n") && part !== "") text += "\n";
-      text += part;
-    } catch {
-      // 不是真帧，跳过
+    const frame = decodeZstdFrame(buffer, at);
+    if (frame === undefined) {
+      at = buffer.indexOf(ZSTD_MAGIC, at + 1);
+      continue;
     }
-    at = buffer.indexOf(ZSTD_MAGIC, at + 1);
+    // 帧尾通常带换行；万一没有，补一个，免得两帧的行粘成一条坏 JSON。
+    if (text !== "" && !text.endsWith("\n") && frame.text !== "") text += "\n";
+    text += frame.text;
+    if (frame.end === buffer.length) break;
+    at = frame.end;
   }
   return text;
 }
